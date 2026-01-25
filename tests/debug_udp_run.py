@@ -1,14 +1,15 @@
 # Diagnostic helper — not used by CI; see tools/README.md
 
 #!/usr/bin/env python3
-import time
 import socket
 import threading
-from queue import Queue, Empty
-from py_iperf3.libiperf_server import Server
-from py_iperf3.libiperf_client import Client
+import time
+from queue import Empty, Queue
+
 from py_iperf3.config import ClientConfig, Protocol
-from py_iperf3.ffi.api import lib, ffi
+from py_iperf3.ffi.api import ffi, lib
+from py_iperf3.libiperf_client import Client
+from py_iperf3.libiperf_server import Server
 
 
 def _server_thread(host, port, exc_q: Queue):

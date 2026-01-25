@@ -1,14 +1,13 @@
 import os
-import socket
-import time
 import shutil
+import socket
 import subprocess
-from typing import Optional
+import time
 
 import pytest
 
 
-def _port_for_group(group: Optional[str]) -> int:
+def _port_for_group(group: str | None) -> int:
     base = int(os.getenv("IPERF3_BASE_PORT", "5201"))
     if not group:
         return base
@@ -63,6 +62,7 @@ def iperf3_server(request):
     # real cffi-backed `lib` object before we start integration servers.
     try:
         import importlib
+
         import py_iperf3.ffi.api as api_mod
         import py_iperf3.libiperf_client as client_mod
         importlib.reload(api_mod)
@@ -165,6 +165,7 @@ def reload_ffi_and_client_each_test():
     """
     try:
         import importlib
+
         import py_iperf3.ffi.api as api_mod
         import py_iperf3.libiperf_client as client_mod
         importlib.reload(api_mod)

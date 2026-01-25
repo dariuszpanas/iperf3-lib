@@ -1,14 +1,14 @@
-import pytest
 import socket
 import threading
 import time
 
+import pytest
+
 from py_iperf3.config import ClientConfig, Protocol
 from py_iperf3.exceptions import UnsupportedFeatureError
-from py_iperf3.ffi.api import lib
 from py_iperf3.libiperf_client import Client
-from py_iperf3.result import Result
 from py_iperf3.libiperf_server import Server
+from py_iperf3.result import Result
 
 cases = [
     ("tcp_basic", {"protocol": Protocol.TCP}),
