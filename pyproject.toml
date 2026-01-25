@@ -1,0 +1,116 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "iperf3-lib"
+version = "0.1.0"
+description = "Modern Python wrapper for iperf3 using cffi (libiperf), with async support."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+authors = [
+    { name = "Dariusz Panas" },
+]
+keywords = [
+    "iperf3",
+    "network",
+    "benchmark",
+    "throughput",
+    "MPTCP",
+    "SCTP",
+    "cffi",
+    "async",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Networking",
+    "Topic :: System :: Benchmark",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "cffi>=1.16",
+    "pydantic>=2.8",
+]
+
+[project.urls]
+Homepage = "https://github.com/dariuszpanas/iperf3-lib"
+Documentation = "https://github.com/dariuszpanas/iperf3-lib/tree/main/docs"
+Repository = "https://github.com/dariuszpanas/iperf3-lib"
+Issues = "https://github.com/dariuszpanas/iperf3-lib/issues"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+    "pytest-cov>=7.0.0",
+    "ruff>=0.14.14",
+    "ty>=0.0.13",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/iperf3_lib"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "A",    # flake8-builtins
+    "C4",   # flake8-comprehensions
+    "PIE",  # flake8-pie
+    "D",    # pydocstyle (docstring enforcement)
+]
+ignore = ["E501"]
+
+# Docstring enforcement: require docstrings for public modules, classes, and functions.
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.isort]
+known-first-party = ["iperf3_lib"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.ty.environment]
+python-version = "3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+markers = [
+    "integration: marks tests that require a local libiperf and may run iperf3",
+]
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
+
