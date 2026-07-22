@@ -28,7 +28,7 @@ class Result(BaseModel):
 
     ok: bool
     error: str | None = None
-    raw: dict[str, Any] = {}
+    raw: dict[str, Any] = Field(default_factory=dict)
     end: EndStats | None = None
 
     @property

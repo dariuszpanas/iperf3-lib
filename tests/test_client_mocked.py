@@ -28,6 +28,7 @@ class DummyLib:
     def __init__(self):
         """Initialize DummyLib with i_errno attribute."""
         self.i_errno = 0
+        self.protocol_id = 1
 
     def iperf_new_test(self):
         """Simulate iperf_new_test call."""
@@ -52,6 +53,15 @@ class DummyLib:
     def iperf_set_test_duration(self, t, d):
         """Simulate iperf_set_test_duration call."""
         return None
+
+    def set_protocol(self, t, protocol_id):
+        """Record and accept the selected protocol."""
+        self.protocol_id = protocol_id
+        return 0
+
+    def iperf_get_test_protocol_id(self, t):
+        """Return the selected protocol."""
+        return self.protocol_id
 
     def iperf_set_test_json_output(self, t, v):
         """Simulate iperf_set_test_json_output call."""

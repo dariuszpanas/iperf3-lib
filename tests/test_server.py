@@ -28,3 +28,21 @@ def test_server_new_test_fails(monkeypatch):
     s = Server()
     with pytest.raises(IperfLibraryError):
         s.run_once()
+
+
+@pytest.mark.parametrize("port", [0, 65536, -1])
+def test_server_rejects_out_of_range_port(port):
+    """Reject ports outside the valid TCP/UDP range at construction time."""
+    from iperf3_lib.iperf_server import Server
+
+    with pytest.raises(ValueError, match="between 1 and 65535"):
+        Server(port=port)
+
+
+@pytest.mark.parametrize("port", [True, 5201.0, "5201"])
+def test_server_rejects_non_integer_port(port):
+    """Reject values that only look like integer ports."""
+    from iperf3_lib.iperf_server import Server
+
+    with pytest.raises(TypeError, match="integer"):
+        Server(port=port)

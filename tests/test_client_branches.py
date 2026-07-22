@@ -2,6 +2,10 @@
 
 import importlib
 
+import pytest
+
+from iperf3_lib.config import Protocol
+from iperf3_lib.exceptions import UnsupportedFeatureError
 from iperf3_lib.result import Result
 
 
@@ -19,6 +23,15 @@ class DummyFFI:
     def new(self, spec, val):
         """Return the value (simulate cffi.new)."""
         return val
+
+
+class CallbackFFI(DummyFFI):
+    """Dummy FFI that can construct a Python stand-in for a C callback."""
+
+    def callback(self, signature, function):
+        """Return the Python callable while recording the expected signature."""
+        assert signature == "void(iperf_test *, char *)"
+        return function
 
 
 class RecorderLib:
@@ -55,6 +68,15 @@ class RecorderLib:
         """Record test duration setter."""
         self._record["duration"] = d
 
+    def set_protocol(self, t, protocol_id):
+        """Record the selected protocol."""
+        self._record["protocol_id"] = int(protocol_id)
+        return 0
+
+    def iperf_get_test_protocol_id(self, t):
+        """Return the selected protocol."""
+        return self._record["protocol_id"]
+
     def iperf_set_test_omit(self, t, o):
         """Record test omit setter."""
         self._record["omit"] = o
@@ -79,13 +101,13 @@ class RecorderLib:
         """Record test bidirectional setter."""
         self._record["bidir"] = int(v)
 
-    def iperf_set_test_mptcp(self, t, v):
-        """Record test mptcp setter."""
-        self._record["mptcp"] = int(v)
-
     def iperf_set_test_json_output(self, t, v):
         """Record test json_output setter."""
         self._record["json"] = int(v)
+
+    def iperf_set_test_rate(self, t, rate):
+        """Record test rate setter."""
+        self._record["rate"] = int(rate)
 
     def iperf_run_client(self, t):
         """Simulate iperf_run_client call."""
@@ -107,11 +129,11 @@ class RecorderLib:
         return None
 
 
-def _setup_and_run(monkeypatch, lib, cfg_kwargs):
+def _setup_and_run(monkeypatch, lib, cfg_kwargs, dummy_ffi=None):
     """Helper to patch client and run with given lib and config."""
     import iperf3_lib.ffi.api as api_mod
 
-    dummy_ffi = DummyFFI()
+    dummy_ffi = dummy_ffi or DummyFFI()
     monkeypatch.setattr(api_mod, "ffi", dummy_ffi)
     monkeypatch.setattr(api_mod, "lib", lib)
 
@@ -139,12 +161,17 @@ def test_client_bidirectional(monkeypatch):
 
 
 def test_client_mptcp(monkeypatch):
-    """Test MPTCP setter logic in client."""
+    """Test that MPTCP is rejected by the direct ABI backend."""
     r = RecorderLib()
-    res, record = _setup_and_run(monkeypatch, r, {"mptcp": True})
-    assert isinstance(res, Result)
-    assert res.ok is True
-    assert record.get("mptcp") == 1
+    with pytest.raises(UnsupportedFeatureError, match="direct libiperf ABI"):
+        _setup_and_run(monkeypatch, r, {"mptcp": True})
+
+
+def test_client_json_stream(monkeypatch):
+    """Test that streaming JSON is rejected by the direct ABI backend."""
+    r = RecorderLib()
+    with pytest.raises(UnsupportedFeatureError, match="direct libiperf ABI"):
+        _setup_and_run(monkeypatch, r, {"json_stream": True})
 
 
 def test_client_setters(monkeypatch):
@@ -170,3 +197,65 @@ def test_client_run_error(monkeypatch):
     res, record = _setup_and_run(monkeypatch, r, {})
     assert isinstance(res, Result)
     assert res.ok is False
+
+
+@pytest.mark.parametrize(
+    ("protocol", "protocol_id", "default_blksize", "default_rate"),
+    [
+        (Protocol.TCP, 1, None, None),
+        (Protocol.UDP, 2, 0, 1024 * 1024),
+        (Protocol.SCTP, 12, 64 * 1024, None),
+    ],
+)
+def test_client_protocol_defaults(
+    monkeypatch, protocol, protocol_id, default_blksize, default_rate
+):
+    """Apply every protocol and its protocol-specific direct-ABI defaults."""
+    res, record = _setup_and_run(monkeypatch, RecorderLib(), {"protocol": protocol})
+
+    assert res.ok is True
+    assert record["protocol_id"] == protocol_id
+    assert record.get("blksize") == default_blksize
+    assert record.get("rate") == default_rate
+
+
+def test_client_explicit_rate_applies_to_tcp(monkeypatch):
+    """Apply an explicit rate through the generic setter for non-UDP protocols."""
+    res, record = _setup_and_run(monkeypatch, RecorderLib(), {"rate": 42})
+
+    assert res.ok is True
+    assert record["rate"] == 42
+
+
+def test_client_udp_zero_rate_overrides_default(monkeypatch):
+    """Preserve an explicit unlimited UDP rate instead of applying the default."""
+    res, record = _setup_and_run(
+        monkeypatch,
+        RecorderLib(),
+        {"protocol": Protocol.UDP, "rate": 0},
+    )
+
+    assert res.ok is True
+    assert record["rate"] == 0
+
+
+def test_client_uses_json_callback_when_supported(monkeypatch):
+    """Capture final native JSON with the callback instead of native stdout."""
+
+    class CallbackLib(RecorderLib):
+        def iperf_set_test_json_callback(self, t, callback):
+            self._callback = callback
+            self._record["json_callback"] = True
+
+        def iperf_run_client(self, t):
+            self._callback(t, b'{"end": {"sum_sent": {"bits_per_second": 99.0}}}')
+            return 0
+
+        def iperf_get_test_json_output_string(self, t):
+            return 0
+
+    res, record = _setup_and_run(monkeypatch, CallbackLib(), {}, CallbackFFI())
+
+    assert res.ok is True
+    assert res.raw["end"]["sum_sent"]["bits_per_second"] == 99.0
+    assert record["json_callback"] is True

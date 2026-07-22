@@ -27,6 +27,7 @@ class AsyncLib:
     def __init__(self):
         """Initialize AsyncLib with i_errno attribute."""
         self.i_errno = 0
+        self.protocol_id = 1
 
     def iperf_new_test(self):
         """Simulate iperf_new_test call."""
@@ -51,6 +52,15 @@ class AsyncLib:
     def iperf_set_test_duration(self, t, d):
         """Simulate iperf_set_test_duration call."""
         return None
+
+    def set_protocol(self, t, protocol_id):
+        """Select a protocol."""
+        self.protocol_id = protocol_id
+        return 0
+
+    def iperf_get_test_protocol_id(self, t):
+        """Return the selected protocol."""
+        return self.protocol_id
 
     def iperf_set_test_json_output(self, t, v):
         """Simulate iperf_set_test_json_output call."""
@@ -96,3 +106,13 @@ async def test_client_arun_and_summary(monkeypatch):
     assert res.ok is True
     # summary_mbps should come from sum_sent bits_per_second (2,000,000 -> 2.0 Mbps)
     assert abs(res.summary_mbps - 2.0) < 0.001
+
+
+def test_result_raw_uses_independent_default_dicts():
+    """Do not share mutable raw result state between model instances."""
+    first = Result(ok=True)
+    second = Result(ok=True)
+
+    first.raw["changed"] = True
+
+    assert second.raw == {}

@@ -20,5 +20,7 @@ def test_has_symbol_monkeypatched(monkeypatch):
     importlib.reload(caps)
 
     assert caps.HAS_BIDIR is True
+    assert caps.HAS_MPTCP is False
+    assert caps.HAS_JSON_STREAM is False
     # ensure a non-existent symbol is false
     assert caps.has_symbol("non_existing_symbol") is False

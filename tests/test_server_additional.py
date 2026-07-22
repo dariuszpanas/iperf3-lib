@@ -50,8 +50,7 @@ def test_run_iteration_check_raises(monkeypatch):
 
 
 def test_run_once_with_bind_host(monkeypatch):
-    """Test that run_once calls set_test_server_hostname when bind_host is set."""
-    # Ensure iperf_set_test_server_hostname is called when bind_host is set
+    """Test that run_once applies bind_host as a local bind address."""
     import iperf3_lib.iperf_server as server_mod
 
     fake_ffi = SimpleNamespace()
@@ -86,8 +85,8 @@ def test_run_once_with_bind_host(monkeypatch):
     def iperf_set_test_server_port(t, p):
         return None
 
-    def iperf_set_test_server_hostname(t, h):
-        called["hostname"] = h
+    def iperf_set_test_bind_address(t, h):
+        called["bind_address"] = h
 
     def iperf_run_server(t):
         return 0
@@ -102,7 +101,7 @@ def test_run_once_with_bind_host(monkeypatch):
     fake_lib.iperf_defaults = iperf_defaults
     fake_lib.iperf_set_test_role = iperf_set_test_role
     fake_lib.iperf_set_test_server_port = iperf_set_test_server_port
-    fake_lib.iperf_set_test_server_hostname = iperf_set_test_server_hostname
+    fake_lib.iperf_set_test_bind_address = iperf_set_test_bind_address
     fake_lib.iperf_run_server = iperf_run_server
     fake_lib.iperf_reset_test = iperf_reset_test
     fake_lib.iperf_free_test = iperf_free_test
@@ -112,5 +111,5 @@ def test_run_once_with_bind_host(monkeypatch):
 
     s = Server(bind_host="0.0.0.0")
     s.run_once()
-    # hostname stored as bytes from ffi.new("char[]", b"...") -> decode for comparison
-    assert called.get("hostname").decode() == "0.0.0.0"
+    # address stored as bytes from ffi.new("char[]", b"...") -> decode for comparison
+    assert called.get("bind_address").decode() == "0.0.0.0"

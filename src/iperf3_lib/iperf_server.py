@@ -33,6 +33,10 @@ class Server:
 
     def __init__(self, port: int = 5201, bind_host: str | None = None):
         """Initialize the server with a port and optional bind host."""
+        if isinstance(port, bool) or not isinstance(port, int):
+            raise TypeError("port must be an integer")
+        if not 1 <= port <= 65535:
+            raise ValueError("port must be between 1 and 65535")
         self.port = port
         self.bind_host = bind_host
         # event used to cooperatively stop the serve_forever loop
@@ -56,7 +60,7 @@ class Server:
             lib.iperf_set_test_role(t, b"s")
             lib.iperf_set_test_server_port(t, int(self.port))
             if self.bind_host:
-                _set_str(lib.iperf_set_test_server_hostname, t, self.bind_host)
+                _set_str(lib.iperf_set_test_bind_address, t, self.bind_host)
             # single iteration
             self._run_iteration(t)
         finally:
@@ -76,7 +80,7 @@ class Server:
             lib.iperf_set_test_role(t, b"s")
             lib.iperf_set_test_server_port(t, int(self.port))
             if self.bind_host:
-                _set_str(lib.iperf_set_test_server_hostname, t, self.bind_host)
+                _set_str(lib.iperf_set_test_bind_address, t, self.bind_host)
             while not self._stop_event.is_set():
                 try:
                     self._run_iteration(t)
