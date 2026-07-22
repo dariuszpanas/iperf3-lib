@@ -1,13 +1,13 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Install the project in editable mode from mounted volume (if pyproject.toml exists)
-if [ -f /app/pyproject.toml ]; then
-    echo "Installing project from mounted volume..."
-    pip install --no-cache-dir -q -e "/app"
-    # Install dev dependencies (pytest, ruff, ty, etc.)
-    pip install --no-cache-dir -q pytest pytest-asyncio pytest-cov ruff
+# A bind-mounted checkout can differ from the files baked into the image. Keep
+# /opt/venv aligned with its committed lockfile before running the command.
+if [[ -f /app/pyproject.toml && -f /app/uv.lock ]]; then
+    uv sync --frozen --dev
+else
+    echo "error: /app must contain pyproject.toml and uv.lock" >&2
+    exit 2
 fi
 
-# Execute the command passed to the container
 exec "$@"

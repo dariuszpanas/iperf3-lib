@@ -12,6 +12,20 @@ from .exceptions import IperfError, IperfLibraryError, UnsupportedFeatureError
 from .ffi.api import ffi, lib
 from .result import EndStats, Result, SumStats
 
+TCP_PROTOCOL_ID = 1
+UDP_PROTOCOL_ID = 2
+SCTP_PROTOCOL_ID = 12
+
+DEFAULT_UDP_BLOCK_SIZE = 0  # select the control connection's MSS, with libiperf fallback
+DEFAULT_SCTP_BLOCK_SIZE = 64 * 1024
+DEFAULT_UDP_RATE = 1024 * 1024
+
+PROTOCOL_IDS = {
+    Protocol.TCP: TCP_PROTOCOL_ID,
+    Protocol.UDP: UDP_PROTOCOL_ID,
+    Protocol.SCTP: SCTP_PROTOCOL_ID,
+}
+
 
 def _check(ret: int) -> None:
     """Raise IperfError if the return code is negative."""
@@ -43,6 +57,29 @@ def _maybe_set(setter_name: str, t, value: int) -> bool:
     return False
 
 
+def _install_json_callback(t) -> tuple[list[str], object | None]:
+    """Install libiperf's JSON callback when both the library and FFI support it.
+
+    Minimal Python test doubles commonly omit ``ffi.callback``. In that case,
+    retain the legacy getter-based behavior so unit tests do not need to emulate
+    native callback machinery.
+    """
+    setter = _try_set("iperf_set_test_json_callback")
+    callback_factory = getattr(ffi, "callback", None)
+    if setter is None or callback_factory is None:
+        return [], None
+
+    payloads: list[str] = []
+
+    def receive_json(_test, payload) -> None:
+        if payload != ffi.NULL:
+            payloads.append(ffi.string(payload).decode())
+
+    callback = callback_factory("void(iperf_test *, char *)", receive_json)
+    setter(t, callback)
+    return payloads, callback
+
+
 class Client:
     """Client for running iperf3 tests using the provided configuration."""
 
@@ -52,6 +89,17 @@ class Client:
 
     def run(self) -> Result:
         """Run the iperf3 test synchronously and return the result."""
+        if self.cfg.mptcp:
+            raise UnsupportedFeatureError(
+                "MPTCP is unavailable through the direct libiperf ABI backend; "
+                "libiperf does not publish an MPTCP setter"
+            )
+        if self.cfg.json_stream:
+            raise UnsupportedFeatureError(
+                "Streaming JSON is unavailable through the direct libiperf ABI backend; "
+                "Client.run() requires one complete JSON result"
+            )
+
         t = lib.iperf_new_test()
         if t == ffi.NULL:
             raise IperfLibraryError("iperf_new_test failed")
@@ -61,12 +109,33 @@ class Client:
             _set_str(lib.iperf_set_test_server_hostname, t, str(self.cfg.server))
             lib.iperf_set_test_server_port(t, int(self.cfg.port))
             lib.iperf_set_test_duration(t, int(self.cfg.duration))
+
+            protocol_id = PROTOCOL_IDS[self.cfg.protocol]
+            protocol_setter = _try_set("set_protocol")
+            protocol_getter = _try_set("iperf_get_test_protocol_id")
+            if protocol_setter is None or protocol_getter is None:
+                raise UnsupportedFeatureError(
+                    "This libiperf lacks the public protocol selection API"
+                )
+            _check(protocol_setter(t, protocol_id))
+            if int(protocol_getter(t)) != protocol_id:
+                raise IperfLibraryError(
+                    f"libiperf did not apply requested protocol {self.cfg.protocol.value}"
+                )
+
             if self.cfg.omit:
                 lib.iperf_set_test_omit(t, int(self.cfg.omit))
             if self.cfg.parallel and self.cfg.parallel > 1:
                 lib.iperf_set_test_num_streams(t, int(self.cfg.parallel))
-            if self.cfg.blksize:
-                lib.iperf_set_test_blksize(t, int(self.cfg.blksize))
+
+            block_size = self.cfg.blksize
+            if block_size is None and self.cfg.protocol is Protocol.UDP:
+                block_size = DEFAULT_UDP_BLOCK_SIZE
+            elif block_size is None and self.cfg.protocol is Protocol.SCTP:
+                block_size = DEFAULT_SCTP_BLOCK_SIZE
+            if block_size is not None:
+                lib.iperf_set_test_blksize(t, int(block_size))
+
             if self.cfg.tos is not None:
                 lib.iperf_set_test_tos(t, int(self.cfg.tos))
 
@@ -77,43 +146,33 @@ class Client:
                 if not _maybe_set("iperf_set_test_bidirectional", t, 1):
                     raise UnsupportedFeatureError("Bidirectional not supported by this libiperf")
 
-            # mptcp
-            if self.cfg.mptcp:
-                if not _maybe_set("iperf_set_test_mptcp", t, 1):
-                    raise UnsupportedFeatureError("MPTCP not supported by this libiperf")
-
-            # protocol-specific (UDP bitrate is optional setter name)
-            if self.cfg.protocol == Protocol.UDP:
-                # Numeric `rate` (bits per second) is the canonical lib API.
-                # Only support numeric rate in the lib backend; tests and
-                # callers should provide `rate: int`. If rate is absent,
-                # do not attempt to set bitrate on the lib path.
-                rate = getattr(self.cfg, "rate", None)
-                if rate is not None:
-                    try:
-                        rate_bps = int(rate)
-                    except (TypeError, ValueError) as exc:
-                        raise IperfError(f"invalid rate value: {rate}") from exc
-
-                    # some libs expose iperf_set_test_bitrate, others expose
-                    # a more generic iperf_set_test_rate; accept either.
-                    fn = _try_set("iperf_set_test_bitrate") or _try_set("iperf_set_test_rate")
-                    if fn is None:
-                        raise UnsupportedFeatureError(
-                            "This lib lacks 'iperf_set_test_bitrate' or 'iperf_set_test_rate'"
-                        )
-                    # pass integer value to the C API
-                    fn(t, rate_bps)
+            rate = self.cfg.rate
+            if rate is None and self.cfg.protocol is Protocol.UDP:
+                rate = DEFAULT_UDP_RATE
+            if rate is not None:
+                rate_setter = _try_set("iperf_set_test_rate")
+                if rate_setter is None:
+                    raise UnsupportedFeatureError("This libiperf lacks the public rate setter")
+                rate_setter(t, int(rate))
 
             # ensure JSON output
             if not _maybe_set("iperf_set_test_json_output", t, 1):
                 # some extremely old libs may lack JSON setter; we rely on JSON for parsing
                 raise UnsupportedFeatureError("This libiperf lacks JSON output support")
 
+            callback_payloads, callback = _install_json_callback(t)
             _check(lib.iperf_run_client(t))
-            cjson = lib.iperf_get_test_json_output_string(t)
-            if cjson != ffi.NULL:
-                raw = json.loads(ffi.string(cjson).decode())
+            # Keep the cdata callback alive through iperf_run_client().
+            _ = callback
+
+            json_text: str | None = callback_payloads[-1] if callback_payloads else None
+            if json_text is None:
+                cjson = lib.iperf_get_test_json_output_string(t)
+                if cjson != ffi.NULL:
+                    json_text = ffi.string(cjson).decode()
+
+            if json_text is not None:
+                raw = json.loads(json_text)
                 end = raw.get("end", {})
 
                 # minimal typed mapping into Result

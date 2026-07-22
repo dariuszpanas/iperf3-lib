@@ -18,6 +18,10 @@ void iperf_set_test_blksize(iperf_test *t, int bytes);
 void iperf_set_test_tos(iperf_test *t, int tos);
 void iperf_set_test_omit(iperf_test *t, int seconds);
 void iperf_set_test_reverse(iperf_test *t, int on);
+int set_protocol(iperf_test *t, int protocol_id);
+int iperf_get_test_protocol_id(iperf_test *t);
+void iperf_set_test_bind_address(iperf_test *t, const char *bind_address);
+char *iperf_get_test_bind_address(iperf_test *t);
 
 /* optional / feature gated (may not exist on older libs) */
 void iperf_set_test_json_output(iperf_test *t, int on);
@@ -25,6 +29,10 @@ void iperf_set_test_json_stream(iperf_test *t, int on);
 void iperf_set_test_bidirectional(iperf_test *t, int on);
 void iperf_set_test_json_stream_full_output(iperf_test *t, int on);
 void iperf_set_test_rate(iperf_test *t, unsigned long long rate);
+void iperf_set_test_json_callback(
+    iperf_test *t,
+    void (*callback)(iperf_test *, char *)
+);
 
 /* run/reset */
 int iperf_run_client(iperf_test *t);
@@ -33,6 +41,7 @@ void iperf_reset_test(iperf_test *t);
 
 /* output / errors */
 char *iperf_get_test_json_output_string(iperf_test *t);
+char *iperf_get_iperf_version(void);
 extern int i_errno;
 char *iperf_strerror(int);
 """

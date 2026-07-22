@@ -32,6 +32,7 @@ class BaseDummyLib:
     def __init__(self):
         """Initialize BaseDummyLib with i_errno attribute."""
         self.i_errno = 0
+        self.protocol_id = 1
 
     def iperf_new_test(self):
         """Simulate iperf_new_test call."""
@@ -56,6 +57,19 @@ class BaseDummyLib:
     def iperf_set_test_duration(self, t, d):
         """Simulate iperf_set_test_duration call."""
         return None
+
+    def set_protocol(self, t, protocol_id):
+        """Select a protocol."""
+        self.protocol_id = protocol_id
+        return 0
+
+    def iperf_get_test_protocol_id(self, t):
+        """Return the selected protocol."""
+        return self.protocol_id
+
+    def iperf_set_test_blksize(self, t, blksize):
+        """Accept a block size."""
+        self._last_blksize = blksize
 
     def iperf_run_client(self, t):
         """Simulate iperf_run_client call."""
@@ -141,15 +155,15 @@ def test_client_no_json_support(monkeypatch):
         Client(cfg).run()
 
 
-def test_client_udp_bitrate(monkeypatch):
-    """Test client run with UDP and bitrate set."""
+def test_client_udp_rate(monkeypatch):
+    """Test client run with UDP and an explicit rate."""
     from iperf3_lib.ffi import api as api_mod
 
     dummy_ffi = DummyFFI()
 
     class LibUDP(BaseDummyLib):
-        def iperf_set_test_bitrate(self, t, rate):
-            # accept bitrate
+        def iperf_set_test_rate(self, t, rate):
+            # accept the official generic rate setter
             self._last_rate = rate
 
         def iperf_set_test_json_output(self, t, v):
@@ -172,5 +186,5 @@ def test_client_udp_bitrate(monkeypatch):
 
     assert isinstance(res, Result)
     assert res.ok is True
-    # ensure bitrate setter was called with integer
+    # ensure the generic rate setter was called with an integer
     assert getattr(dummy_lib, "_last_rate", None) == 1000

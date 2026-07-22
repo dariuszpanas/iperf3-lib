@@ -211,3 +211,6 @@ iperf-3.*
 
 # IntelliJ IDEA
 .idea/
+
+# Local Obsidian project knowledge base
+.vault/

@@ -22,7 +22,24 @@ def has_symbol(name: str) -> bool:
 
 # Common optional features
 HAS_BIDIR = has_symbol("iperf_set_test_bidirectional")
-HAS_MPTCP = has_symbol("iperf_set_test_mptcp")
 HAS_JSON_OUTPUT = has_symbol("iperf_set_test_json_output")
+HAS_JSON_CALLBACK = has_symbol("iperf_set_test_json_callback")
+HAS_PROTOCOL_SELECTION = has_symbol("set_protocol") and has_symbol("iperf_get_test_protocol_id")
+HAS_BIND_ADDRESS = has_symbol("iperf_set_test_bind_address")
 
-__all__ = ["has_symbol", "HAS_BIDIR", "HAS_MPTCP", "HAS_JSON_OUTPUT"]
+# These configuration fields remain for compatibility, but the direct ABI
+# backend intentionally rejects them because libiperf exposes no complete,
+# stable public API for either feature.
+HAS_MPTCP = False
+HAS_JSON_STREAM = False
+
+__all__ = [
+    "HAS_BIDIR",
+    "HAS_BIND_ADDRESS",
+    "HAS_JSON_CALLBACK",
+    "HAS_JSON_OUTPUT",
+    "HAS_JSON_STREAM",
+    "HAS_MPTCP",
+    "HAS_PROTOCOL_SELECTION",
+    "has_symbol",
+]

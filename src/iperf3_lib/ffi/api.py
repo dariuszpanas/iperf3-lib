@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import os
-from typing import Final
+import threading
+from typing import Any, Final
 
 from cffi import FFI
 
+from ..exceptions import IperfLibraryError
 from .symbols import CDEF
 
 POSSIBLE_NAMES: Final[tuple[str, ...]] = (
@@ -35,4 +37,30 @@ def _dlopen():
     raise OSError(f"Could not load libiperf. Tried {POSSIBLE_NAMES}. Last error: {last_err}")
 
 
-lib = _dlopen()
+class _LazyLibrary:
+    """Load libiperf on first symbol access instead of during package import."""
+
+    def __init__(self) -> None:
+        """Initialize an unloaded, thread-safe library proxy."""
+        self._loaded: Any | None = None
+        self._lock = threading.Lock()
+
+    def _load(self) -> Any:
+        """Return the loaded library, translating loader errors for consumers."""
+        if self._loaded is not None:
+            return self._loaded
+
+        with self._lock:
+            if self._loaded is None:
+                try:
+                    self._loaded = _dlopen()
+                except OSError as exc:
+                    raise IperfLibraryError(str(exc)) from exc
+        return self._loaded
+
+    def __getattr__(self, name: str) -> Any:
+        """Resolve a symbol from libiperf, loading the library if necessary."""
+        return getattr(self._load(), name)
+
+
+lib = _LazyLibrary()
