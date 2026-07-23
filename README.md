@@ -13,7 +13,7 @@ models.
 
 | Component | Supported and tested | Notes |
 | --- | --- | --- |
-| Python | 3.12, 3.13, 3.14 | Python 3.15 prereleases run in a non-blocking preview job. |
+| Python | 3.12, 3.13, 3.14 | CI and release smoke tests cover every supported version. |
 | libiperf | 3.19.1, 3.21 | 3.19.1 is the minimum supported security baseline; 3.21 is the default. |
 | Platform | Linux | CI runs on Linux. macOS and FreeBSD are unverified; Windows requires a compatible DLL and is best-effort. |
 | Protocol | TCP, UDP, SCTP | SCTP also requires operating-system and libiperf SCTP support. |
