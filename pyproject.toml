@@ -55,13 +55,13 @@ dev = [
     "pytest>=9.1,<10",
     "pytest-asyncio>=1.4,<2",
     "pytest-cov>=7.1,<8",
-    "ruff>=0.15.22,<0.16",
+    "ruff>=0.15.22,<0.17",
     # ty is beta; review each upgrade before changing this exact pin.
     "ty==0.0.62",
 ]
 release = [
     "check-wheel-contents>=0.6.3,<0.7",
-    "twine>=6.2,<7",
+    "twine>=6.2,<8",
 ]
 
 [tool.uv]
