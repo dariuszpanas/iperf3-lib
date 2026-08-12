@@ -57,7 +57,7 @@ dev = [
     "pytest-cov>=7.1,<8",
     "ruff>=0.15.22,<0.17",
     # ty is beta; review each upgrade before changing this exact pin.
-    "ty==0.0.62",
+    "ty==0.0.69",
 ]
 release = [
     "check-wheel-contents>=0.6.3,<0.7",
