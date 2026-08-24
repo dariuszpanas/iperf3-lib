@@ -5,10 +5,11 @@ Python 3.12-3.14 and libiperf 3.19.1/3.21 matrix.
 
 ## Development setup
 
-Install [uv](https://docs.astral.sh/uv/) 0.11.31, clone the repository, and run:
+Install the [uv](https://docs.astral.sh/uv/) release pinned in
+[`.tool-versions`](.tool-versions), clone the repository, and run:
 
 ```bash
-uv sync --frozen --dev
+make install
 ```
 
 Native tests require both the iperf3 executable and its shared `libiperf`.
@@ -33,10 +34,10 @@ Run non-mutating static checks before submitting a change:
 make check
 ```
 
-With a compatible host library, run the tests directly:
+With a compatible host library, run the non-integration tests directly:
 
 ```bash
-uv run --frozen pytest
+make test
 ```
 
 Build and validate distribution artifacts after packaging or documentation
@@ -78,7 +79,8 @@ or the `.vault/` project knowledge base.
   at 09:17 America/Los_Angeles, as well as on pushes and pull requests.
 - Dependabot checks Python, GitHub Actions, and Docker dependencies every
   Monday. Version and security updates are grouped by ecosystem; the beta `ty`
-  checker remains isolated for deliberate review.
+  checker remains isolated for deliberate review. The uv executable is pinned
+  once in `.tool-versions` and upgraded as a coordinated toolchain change.
 
 ## Releases
 

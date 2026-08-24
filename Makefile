@@ -1,14 +1,27 @@
 .DEFAULT_GOAL := help
 
 UV ?= uv
+HOST_PYTHON ?= python
 PYTHON_BASE ?= python:3.12-slim
 IPERF3_VERSION ?= 3.21
 DOCKER_IMAGE ?= iperf3-lib-test:local
+TOOL_VERSIONS_FILE := .tool-versions
+TOOL_VERSIONS := $(strip $(file <$(TOOL_VERSIONS_FILE)))
 
-.PHONY: help install test test-cov test-integration lint format format-check type-check check ci build clean docker-build docker-test docker-shell all
+ifneq ($(words $(TOOL_VERSIONS)),2)
+$(error $(TOOL_VERSIONS_FILE) must contain exactly "uv <version>")
+endif
+ifneq ($(word 1,$(TOOL_VERSIONS)),uv)
+$(error $(TOOL_VERSIONS_FILE) must contain exactly "uv <version>")
+endif
+override UV_VERSION := $(word 2,$(TOOL_VERSIONS))
+
+.PHONY: help check-uv-pin check-toolchain install test test-cov test-integration lint format format-check type-check check ci build clean docker-build docker-test docker-shell all
 
 help:
 	@echo "Available targets:"
+	@echo "  check-uv-pin      - Verify every uv consumer derives from .tool-versions"
+	@echo "  check-toolchain   - Verify installed uv matches .tool-versions"
 	@echo "  install          - Sync the frozen development environment"
 	@echo "  test             - Run tests that are not marked integration"
 	@echo "  test-cov         - Run non-integration tests with coverage"
@@ -24,6 +37,14 @@ help:
 	@echo "  docker-test      - Build the image and run the full suite"
 	@echo "  docker-shell     - Open a shell in the Docker test image"
 	@echo "  clean            - Remove local build and test artifacts"
+
+check-uv-pin:
+	$(HOST_PYTHON) scripts/check_uv_pin.py --validate-only
+
+check-toolchain:
+	$(HOST_PYTHON) scripts/check_uv_pin.py --uv-command "$(UV)"
+
+install test test-cov test-integration lint format format-check type-check build: check-toolchain
 
 install:
 	$(UV) sync --frozen --dev
@@ -59,8 +80,9 @@ build:
 	$(UV) run --frozen --no-dev --group release twine check dist/*
 	$(UV) run --frozen --no-dev --group release check-wheel-contents dist/*.whl
 
-docker-build:
+docker-build: check-uv-pin
 	docker build \
+		--build-arg UV_VERSION=$(UV_VERSION) \
 		--build-arg PYTHON_BASE=$(PYTHON_BASE) \
 		--build-arg IPERF3_VERSION=$(IPERF3_VERSION) \
 		-t $(DOCKER_IMAGE) .
