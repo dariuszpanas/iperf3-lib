@@ -105,18 +105,18 @@ the cooperative shutdown limitation above before embedding it in a service.
 
 ## Contributing
 
-Install [uv](https://docs.astral.sh/uv/) 0.11.31 and synchronize the committed
-lockfile:
+Install the [uv](https://docs.astral.sh/uv/) release pinned in
+[`.tool-versions`](.tool-versions), then synchronize the committed lockfile:
 
 ```bash
-uv sync --frozen --dev
+make install
 ```
 
 With a supported native libiperf available:
 
 ```bash
 make check
-uv run --frozen pytest
+make test
 ```
 
 The reproducible Linux route builds libiperf and runs the complete suite in
