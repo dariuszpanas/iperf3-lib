@@ -45,22 +45,3 @@ updates:
         applies-to: "security-updates"
         patterns:
           - "*"
-
-  - package-ecosystem: "docker"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:30"
-      timezone: "America/Los_Angeles"
-    commit-message:
-      prefix: "chore(docker)"
-    groups:
-      docker-images:
-        applies-to: "version-updates"
-        patterns:
-          - "*"
-      docker-security:
-        applies-to: "security-updates"
-        patterns:
-          - "*"
