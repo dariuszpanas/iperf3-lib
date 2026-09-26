@@ -7,7 +7,7 @@ DOCKER_IMAGE ?= iperf3-lib-test:local
 REVISION ?= HEAD
 RANGE ?= origin/main...HEAD
 
-.PHONY: help install test test-cov test-integration lint format format-check type-check policy-check commit-check change-check workflow-lint check ci build clean docker-build docker-test docker-shell all
+.PHONY: help install test test-cov test-integration lint format format-check type-check policy-check commit-check change-check workflow-lint check ci docs docs-serve build clean docker-build docker-test docker-shell all
 
 help:
 	@echo "Available targets:"
@@ -25,6 +25,8 @@ help:
 	@echo "  workflow-lint    - Run YAGA actionlint checks (requires Docker)"
 	@echo "  check            - Run all non-mutating static checks"
 	@echo "  ci               - Run quality/unit checks, workflow lint, and Docker tests"
+	@echo "  docs             - Build documentation and check site/README links"
+	@echo "  docs-serve       - Preview documentation with live reload"
 	@echo "  build             - Build and validate wheel/sdist artifacts"
 	@echo "  docker-build     - Build the Docker test image"
 	@echo "  docker-test      - Build the image and run the full suite"
@@ -68,9 +70,16 @@ change-check:
 workflow-lint:
 	$(UV) run --frozen yaga workflow lint .github/workflows
 
-check: lint format-check type-check policy-check
+check: lint format-check type-check policy-check docs
 
 ci: check test workflow-lint docker-test
+
+docs:
+	$(UV) run --frozen zensical build --strict --clean
+	$(UV) run --frozen python scripts/check_docs.py
+
+docs-serve:
+	$(UV) run --frozen zensical serve
 
 build:
 	$(UV) build --no-sources

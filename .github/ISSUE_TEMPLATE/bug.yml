@@ -1,0 +1,30 @@
+name: Bug report
+description: Report incorrect behavior with a reproducible example.
+labels: [bug]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Expected and observed behavior
+      description: Explain the difference and its impact.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Include minimal Python code and sanitized native JSON or error output where relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Package version or commit, Python, libiperf version, operating system, protocol, and direction.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Suggested acceptance checks
+      description: What would demonstrate that this is fixed?

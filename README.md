@@ -4,6 +4,16 @@
 [![PyPI](https://img.shields.io/pypi/v/iperf3-lib.svg)](https://pypi.org/project/iperf3-lib/)
 [![Python](https://img.shields.io/pypi/pyversions/iperf3-lib.svg)](https://pypi.org/project/iperf3-lib/)
 
+[Documentation](https://dariuszpanas.github.io/iperf3-lib/) ·
+[Roadmap](https://dariuszpanas.github.io/iperf3-lib/roadmap.html) ·
+[Issues](https://github.com/dariuszpanas/iperf3-lib/issues)
+
+> This README and the documentation track `main`. Published **0.2.0** uses
+> Pydantic; the dataclass models, normalized results, and Prometheus exporter
+> described below are **unreleased**. See the
+> [installation guide](https://dariuszpanas.github.io/iperf3-lib/getting-started.html)
+> for installing the development version.
+
 `iperf3-lib` is a typed Python wrapper around the native iperf3 `libiperf`
 library. It uses CFFI's ABI mode and provides synchronous and asynchronous
 client APIs, a minimal server wrapper, validated dataclass configuration, and
@@ -101,12 +111,19 @@ result = await Client(config).arun()
 `Result` keeps the complete native JSON in `raw` and provides normalized
 `flows`, `intervals`, protocol, duration, and timestamp fields. Each flow
 identifies its direction independently from whether the native measurement was
-reported by the sender or receiver. Missing measurements stay `None`.
+reported by the sender or receiver. The normalization contract is still being
+completed: optional measurements may be `None`, while some legacy summary
+values default to zero. Review the
+[current result limitations](https://dariuszpanas.github.io/iperf3-lib/guides/results.html)
+before using the development API for automated acceptance decisions.
 Configuration strings for protocols are normalized to `Protocol`; numeric
 configuration fields require integers (not booleans or numeric strings), and
 boolean options require actual booleans. Hostnames remain strings, and standard
 library IPv4/IPv6 address objects are accepted.
 
+The exporter is unreleased. Exposition conformance and an end-to-end Grafana
+integration are tracked in the
+[roadmap](https://dariuszpanas.github.io/iperf3-lib/roadmap.html).
 Render a completed run for an existing Prometheus metrics endpoint:
 
 ```python
@@ -186,10 +203,22 @@ make docker-test PYTHON_BASE=python:3.14-slim IPERF3_VERSION=3.19.1
 `make check` never changes source files. Run `make format` explicitly to apply
 formatting and safe lint fixes. YAGA is included in the development environment
 and enforces this repository's commit, workflow, and file policies in local
-commands and CI. See [CONTRIBUTING.md](CONTRIBUTING.md#yaga-checks-and-policies)
+commands and CI. See [CONTRIBUTING.md](https://github.com/dariuszpanas/iperf3-lib/blob/main/CONTRIBUTING.md#yaga-checks-and-policies)
 for policy commands and the full development and review checklist.
 
+Build the documentation with `make docs`, or preview it with `make docs-serve`.
+
 ## Changelog
+
+### Unreleased
+
+- Replace Pydantic with standard-library dataclasses and explicit configuration
+  validation; add normalized flow/interval results and Prometheus textfile output.
+- Adopt YAGA repository and commit policies, current stable uv, and refreshed tooling.
+- Add a Zensical documentation site and issue-based roadmap.
+
+See the [full changelog](https://dariuszpanas.github.io/iperf3-lib/changelog.html)
+for migration notes and release history.
 
 ### 0.2.0 — 2026-07-22
 
@@ -204,6 +233,5 @@ for policy commands and the full development and review checklist.
 ### 0.1.0
 
 - Initial CFFI ABI wrapper for libiperf clients and servers.
-- Typed dataclass configuration/results and asynchronous convenience methods.
-- Normalized flow and interval results with Prometheus textfile output.
+- Typed Pydantic configuration/results and asynchronous convenience methods.
 - Docker compatibility testing and PyPI release automation.

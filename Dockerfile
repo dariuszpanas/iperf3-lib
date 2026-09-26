@@ -52,6 +52,7 @@ RUN uv sync --frozen --dev --no-install-project
 
 COPY src ./src
 COPY tests ./tests
+COPY scripts ./scripts
 RUN uv sync --frozen --dev
 
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh

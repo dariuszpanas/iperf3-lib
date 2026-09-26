@@ -1,0 +1,21 @@
+name: Maintenance or documentation task
+description: Track a concrete improvement to tooling, docs, or release preparation.
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Intended outcome
+      description: Explain what needs to change and why.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Completion checklist
+      description: List concrete, verifiable steps and any follow-up that remains separate.
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Related issues or pull requests

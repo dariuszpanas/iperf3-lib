@@ -1,0 +1,65 @@
+[project]
+site_name = "iperf3-lib"
+site_description = "Typed Python access to libiperf, with results you can inspect and reuse."
+site_author = "iperf3-lib contributors"
+site_url = "https://dariuszpanas.github.io/iperf3-lib/"
+repo_url = "https://github.com/dariuszpanas/iperf3-lib"
+repo_name = "dariuszpanas/iperf3-lib"
+docs_dir = "docs"
+site_dir = "site"
+use_directory_urls = false
+extra_css = ["stylesheets/extra.css"]
+nav = [
+  { "Home" = "index.md" },
+  { "Start here" = [
+    { "Installation and first run" = "getting-started.md" },
+    { "Running clients and servers" = "guides/running-tests.md" },
+    { "Reading results" = "guides/results.md" },
+    { "Prometheus output" = "guides/prometheus.md" },
+  ] },
+  { "Reference" = [
+    { "Configuration" = "reference/configuration.md" },
+    { "Python API" = "reference/api.md" },
+    { "Compatibility and limitations" = "reference/compatibility.md" },
+  ] },
+  { "Project" = [
+    { "Roadmap and issues" = "roadmap.md" },
+    { "Contributing" = "contributing.md" },
+    { "Documentation maintenance" = "documentation.md" },
+    { "Releasing" = "releasing.md" },
+    { "Security" = "security.md" },
+    { "Changelog" = "changelog.md" },
+  ] },
+]
+
+[project.theme]
+custom_dir = "overrides"
+language = "en"
+font = false
+features = [
+  "navigation.instant", "navigation.tracking", "navigation.sections",
+  "navigation.path", "navigation.top", "navigation.footer",
+  "content.code.copy", "toc.follow",
+]
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme)"
+toggle.icon = "lucide/sun-moon"
+toggle.name = "Switch to light mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "custom"
+accent = "custom"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "custom"
+accent = "custom"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to system preference"
+

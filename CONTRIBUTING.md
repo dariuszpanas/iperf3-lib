@@ -56,7 +56,7 @@ environment. No YAGA source checkout or global YAGA installation is needed.
 The project's policy lives in `[tool.yaga]` in `pyproject.toml` and `.yaga/`.
 Dependabot's existing uv and GitHub Actions updates cover the CLI and Action.
 
-`make check` runs Ruff, ty, and the YAGA repository plan. That plan checks
+`make check` runs Ruff, ty, the documentation build/link check, and the YAGA repository plan. That plan checks
 immutable Action references, workflow permissions and checkout settings,
 Windows-compatible file names, regular file modes, file size limits, required
 project files, and accidental commits of local vaults or generated files.
@@ -111,6 +111,14 @@ run. The aggregate `ci` check requires the commit-policy job for PRs.
 
 ## Pull requests
 
+Start from an existing [issue](https://github.com/dariuszpanas/iperf3-lib/issues)
+or open one using the bug, feature, or task form. Use `bug`, `enhancement`, or
+`documentation` for the work type and one `area:*` label for the affected
+component. `planning` means a design or scope decision is still needed.
+Keep acceptance criteria in the issue and link dependencies explicitly.
+The [roadmap](https://dariuszpanas.github.io/iperf3-lib/roadmap.html) links the
+pre-release review backlog; an open proposal is not a release commitment.
+
 Keep changes focused and explain:
 
 - the user-visible behavior and compatibility impact;
@@ -120,6 +128,25 @@ Keep changes focused and explain:
 
 Do not commit local environments, coverage output, downloaded iperf sources,
 or the `.vault/` project knowledge base.
+
+## Documentation
+
+The site uses Zensical, following YAGA's documentation conventions. Edit
+`docs/`, navigation in `zensical.toml`, and theme overrides in `overrides/`.
+Keep examples aligned with the source and distinguish unreleased APIs from
+the latest published version.
+
+```bash
+make docs
+make docs-serve
+```
+
+`make docs` runs a strict clean build and validates local site links, assets,
+fragments, and rendered README links. It does not check remote URLs. CI builds
+documentation on every PR; `.github/workflows/docs.yml` deploys it to GitHub
+Pages after a push to `main`. The detailed
+[documentation maintenance guide](https://dariuszpanas.github.io/iperf3-lib/documentation.html)
+covers Pages setup, preview, and publication checks.
 
 ## Maintenance automation
 
