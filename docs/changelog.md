@@ -11,8 +11,14 @@ These pages describe `main`. Released versions remain available through
 - Add normalized directional flow and interval models alongside the original
   native JSON, execution metadata, and a `to_dict()` helper.
 - Add a dependency-free Prometheus renderer and atomic textfile writer.
-  Normalization and exporter conformance still have open pre-release criteria;
-  see the [roadmap](roadmap.md).
+- Emit each Prometheus metric family's metadata once, group its samples, and
+  reject reserved caller labels and duplicate samples. Preserve existing files
+  on failed atomic replacement.
+- Read libiperf's native `bidir` flag so simultaneous bidirectional runs retain
+  both flows. Keep the `bidirectional` spelling compatible and reject conflicts.
+- Add a [Docker Desktop Kubernetes/Grafana example](guides/grafana.md) with
+  native JSON-to-metric comparison and success/failure freshness checks.
+  Other normalized-result correctness work remains in the [roadmap](roadmap.md).
 - Refresh development dependencies and use current stable uv in CI and Docker.
 - Adopt YAGA commit, workflow, repository, and source/test-change policies here.
 - Add a Zensical site, GitHub Pages deployment, documentation checks, and

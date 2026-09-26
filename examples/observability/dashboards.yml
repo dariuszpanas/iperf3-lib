@@ -1,0 +1,11 @@
+apiVersion: 1
+providers:
+  - name: iperf3-lib
+    orgId: 1
+    folder: iperf3-lib
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    updateIntervalSeconds: 10
+    options:
+      path: /var/lib/grafana/dashboards

@@ -46,17 +46,18 @@ test-integration:
 	$(UV) run --frozen pytest -m integration
 
 lint:
-	$(UV) run --frozen ruff check src tests scripts
+	$(UV) run --frozen ruff check src tests scripts examples
 
 format:
-	$(UV) run --frozen ruff format src tests scripts
-	$(UV) run --frozen ruff check --fix src tests scripts
+	$(UV) run --frozen ruff format src tests scripts examples
+	$(UV) run --frozen ruff check --fix src tests scripts examples
 
 format-check:
-	$(UV) run --frozen ruff format --check src tests scripts
+	$(UV) run --frozen ruff format --check src tests scripts examples
 
 type-check:
 	$(UV) run --frozen ty check src scripts
+	$(UV) run --frozen ty check examples --python-platform linux
 
 policy-check:
 	$(UV) run --frozen yaga repo check --plan .yaga/checks/repository.toml --revision "$(REVISION)"

@@ -32,8 +32,8 @@ Configure a client, run a benchmark, and keep its measurements in your applicati
 
 - **Export completed runs**
 
-    Explore the unreleased Prometheus renderer and atomic textfile writer,
-    including their current validation gaps.
+    Explore the unreleased Prometheus renderer, atomic textfile writer, and
+    local Grafana integration.
 
     [Prometheus guide](guides/prometheus.md)
 

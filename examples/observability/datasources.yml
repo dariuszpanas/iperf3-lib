@@ -1,0 +1,12 @@
+apiVersion: 1
+datasources:
+  - name: iperf3 Prometheus
+    uid: iperf3-prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      httpMethod: POST
+      timeInterval: 2s

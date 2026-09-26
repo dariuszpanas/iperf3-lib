@@ -93,3 +93,31 @@ def test_client_applies_protocol_and_settings(
         assert 16 <= test_start["blksize"] <= 65507
     for key, value in expected.items():
         assert test_start[key] == value
+
+
+@pytest.mark.integration
+def test_client_normalizes_both_directions_from_native_bidirectional_run(iperf3_server) -> None:
+    """Preserve native bidir flags and all four endpoint summaries in normalized results."""
+    host, port = iperf3_server
+    result = Client(
+        ClientConfig(server=host, port=port, duration=1, bidirectional=True, rate=4_000_000)
+    ).run()
+
+    assert result.ok, result.error
+    assert result.raw["start"]["test_start"]["bidir"] == 1
+    assert result.bidirectional is True
+    assert len(result.flows) == 2
+    flows = {flow.direction: flow for flow in result.flows}
+    assert set(flows) == {"client_to_server", "server_to_client"}
+    for direction, suffix in (("client_to_server", ""), ("server_to_client", "_bidir_reverse")):
+        flow = flows[direction]
+        for observer, native_key in (("sender", "sum_sent"), ("receiver", "sum_received")):
+            stats = getattr(flow, observer)
+            assert stats is not None
+            assert stats.direction == direction
+            assert stats.observation == observer
+            assert stats.bits_per_second > 0
+            assert (
+                stats.bits_per_second
+                == result.raw["end"][f"{native_key}{suffix}"]["bits_per_second"]
+            )

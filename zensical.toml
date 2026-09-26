@@ -16,6 +16,7 @@ nav = [
     { "Running clients and servers" = "guides/running-tests.md" },
     { "Reading results" = "guides/results.md" },
     { "Prometheus output" = "guides/prometheus.md" },
+    { "Local Grafana validation" = "guides/grafana.md" },
   ] },
   { "Reference" = [
     { "Configuration" = "reference/configuration.md" },
