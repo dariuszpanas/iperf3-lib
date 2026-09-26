@@ -45,7 +45,10 @@ execution. `result.ok` is true only for completed execution. A completed run
 can still lack individual measurements; diagnostics describe those gaps.
 Performance acceptance is a separate application decision.
 
-`execution.configuration.requested` records the admitted `ClientConfig`.
+`execution.configuration.requested` records the admitted, resolved `ClientConfig`.
+When rate intent or protocol defaults derive a native rate, the original caller
+config, intent, and allocation remain in the `iperf3_lib.rate_intent` result
+extension. See [rate resolution](configuration-intent.md).
 Each run validates and executes a detached snapshot. Mutating the caller's
 configuration during execution cannot alter that snapshot. `effective`
 contains independently returned native settings, each with a `state`, `value`,

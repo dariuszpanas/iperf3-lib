@@ -1,5 +1,9 @@
 # Configuration reference
 
+For aggregate rate targets, explicit units, plan estimates, and capability
+inspection, see [rate intent and capabilities](../guides/configuration-intent.md).
+`ClientConfig.rate` remains the low-level **per-stream** bits/s setting.
+
 `ClientConfig` is a mutable standard-library dataclass on the development
 branch. Its constructor validates types, bounds, and option combinations.
 Pydantic APIs such as `model_validate()` and `model_dump()` are not provided.

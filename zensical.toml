@@ -14,6 +14,7 @@ nav = [
   { "Start here" = [
     { "Installation and first run" = "getting-started.md" },
     { "Running clients and servers" = "guides/running-tests.md" },
+    { "Rate intent and capabilities" = "guides/configuration-intent.md" },
     { "Reading results" = "guides/results.md" },
     { "Portable result artifacts" = "guides/artifacts.md" },
     { "Prometheus output" = "guides/prometheus.md" },

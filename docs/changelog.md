@@ -6,6 +6,14 @@ These pages describe `main`. Released versions remain available through
 
 ## Unreleased
 
+- Add explicit per-stream/aggregate-per-direction rate intent, exact SI unit
+  parsing, native allocation provenance, and sequential admission estimates.
+  Preserve the original request in an artifact extension and record the resolved
+  low-level config separately from verified native settings.
+- Add capability reports separating wrapper coverage, ABI declarations, native
+  symbols, tested environments, and supplied execution evidence. Offline import
+  and reports do not load libiperf; legacy capability flags remain lazy.
+
 - Replace Pydantic runtime models with standard-library dataclasses and explicit
   `ClientConfig` validation. Runtime dependencies now consist of CFFI.
 - Add normalized directional flow and interval models alongside the original
