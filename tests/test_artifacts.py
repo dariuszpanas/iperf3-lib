@@ -755,6 +755,8 @@ def test_retained_fixture_inventory_and_native_provenance():
     """Deleting a golden cannot silently turn its contract regression into a skip."""
     assert {path.name for path in FIXTURES.glob("*.json")} == {
         "legacy-end-only.json",
+        "development-v1-original-hashes.json",
+        "v1-native-3.21-tcp-evidence-client.json",
         "v1-failed.json",
         "v1-incomplete.json",
         "v1-partial-zero-extensions.json",
@@ -783,3 +785,98 @@ def test_retained_fixture_inventory_and_native_provenance():
             assert any(
                 item.code == "measurement.unsupported" for item in artifact.result.diagnostics
             )
+
+
+@pytest.mark.parametrize(
+    "alteration",
+    [
+        "cpu_negative",
+        "cpu_nonfinite",
+        "cpu_bool",
+        "cpu_duplicate",
+        "cpu_wrong_endpoint",
+        "cpu_missing_receipt",
+        "tcp_nonfinite",
+        "tcp_negative_window",
+        "tcp_window_bool",
+        "tcp_missing_receipt",
+        "tcp_bad_receipt",
+        "tcp_empty_receipt",
+        "tcp_unknown_measurement",
+        "tcp_absent_with_receipt",
+        "tcp_wrong_protocol",
+        "tcp_wrong_scope",
+        "tcp_wrong_observer",
+        "tcp_flow_evidence",
+    ],
+)
+def test_transport_evidence_strict_artifact_validation(alteration):
+    """Normalized evidence cannot lose units, provenance, endpoint or protocol constraints."""
+    raw = json.loads((NATIVE_FIXTURES / "3.21" / "tcp-forward-client.json").read_text())
+    result = artifact_from_result(result_from_iperf_json(raw)).result
+    interval = next(item for item in result.intervals if item.tcp is not None)
+    if alteration == "cpu_negative":
+        result.cpu[0].total_percent = -1
+    elif alteration == "cpu_nonfinite":
+        result.cpu[0].total_percent = float("inf")
+    elif alteration == "cpu_bool":
+        result.cpu[0].total_percent = True
+    elif alteration == "cpu_duplicate":
+        result.cpu.append(copy.deepcopy(result.cpu[0]))
+    elif alteration == "cpu_wrong_endpoint":
+        result.cpu[0].endpoint = "server"
+    elif alteration == "cpu_missing_receipt":
+        result.cpu[0].evidence_paths.clear()
+    elif alteration == "tcp_nonfinite":
+        interval.tcp.smoothed_rtt_seconds = float("nan")
+    elif alteration == "tcp_negative_window":
+        interval.tcp.send_congestion_window_bytes = -1
+    elif alteration == "tcp_window_bool":
+        interval.tcp.send_congestion_window_bytes = False
+    elif alteration == "tcp_missing_receipt":
+        interval.tcp.evidence_paths.clear()
+    elif alteration == "tcp_bad_receipt":
+        interval.tcp.evidence_paths["smoothed_rtt_seconds"] = "/raw/missing"
+    elif alteration == "tcp_empty_receipt":
+        interval.tcp.evidence_paths["smoothed_rtt_seconds"] = ""
+    elif alteration == "tcp_unknown_measurement":
+        interval.tcp.evidence_paths["latency"] = "/raw/start"
+    elif alteration == "tcp_absent_with_receipt":
+        interval.tcp.smoothed_rtt_seconds = None
+    elif alteration == "tcp_wrong_protocol":
+        result.protocol = "udp"
+    elif alteration == "tcp_wrong_scope":
+        interval.scope = "aggregate"
+        interval.stream_id = None
+    elif alteration == "tcp_wrong_observer":
+        interval.observation = "receiver"
+    elif alteration == "tcp_flow_evidence":
+        result.flows[0].sender.tcp = copy.deepcopy(result.streams[0].sender.tcp)
+    with pytest.raises(ArtifactValidationError):
+        artifact_to_dict(ResultArtifact(result, ArtifactProducer("example", "1")))
+
+
+def test_development_v1_fixture_amendment_preserves_every_prior_recorded_value():
+    """Only explicit new null/empty fields were added before the first public schema release."""
+    import hashlib
+
+    hashes = json.loads((FIXTURES / "development-v1-original-hashes.json").read_text())
+    for filename, expected in hashes.items():
+        archived = json.loads((FIXTURES / filename).read_text())
+        result = archived["result"]
+        assert result.pop("cpu") == []
+        for interval in result["intervals"]:
+            assert interval.pop("tcp") is None
+        for name in ("flows", "streams"):
+            for item in result[name]:
+                for observer in ("sender", "receiver", "unattributed"):
+                    if item.get(observer) is not None:
+                        assert item[observer].pop("tcp") is None
+        if result["end"] is not None:
+            for name in ("sum_sent", "sum_received"):
+                if result["end"].get(name) is not None:
+                    assert result["end"][name].pop("tcp") is None
+        actual = hashlib.sha256(
+            json.dumps(archived, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        assert actual == expected, filename

@@ -15,9 +15,11 @@ from dataclasses import dataclass, field, fields
 from importlib.metadata import version
 from typing import Any, Never
 
+from ._evidence import has_observed_evidence
 from .result import (
     ConfigurationSnapshot,
     Diagnostic,
+    EndpointCpuEvidence,
     EndStats,
     ExecutionMetadata,
     FieldAvailability,
@@ -28,6 +30,8 @@ from .result import (
     RunTiming,
     StreamStats,
     SumStats,
+    TcpIntervalEvidence,
+    TcpSummaryEvidence,
     VerifiedSetting,
 )
 
@@ -125,6 +129,31 @@ _MEASUREMENTS = {
 }
 _SCHEMAS: dict[type, dict[str, Any]] = {
     ArtifactProducer: {"name": "nonempty_string", "version": "nonempty_string"},
+    TcpIntervalEvidence: {
+        "smoothed_rtt_seconds": _optional("nonnegative_number"),
+        "rtt_variation_seconds": _optional("nonnegative_number"),
+        "send_congestion_window_bytes": _optional("count"),
+        "advertised_send_window_bytes": _optional("count"),
+        "path_mtu_bytes": _optional("count"),
+        "evidence_paths": _mapping("pointer"),
+    },
+    TcpSummaryEvidence: {
+        "minimum_sampled_rtt_seconds": _optional("nonnegative_number"),
+        "maximum_sampled_rtt_seconds": _optional("nonnegative_number"),
+        "native_mean_sampled_rtt_seconds": _optional("nonnegative_number"),
+        "maximum_send_congestion_window_bytes": _optional("count"),
+        "maximum_advertised_send_window_bytes": _optional("count"),
+        "evidence_paths": _mapping("pointer"),
+    },
+    EndpointCpuEvidence: {
+        "endpoint": _enum("client", "server", "unknown"),
+        "locality": _enum("local", "remote"),
+        "scope": _enum("iperf_process"),
+        "total_percent": _optional("nonnegative_number"),
+        "user_percent": _optional("nonnegative_number"),
+        "system_percent": _optional("nonnegative_number"),
+        "evidence_paths": _mapping("pointer"),
+    },
     RunTiming: {
         "started_at_seconds": _optional("number"),
         "completed_at_seconds": _optional("number"),
@@ -160,6 +189,7 @@ _SCHEMAS: dict[type, dict[str, Any]] = {
         **_MEASUREMENTS,
         "direction": _optional(_enum(*_DIRECTIONS)),
         "observation": _optional(_enum("sender", "receiver")),
+        "tcp": _optional(TcpSummaryEvidence),
     },
     FlowStats: {
         "direction": _enum(*_DIRECTIONS),
@@ -179,6 +209,7 @@ _SCHEMAS: dict[type, dict[str, Any]] = {
         "observation": _optional(_enum("sender", "receiver")),
         "stream_id": _optional("count"),
         "scope": _enum("aggregate", "stream", "unknown"),
+        "tcp": _optional(TcpIntervalEvidence),
     },
     EndStats: {"sum_sent": _optional(SumStats), "sum_received": _optional(SumStats)},
     Diagnostic: {
@@ -206,6 +237,7 @@ _SCHEMAS: dict[type, dict[str, Any]] = {
         "streams": _array(StreamStats),
         "availability": _mapping(FieldAvailability),
         "extensions": "extensions",
+        "cpu": _array(EndpointCpuEvidence),
     },
     ResultArtifact: {
         "result": Result,
@@ -377,26 +409,10 @@ def _validate_measurements(value: SumStats | IntervalStats, path: str) -> None:
 
 
 def _has_observed_evidence(result: Result, pointers: list[str]) -> bool:
-    for pointer in pointers:
-        tokens = _pointer(pointer, "")
-        if not tokens or tokens[0] not in {"raw", "extensions"}:
-            continue
-        value: Any = getattr(result, tokens[0])
-        for token in tokens[1:]:
-            if isinstance(value, dict) and token in value:
-                value = value[token]
-            elif (
-                isinstance(value, list)
-                and re.fullmatch(r"0|[1-9][0-9]*", token)
-                and int(token) < len(value)
-            ):
-                value = value[int(token)]
-            else:
-                break
-        else:
-            if value is not None:
-                return True
-    return False
+    try:
+        return has_observed_evidence(result, pointers)
+    except ValueError as exc:
+        return _fail("", str(exc))
 
 
 def _validate_observations(value: FlowStats | StreamStats, path: str) -> None:
@@ -587,6 +603,62 @@ def _validate_result(result: Result) -> None:
                 f"/result/intervals/{index}/direction",
                 "interval direction conflicts with its local stream",
             )
+
+    def validate_evidence(item, path):
+        names = _SCHEMAS[type(item)].keys() - {"evidence_paths", "endpoint", "locality", "scope"}
+        if item.evidence_paths.keys() - names:
+            _fail(f"{path}/evidence_paths", "evidence map contains an unknown measurement name")
+        for name in names:
+            value = getattr(item, name)
+            pointer = item.evidence_paths.get(name)
+            if value is not None and (
+                pointer is None or not _has_observed_evidence(result, [pointer])
+            ):
+                _fail(
+                    f"{path}/{name}",
+                    "present native evidence requires an existing raw or extension receipt",
+                )
+            if value is None and pointer is not None:
+                _fail(f"{path}/evidence_paths/{name}", "absent evidence belongs in availability")
+
+    for group in ("flows", "streams"):
+        for index, item in enumerate(getattr(result, group)):
+            for observer in ("sender", "receiver", "unattributed"):
+                stats = getattr(item, observer, None)
+                if stats is None or stats.tcp is None:
+                    continue
+                path = f"/result/{group}/{index}/{observer}/tcp"
+                if result.protocol != "tcp" or group != "streams" or observer != "sender":
+                    _fail(path, "TCP summary evidence belongs to a TCP stream sender")
+                validate_evidence(stats.tcp, path)
+    for index, interval in enumerate(result.intervals):
+        if interval.tcp is not None:
+            path = f"/result/intervals/{index}/tcp"
+            if (
+                result.protocol != "tcp"
+                or interval.scope != "stream"
+                or interval.observation != "sender"
+            ):
+                _fail(path, "TCP interval evidence belongs to a TCP stream sender")
+            validate_evidence(interval.tcp, path)
+    localities = set()
+    for index, cpu in enumerate(result.cpu):
+        path = f"/result/cpu/{index}"
+        if cpu.locality in localities:
+            _fail(path, "duplicate CPU locality")
+        localities.add(cpu.locality)
+        expected = (
+            result.reporting_role
+            if cpu.locality == "local"
+            else "server"
+            if result.reporting_role == "client"
+            else "client"
+            if result.reporting_role == "server"
+            else None
+        )
+        if cpu.endpoint != "unknown" and cpu.endpoint != expected:
+            _fail(f"{path}/endpoint", "CPU endpoint conflicts with reporting role and locality")
+        validate_evidence(cpu, path)
     _validate_configuration(result, execution)
     for pointer, availability in result.availability.items():
         path = _child("/result/availability", pointer)

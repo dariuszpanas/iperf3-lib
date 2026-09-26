@@ -3,7 +3,9 @@
 !!! note "Unreleased artifact API"
     This contract is being prepared for 0.3.0. Install from source until that
     version is published. Artifact schema versions are independent of package
-    versions.
+    versions. Schema v1 has never been publicly released and remains amendable
+    before 0.3.0. Published schema contracts will require explicit versioning for
+    incompatible changes; unreleased development snapshots have no such guarantee.
 
 Use a versioned artifact when saving a benchmark for later analysis or sharing
 it with another application. `Result.to_dict()` remains an unversioned
@@ -152,3 +154,19 @@ completion timestamp does not prove an observed completion event. Those
 uncertainties remain explicit after migration. The Pydantic models published
 in 0.2.0 and arbitrary third-party dictionaries are not silently treated as
 this development snapshot format.
+
+
+## TCP/CPU fields in the development v1 schema
+
+The unreleased v1 contract includes optional TCP evidence on interval and stream
+sender statistics, and an endpoint CPU collection on `Result`. The
+[analysis guide](analysis.md#tcp-and-endpoint-cpu-evidence) specifies units,
+qualification and attribution. Strict readers validate protocol/scope/endpoint
+consistency and require an existing raw or namespaced receipt for every present
+measurement. CPU percentages may exceed 100%; windows/counts remain nonnegative
+integers and RTT remains finite nonnegative seconds.
+
+Retained development fixtures gained only explicit `tcp: null` and `cpu: []`
+fields. Hash regressions ensure all previous measurements, raw JSON, diagnostics
+and producer metadata remain unchanged. A separate fixture records newly
+normalized evidence. Loading earlier archives never reparses or backfills them.

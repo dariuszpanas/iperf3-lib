@@ -72,6 +72,7 @@ perform native-JSON validation.
 | `flows: list[FlowStats]` | Directional flows with sender/receiver observations. |
 | `intervals: list[IntervalStats]` | Aggregate and per-stream interval observations. |
 | `streams: list[StreamStats]` | Terminal per-stream observations, including mixed UDP summaries marked unattributed. |
+| `cpu: list[EndpointCpuEvidence]` | Qualified process CPU observations with endpoint/locality evidence. |
 | `execution: ExecutionMetadata \| None` | Status, methodology, timing, configuration evidence, and producer environment. |
 | `availability: dict[str, FieldAvailability]` | Explicit uncertainty or absence keyed by normalized JSON pointer. |
 | `extensions: dict[str, JSONValue]` | Namespaced application metadata preserved by artifacts. |
@@ -104,6 +105,7 @@ direction and optional `SumStats` objects for each observation point.
 | `start_seconds`, `end_seconds` | `None` | Native elapsed boundaries in seconds. |
 | `packets`, `lost_packets` | `None` | Native packet counts. |
 | `omitted` | `None` | Whether native output marks this observation as warm-up. |
+| `tcp` | `None` | `TcpSummaryEvidence` for attributable TCP stream sender observations. |
 
 `EndStats(sum_sent=None, sum_received=None)` holds two optional `SumStats`
 objects. Both are observations of the primary flow, not separate traffic
@@ -116,7 +118,8 @@ direction="unknown", observation=None, stream_id=None)` uses
 optional elapsed interval boundaries in seconds and an optional bitrate in bits/s.
 `stream_id` is the native socket identifier when available.
 Additional fields are `scope`, `bytes`, `duration_seconds`, `omitted`,
-`packets`, `lost_packets`, `retransmits`, `lost_percent`, and `jitter_ms`.
+`packets`, `lost_packets`, `retransmits`, `lost_percent`, `jitter_ms`, and
+`tcp: TcpIntervalEvidence | None`.
 Scope comes from the native container; all optional measurements retain `None`
 when absent. `StreamStats` groups terminal `sender`, `receiver`, or `unattributed`
 summaries by direction and optional stream identifier.
@@ -215,3 +218,51 @@ Importing the module does not load libiperf. `get_capabilities(probe_native=Fals
 provides an offline report; an explicit native probe distinguishes library and
 symbol availability from wrapper support and qualification.
 
+
+
+## Pure measurement analysis
+
+Import from `iperf3_lib.analysis`:
+
+```text
+summary_throughput(result, *, direction, observation) -> ThroughputAnalysis
+interval_stability(result, *, selection, threshold_bps=None,
+                   quantiles=(0.5, 0.95), policy=IntervalPolicy()) -> StabilityAnalysis
+stream_balance(result, *, direction, observation, source="summaries",
+               policy=IntervalPolicy()) -> StreamBalanceAnalysis
+check_compatibility(trials, *, policy) -> CompatibilityAnalysis
+stream_scaling(trials, *, direction, observation, compatibility,
+               best_fraction=0.95, minimum_valid_trials=1) -> ScalingAnalysis
+simultaneous_asymmetry(result, *, observation) -> AsymmetryAnalysis
+sequential_asymmetry(forward, reverse, *, observation,
+                     methodology) -> AsymmetryAnalysis
+```
+
+Inputs include `Selection`, `IntervalPolicy`, `AnalysisTrial(trial_id, result)`,
+`ComparisonPolicy`, and `SequentialMethodology`. Output dataclasses carry
+`quality`, named units, `EvidenceRef(path, trial_id=None)`, and
+`AnalysisDiagnostic(code, message, evidence=())`. `CompatibilityAnalysis` records
+`compatible`, `policy`, concrete per-trial `fingerprints`, and diagnostics.
+All are ordinary frozen dataclasses; nested mappings retain their usual mutability.
+Invalid numbers, counts, option enums and comparison receipts raise `ValueError`.
+Missing measurement evidence produces an explicit data-quality outcome.
+
+The [analysis guide](../guides/analysis.md) specifies formulas, default policies,
+compatibility fields, coverage and methodology requirements.
+
+### TCP and CPU evidence dataclasses
+
+Import these from `iperf3_lib.result`:
+
+- `TcpIntervalEvidence`: `smoothed_rtt_seconds`, `rtt_variation_seconds`,
+  `send_congestion_window_bytes`, `advertised_send_window_bytes`, `path_mtu_bytes`.
+- `TcpSummaryEvidence`: `minimum_sampled_rtt_seconds`,
+  `maximum_sampled_rtt_seconds`, `native_mean_sampled_rtt_seconds`,
+  `maximum_send_congestion_window_bytes`, `maximum_advertised_send_window_bytes`.
+- `EndpointCpuEvidence(endpoint, locality)`: `total_percent`, `user_percent`,
+  `system_percent`, and `scope="iperf_process"`. Endpoint is client/server/unknown;
+  locality is local/remote. Percentages have no 100% ceiling.
+
+All measurement fields default to `None`. Each object has `evidence_paths`, a
+mapping from present measurement names to raw or namespaced receipt pointers.
+Qualification, units and attribution limits are documented in the analysis guide.

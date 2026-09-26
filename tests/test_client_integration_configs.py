@@ -6,6 +6,8 @@ from typing import Any
 
 import pytest
 
+from iperf3_lib.analysis import IntervalPolicy, Selection, interval_stability, summary_throughput
+from iperf3_lib.artifacts import artifact_from_result, dumps_artifact, loads_artifact
 from iperf3_lib.config import ClientConfig, Protocol
 from iperf3_lib.iperf_client import Client
 
@@ -116,6 +118,15 @@ def test_client_normalizes_native_flow_and_stream_directions(iperf3_server, scen
 
     assert result.ok, result.error
     assert result.reporting_role == "client"
+    assert result.cpu[0].endpoint == "client" and result.cpu[0].locality == "local"
+    assert result.cpu[1].endpoint == "server" and result.cpu[1].locality == "remote"
+    for endpoint, prefix in zip(result.cpu, ("host", "remote"), strict=True):
+        for field in ("total", "user", "system"):
+            assert (
+                getattr(endpoint, f"{field}_percent")
+                == result.raw["end"]["cpu_utilization_percent"][f"{prefix}_{field}"]
+            )
+    assert loads_artifact(dumps_artifact(artifact_from_result(result))).result == result
     assert result.raw["start"]["test_start"]["bidir"] == (scenario == "tcp-bidirectional")
     assert result.raw["start"]["test_start"]["reverse"] == (scenario == "tcp-reverse")
     assert result.raw["start"]["test_start"]["num_streams"] == 2
@@ -133,6 +144,12 @@ def test_client_normalizes_native_flow_and_stream_directions(iperf3_server, scen
             assert stats is not None
             assert stats.direction == direction
             assert stats.observation == observer
+            throughput = summary_throughput(result, direction=direction, observation=observer)
+            native_summary = result.raw["end"][f"{native_key}{suffix}"]
+            assert throughput.quality == "complete"
+            assert (
+                throughput.throughput_bps == 8 * native_summary["bytes"] / native_summary["seconds"]
+            )
             assert stats.bits_per_second > 0
             assert (
                 stats.bits_per_second
@@ -160,3 +177,40 @@ def test_client_normalizes_native_flow_and_stream_directions(iperf3_server, scen
         assert normalized.start_seconds == native["start"]
         assert normalized.end_seconds == native["end"]
         assert normalized.bits_per_second == native["bits_per_second"]
+
+        if scenario != "udp" and native["sender"]:
+            assert normalized.tcp is not None
+            assert normalized.tcp.smoothed_rtt_seconds == native["rtt"] / 1_000_000
+            assert normalized.tcp.rtt_variation_seconds == native["rttvar"] / 1_000_000
+            assert normalized.tcp.send_congestion_window_bytes == native["snd_cwnd"]
+            assert normalized.tcp.advertised_send_window_bytes == native["snd_wnd"]
+            assert normalized.tcp.path_mtu_bytes == native["pmtu"]
+        else:
+            assert normalized.tcp is None
+    for normalized, native in zip(result.streams, result.raw["end"]["streams"], strict=True):
+        if scenario != "udp" and native["sender"]["sender"]:
+            assert (
+                normalized.sender.tcp.native_mean_sampled_rtt_seconds
+                == native["sender"]["mean_rtt"] / 1_000_000
+            )
+            assert (
+                normalized.sender.tcp.maximum_send_congestion_window_bytes
+                == native["sender"]["max_snd_cwnd"]
+            )
+        elif normalized.sender is not None:
+            assert normalized.sender.tcp is None
+    for direction, suffix in expected_flows:
+        native_intervals = [
+            interval[f"sum{suffix}"]
+            for interval in result.raw["intervals"]
+            if not interval[f"sum{suffix}"]["omitted"]
+        ]
+        observer = "sender" if native_intervals[0]["sender"] else "receiver"
+        analysis = interval_stability(
+            result,
+            selection=Selection(direction, observer),
+            policy=IntervalPolicy(minimum_intervals=1),
+        )
+        assert analysis.interval_bytes_throughput_bps == 8 * sum(
+            interval["bytes"] for interval in native_intervals
+        ) / sum(interval["seconds"] for interval in native_intervals)

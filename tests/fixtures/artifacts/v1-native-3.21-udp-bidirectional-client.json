@@ -38,6 +38,7 @@
     },
     "bidirectional": true,
     "completed_at_seconds": null,
+    "cpu": [],
     "diagnostics": [
       {
         "code": "provenance.mixed_udp_summary",
@@ -91,7 +92,8 @@
         "omitted": null,
         "packets": 834,
         "retransmits": null,
-        "start_seconds": 0
+        "start_seconds": 0,
+        "tcp": null
       },
       "sum_sent": {
         "bits_per_second": 8002254.831997026,
@@ -106,7 +108,8 @@
         "omitted": null,
         "packets": 834,
         "retransmits": null,
-        "start_seconds": 0
+        "start_seconds": 0,
+        "tcp": null
       }
     },
     "error": null,
@@ -235,7 +238,8 @@
           "omitted": null,
           "packets": 834,
           "retransmits": null,
-          "start_seconds": 0
+          "start_seconds": 0,
+          "tcp": null
         },
         "sender": {
           "bits_per_second": 8002254.831997026,
@@ -250,7 +254,8 @@
           "omitted": null,
           "packets": 834,
           "retransmits": null,
-          "start_seconds": 0
+          "start_seconds": 0,
+          "tcp": null
         }
       },
       {
@@ -268,7 +273,8 @@
           "omitted": null,
           "packets": 834,
           "retransmits": null,
-          "start_seconds": 0
+          "start_seconds": 0,
+          "tcp": null
         },
         "sender": {
           "bits_per_second": 8002254.831997026,
@@ -283,7 +289,8 @@
           "omitted": null,
           "packets": 834,
           "retransmits": null,
-          "start_seconds": 0
+          "start_seconds": 0,
+          "tcp": null
         }
       }
     ],
@@ -303,7 +310,8 @@
         "retransmits": null,
         "scope": "aggregate",
         "start_seconds": 0,
-        "stream_id": null
+        "stream_id": null,
+        "tcp": null
       },
       {
         "bits_per_second": 8002255.11702496,
@@ -320,7 +328,8 @@
         "retransmits": null,
         "scope": "aggregate",
         "start_seconds": 0,
-        "stream_id": null
+        "stream_id": null,
+        "tcp": null
       },
       {
         "bits_per_second": 4001127.55851248,
@@ -337,7 +346,8 @@
         "retransmits": null,
         "scope": "stream",
         "start_seconds": 0,
-        "stream_id": 7
+        "stream_id": 7,
+        "tcp": null
       },
       {
         "bits_per_second": 4001123.267995256,
@@ -354,7 +364,8 @@
         "retransmits": null,
         "scope": "stream",
         "start_seconds": 0,
-        "stream_id": 9
+        "stream_id": 9,
+        "tcp": null
       },
       {
         "bits_per_second": 4001119.4542098925,
@@ -371,7 +382,8 @@
         "retransmits": null,
         "scope": "stream",
         "start_seconds": 0,
-        "stream_id": 11
+        "stream_id": 11,
+        "tcp": null
       },
       {
         "bits_per_second": 4001119.4542098925,
@@ -388,7 +400,8 @@
         "retransmits": null,
         "scope": "stream",
         "start_seconds": 0,
-        "stream_id": 13
+        "stream_id": 13,
+        "tcp": null
       }
     ],
     "ok": true,
@@ -709,7 +722,8 @@
           "omitted": null,
           "packets": 417,
           "retransmits": null,
-          "start_seconds": 0
+          "start_seconds": 0,
+          "tcp": null
         }
       },
       {
@@ -730,7 +744,8 @@
           "omitted": null,
           "packets": 417,
           "retransmits": null,
-          "start_seconds": 0
+          "start_seconds": 0,
+          "tcp": null
         }
       },
       {
@@ -751,7 +766,8 @@
           "omitted": null,
           "packets": 417,
           "retransmits": null,
-          "start_seconds": 0
+          "start_seconds": 0,
+          "tcp": null
         }
       },
       {
@@ -772,7 +788,8 @@
           "omitted": null,
           "packets": 417,
           "retransmits": null,
-          "start_seconds": 0
+          "start_seconds": 0,
+          "tcp": null
         }
       }
     ]

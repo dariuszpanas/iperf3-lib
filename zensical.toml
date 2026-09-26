@@ -17,6 +17,7 @@ nav = [
     { "Rate intent and capabilities" = "guides/configuration-intent.md" },
     { "Reading results" = "guides/results.md" },
     { "Portable result artifacts" = "guides/artifacts.md" },
+    { "Analyzing measurements" = "guides/analysis.md" },
     { "Prometheus output" = "guides/prometheus.md" },
     { "Local Grafana validation" = "guides/grafana.md" },
   ] },
