@@ -439,8 +439,9 @@ def test_installed_saved_artifacts_keep_estimates_and_failure_freshness_separate
 
 
 @pytest.mark.parametrize("scenario", ["success", "client-error", "not-ready", "exited"])
+@pytest.mark.parametrize("declared_port", [None, 5209])
 def test_smoke_server_owns_fresh_process_and_bounded_cleanup(
-    monkeypatch: pytest.MonkeyPatch, scenario: str
+    monkeypatch: pytest.MonkeyPatch, scenario: str, declared_port: int | None
 ) -> None:
     """Observe readiness without connecting and reclaim each single-use server."""
     state = {"exit": None}
@@ -454,6 +455,8 @@ def test_smoke_server_owns_fresh_process_and_bounded_cleanup(
 
     def _spawn(command, *, stdout, stderr):
         assert "--one-off" in command and "--forceflush" in command
+        if declared_port is not None:
+            assert command[command.index("-p") + 1] == str(declared_port)
         assert stderr == subprocess.STDOUT
         calls.append("spawn")
         if scenario == "exited":
@@ -477,7 +480,7 @@ def test_smoke_server_owns_fresh_process_and_bounded_cleanup(
     monkeypatch.setattr("scripts.smoke_release.time.monotonic", lambda: next(moments))
 
     def _exercise():
-        with native_server("iperf3") as (host, port):
+        with native_server("iperf3", port=declared_port) as (host, port):
             assert host == "127.0.0.1" and 0 < port < 65536
             if scenario == "client-error":
                 raise RuntimeError("client failed")
