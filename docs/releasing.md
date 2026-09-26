@@ -4,6 +4,13 @@ Release scope and migration decisions are tracked in the [roadmap](roadmap.md).
 A merged PR prepares code; publishing a package requires an explicit release
 decision.
 
+For 0.3.0, the planned experiment scope is finite sequential trials and
+explicit sweeps. Adaptive UDP, live events, and isolated workers have a
+[documented follow-on disposition](design/advanced-execution.md); their issues
+remain open. The small native event probe does not qualify stress delivery,
+impairment, cancellation, or process cleanup. Release notes and capability
+claims must preserve those boundaries.
+
 ## Rehearse without publishing
 
 The default manual mode of the
