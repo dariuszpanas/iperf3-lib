@@ -13,6 +13,7 @@ nav = [
   { "Home" = "index.md" },
   { "Start here" = [
     { "Installation and first run" = "getting-started.md" },
+    { "Migrating from 0.2.0" = "guides/migration-0.3.md" },
     { "Running clients and servers" = "guides/running-tests.md" },
     { "Rate intent and capabilities" = "guides/configuration-intent.md" },
     { "Reading results" = "guides/results.md" },
