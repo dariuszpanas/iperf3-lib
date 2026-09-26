@@ -1,54 +1,120 @@
 # Releasing
 
-This is the maintainer procedure. Documentation work or closing a roadmap issue
-does not publish a package. Decide the next release scope through the
-[roadmap](roadmap.md) before selecting a candidate version.
+Release scope and migration decisions are tracked in the [roadmap](roadmap.md).
+A merged PR prepares code; publishing a package requires an explicit release
+decision.
 
-## Qualify the candidate
+## Rehearse without publishing
 
-1. Fetch `origin`, compare the candidate with current `origin/main`, and review
-   unresolved correctness issues and accepted release criteria.
-2. Update `project.version` in `pyproject.toml`, refresh `uv.lock`, and move the
-   appropriate changes out of `Unreleased` in the [changelog](changelog.md).
-   Update the documentation banner, README, and installation examples together.
-3. Run `make ci` and `make build`. Require the hosted Python 3.12–3.14 ×
-   libiperf 3.19.1/3.21 matrix for the exact candidate commit. Preserve both
-   endpoint observations and native lifecycle behavior in regression coverage.
-4. Inspect the rendered README, built docs, and public documentation URLs.
-   Verify the Pages deployment reflects the intended source, and check links
-   anonymously. Twine and the offline link checker do not prove remote availability.
-5. For exporter changes, require a real benchmark to reach Prometheus and the
-   intended Grafana queries/panels. A string comparison of metrics is insufficient.
+The default manual mode of the
+[release workflow](https://github.com/dariuszpanas/iperf3-lib/actions/workflows/release.yml)
+is **qualify**. It builds and tests a candidate and retains evidence without
+uploading to a package registry or creating a GitHub Release.
 
-Validate the chosen tag against metadata (replace the example for the next release):
+After the workflow change is on `main`, run:
 
 ```bash
-uv run --no-project python scripts/validate_release.py --tag v0.2.0
+gh workflow run release.yml --ref main -f target=qualify
 ```
 
-## Publication workflow
+The optional `version` input asserts that the selected revision's
+`project.version` matches the supplied value. Omitting it uses the metadata.
+A branch can be rehearsed in qualification mode; publication requires its
+exact revision to belong to the remote default-branch history.
 
-The [release workflow](https://github.com/dariuszpanas/iperf3-lib/blob/main/.github/workflows/release.yml)
-has two entry points:
+A successful rehearsal contains:
 
-- A `v*` tag validates that its version matches metadata, builds wheel and sdist,
-  checks Twine metadata and wheel contents, and smoke-installs the wheel on all
-  supported Python versions. The `pypi` environment publishes the retained
-  distributions, followed by a GitHub Release using those same artifacts.
-- Manual dispatch requires an exact version input and publishes only to TestPyPI
-  through the `testpypi` environment after the same build and smoke checks.
+- A strict documentation build, rendered README and local-link checks, static
+  and unit gates, YAGA policy checks, and Docker-backed workflow lint.
+- One wheel/sdist pair checked with Twine and wheel-content validation.
+  Both embedded descriptions must match the candidate README and render with
+  valid documentation links. Every absolute documentation URL in the README,
+  including its deployed HTML fragments, is checked alongside the public
+  landing and changelog pages.
+- A `release-bundle` artifact with those distributions and
+  `release-evidence/manifest.json`. The manifest records source revision,
+  version, build Python, filenames, sizes, and SHA-256 hashes.
+- The full Python 3.12–3.14 × libiperf 3.19.1/3.21 native matrix, including
+  lifecycle regressions, from the exact source revision.
+- Installed wheel **and** sdist qualification in every matrix cell. These use
+  fresh environments and isolated interpreters outside the checkout;
+  editable/source imports are rejected.
+- Retained `native-evidence-py*-iperf*` receipts showing native TCP, reverse,
+  bidirectional, UDP, and SCTP runs, reporting roles, directional observations,
+  configuration checks, and missing/zero/error-result semantics.
+- A successful aggregate **Release qualification** job. Artifacts and evidence
+  are retained for 30 days; download them for a longer-lived release record.
 
-The workflow itself does not run the full native suite or assert that a tag is
-on `main`; maintainers must establish those conditions before pushing a tag.
-Production and TestPyPI publication require an explicit release decision.
+The installed smoke runs bounded, rate-limited loopback benchmarks. Each
+format's smoke has a 120-second process deadline in the qualification
+container. This test harness does not change the library's documented
+cancellation or concurrency behavior.
+
+## Prepare the release candidate
+
+1. Fetch `origin`, compare the candidate with current `origin/main`, and
+   resolve the accepted release criteria. Record dispositions for proposals
+   deferred to a later version.
+2. Update `project.version` in `pyproject.toml`, refresh `uv.lock`, and move
+   the selected entries from `Unreleased` into a dated
+   [changelog](changelog.md) section. Update the README, installation examples,
+   migration instructions, and documentation banner together.
+3. Run local quality/unit gates before the Docker/native matrix. Merge the
+   candidate through the normal required checks, then run a build-only hosted
+   rehearsal for the resulting exact commit. Inspect the retained distributions,
+   hashes, and every installed-native receipt.
+4. Inspect the rendered README and deployed documentation anonymously. Confirm
+   the Pages revision, actual page content, and public links. The automated
+   HTTP checks alone do not establish that the intended revision is displayed.
+5. For measurement/exporter changes, also require the real
+   [Prometheus/Grafana qualification](guides/grafana.md). An installed import
+   or a string comparison of metrics is insufficient.
+6. Verify the registry's trusted-publisher configuration and intended publishing
+   environment restrictions before selecting a publication target. The workflow
+   does not create or administratively configure those settings for a rehearsal.
+
+Accepted version syntax is `MAJOR.MINOR.PATCH`, optionally followed by
+`aN`, `bN`, or `rcN`, and optionally `.devN`. Local versions, epochs,
+and post releases are not part of this publication policy.
+
+Validate a planned tag against the current metadata:
+
+```bash
+uv run --no-project python scripts/validate_release.py --tag v0.3.0
+```
+
+That local metadata check alone does not qualify the candidate. The workflow
+also binds checkout HEAD to the event SHA, and publication requires
+default-branch ancestry.
+
+## Publish only after the release decision
+
+There are two publishing entry points:
+
+- An explicitly selected manual `target=testpypi` runs the complete
+  qualification and publishes only to TestPyPI through the `testpypi`
+  environment.
+- A `v*` tag runs the complete qualification, verifies exact tag/version
+  equality and default-branch ancestry, and publishes to PyPI through the
+  `pypi` environment. It then creates the GitHub Release.
+
+Both paths build once. Publishing jobs download the retained bundle and
+verify its manifest against the hash emitted by the build job, then verify
+the exact artifact filenames, sizes, hashes, version and source identity.
+They publish those same files without checking out or rebuilding the package.
+The GitHub Release includes the same wheel, sdist and manifest.
+
+Current stable uv is supported throughout; qualification records the tools
+used and synchronizes the committed dependency lockfile.
 
 ## Verify publication
 
-Check the new PyPI metadata, wheel/sdist files, and GitHub Release assets. Install
-the published wheel in a clean environment, check its version and lazy import,
-and run a real native smoke test with a supported library. Inspect the PyPI
-description and its documentation links without maintainer authentication.
+Check the published registry metadata, wheel/sdist files, GitHub Release
+assets and their hashes against the retained manifest. Install the published
+package in a clean environment, check version and lazy import, and run a
+native smoke with a supported library. Inspect the public PyPI description
+and its documentation links without maintainer authentication.
 
-If publication is interrupted, inspect which artifacts reached the registry
-before retrying. Published files cannot be overwritten. If only the GitHub
-Release failed, repair that step using the retained artifacts.
+If publication is interrupted, inspect which files reached the registry
+before retrying. Published files cannot be overwritten. If only GitHub Release
+creation failed, repair that step using the retained artifacts.
