@@ -6,6 +6,13 @@ These pages describe `main`. Released versions remain available through
 
 ## Unreleased
 
+- Add finite parameter sweeps with preflight budgets, recorded cell order,
+  per-cell warm-ups and measured trials, shared sequential execution, and full
+  failure retention. Verify declared axes and native rate allocations before
+  qualifying receiver medians or explicit method/direction comparisons.
+- Add strict sweep-v1 reports preserving every artifact, setting check and
+  exclusion; validate frozen selection and arithmetic without rerunning analysis.
+
 - Add finite sequential trial plans with detached native settings, explicit
   admission budgets, warm-up runs, between-run pauses, retained failures and
   unstarted records, and no hidden retries.
