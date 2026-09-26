@@ -28,8 +28,7 @@ for flow in result.flows:
             print(flow.direction, observer, stats.bits_per_second)
 ```
 
-Use `flow.direction` for direction labels. The development parser currently
-leaves the nested `SumStats.direction` value inconsistent for reverse runs.
+Flow and nested summary directions agree, including reverse runs.
 Bidirectional end summaries have separate flow entries for each direction.
 
 `result.end.sum_sent` and `result.end.sum_received` retain the compatibility
@@ -38,21 +37,17 @@ results rather than interpreting those two fields as opposite directions.
 
 ## Treat missing data explicitly
 
-A missing endpoint summary is `None`. Missing retransmissions, loss, jitter,
-or interval throughput are also `None`. Their absence does not establish a
-zero measurement.
+A missing endpoint summary is `None`. Missing bitrate, retransmissions, loss,
+jitter, and interval boundaries are also `None`. A measured zero stays zero.
+The Prometheus exporter omits an unavailable measurement while retaining
+other available measurements for the same endpoint.
 
-There are still exceptions in the development model:
-
-- `SumStats.bits_per_second` defaults to zero, and an existing native summary
-  object without a bitrate is normalized to zero.
-- Missing interval start/end values default to zero.
-- `summary_mbps` returns the first nonzero summary rate, preferring the sender,
-  or zero when none is available. It is not a sum across flows or streams.
-
-Inspect `raw` if your application must distinguish an absent bitrate or
-interval boundary from a measured zero. The roadmap includes strengthening
-these missing-data guarantees before release.
+`summary_mbps` remains a compatibility convenience: it selects the first
+available summary bitrate, preferring the sender, including a measured zero.
+It returns `0.0` when no rate is available. Use the optional
+`SumStats.bits_per_second` field when your application must distinguish those
+two cases. The property never adds sender and receiver observations or sums
+independent flows.
 
 ## Read intervals
 
@@ -76,10 +71,20 @@ socket identifier when present. A missing socket identifier also produces
 `None`, so it is not an unconditional guarantee that a record is an aggregate.
 Do not add aggregate and per-stream records together.
 
-Bidirectional aggregate interval keys are recognized, but per-stream interval
-directions currently use the first flow's direction. Inspect native interval
-records for bidirectional per-stream analysis. Omission flags, byte counts,
-and other interval fields remain in `raw` rather than the normalized model.
+Bidirectional per-stream mapping uses reporting-endpoint and native role
+evidence. Unproven direction is `"unknown"` and produces a diagnostic; it is
+never silently assigned to the first flow. A missing observation point is
+`None`. Omission flags, byte counts, and other interval fields remain in `raw`
+rather than the normalized model.
+
+`Client.run()` supplies its known client role. When importing saved native
+JSON, `result_from_iperf_json(raw, reporting_role="server")` can supply the
+reporting endpoint explicitly. The parser also recognizes native
+`start.connecting_to` and `start.accepted_connection` markers. It records the
+resolved value in `result.reporting_role`; contradictory role evidence is
+diagnosed and left unknown. The interval's local `sender` flag, or compatible
+end-of-test evidence for the same socket, determines its direction relative
+to that role. It does not depend on the order of stream records.
 
 The package does not yet calculate stability statistics or interval
 percentiles. Any percentile calculated from interval rates describes interval
@@ -109,7 +114,15 @@ after the call completes. Direct use of `result_from_iperf_json()` estimates
 completion as start plus configured duration when both are present, rather
 than measuring elapsed wall time.
 
-`diagnostics` currently defaults to an empty list. Automatic data-quality
-diagnostics, normalized requested/effective configuration, and richer TCP/CPU
-analysis are future work.
+`diagnostics` records incomplete output, missing measurements, and ambiguous
+direction or observation evidence. A saved native `error` document has
+`ok=False`, retains its message and raw data, and cannot export its partial
+measurements as a successful run. Output without any numeric end-of-test
+endpoint evidence is also incomplete and has `ok=False`. A partial summary
+with some valid measurements remains usable, with diagnostics for gaps.
+
+Invalid object shapes, malformed flags, nonnumeric measurements, and
+non-finite values raise `ValueError`; they do not become zero measurements.
+Normalized requested/effective configuration and richer TCP/CPU analysis
+remain future work.
 

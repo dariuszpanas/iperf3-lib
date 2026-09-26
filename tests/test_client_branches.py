@@ -150,6 +150,44 @@ def _setup_and_run(monkeypatch, lib, cfg_kwargs, dummy_ffi=None):
     return res, lib._record
 
 
+@pytest.mark.parametrize(
+    ("payload", "expected_error"),
+    [
+        (b'{"error":"native failure","end":{"sum_sent":{"bits_per_second":42}}}', False),
+        (b'{"start":{},"end":{}}', False),
+        (b'{"end":{"sum_sent":{"bits_per_second":"invalid"}}}', True),
+    ],
+)
+def test_client_frees_native_test_once_after_failed_or_invalid_json(
+    monkeypatch, payload, expected_error
+):
+    """Preserve native ownership when parsing returns failure or rejects malformed output."""
+
+    class PayloadLib(RecorderLib):
+        """Return a controlled native document and record native cleanup."""
+
+        def iperf_get_test_json_output_string(self, test):
+            """Return the document selected for this error path."""
+            return payload
+
+        def iperf_free_test(self, test):
+            """Count frees of the non-null native test."""
+            assert test == 1
+            self._record["free_count"] = self._record.get("free_count", 0) + 1
+
+    native = PayloadLib()
+    if expected_error:
+        with pytest.raises(ValueError):
+            _setup_and_run(monkeypatch, native, {})
+    else:
+        result, _ = _setup_and_run(monkeypatch, native, {})
+        assert not result.ok
+        assert result.error
+        assert result.completed_at_seconds is not None
+        assert result.reporting_role == "client"
+    assert native._record["free_count"] == 1
+
+
 def test_client_bidirectional(monkeypatch):
     """Test bidirectional setter logic in client."""
     r = RecorderLib()

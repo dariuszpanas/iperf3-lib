@@ -50,8 +50,10 @@ run snapshots, not counters accumulating across runs.
 | `iperf3_last_run_jitter_seconds` | Reported jitter in milliseconds divided by 1,000. |
 
 Measurements carry `direction` and `observer` labels. Status and freshness
-metrics use only your supplied labels. Missing optional measurements are
-omitted; see the [result model's current missing-data limitations](results.md).
+metrics use only your supplied labels. Missing measurements, including an
+absent bitrate inside a present summary, are omitted. Measured zero values
+are emitted as zero. An endpoint can therefore export its known retransmission
+count even when its throughput is unavailable. See [result semantics](results.md).
 
 A failed result emits its failure status and known timestamps, without
 throughput, retransmissions, loss, or jitter from earlier runs. Persist the
@@ -69,6 +71,11 @@ text = render_text(
 For a successful result with a known completion time, that time takes
 precedence over the supplied previous success time. There is no stored state
 inside the exporter.
+
+Saved failed or incomplete documents without an actual completion timestamp
+omit the completion metric. Their requested duration is never used to invent
+a completion time. A live `Client.run()` records its return time for both
+successful and failed runs.
 
 ## Write a node_exporter textfile
 

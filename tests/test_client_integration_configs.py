@@ -96,20 +96,37 @@ def test_client_applies_protocol_and_settings(
 
 
 @pytest.mark.integration
-def test_client_normalizes_both_directions_from_native_bidirectional_run(iperf3_server) -> None:
-    """Preserve native bidir flags and all four endpoint summaries in normalized results."""
+@pytest.mark.parametrize("scenario", ["tcp-forward", "tcp-reverse", "tcp-bidirectional", "udp"])
+def test_client_normalizes_native_flow_and_stream_directions(iperf3_server, scenario: str) -> None:
+    """Match nested flow summaries and every per-stream interval to actual native JSON."""
     host, port = iperf3_server
     result = Client(
-        ClientConfig(server=host, port=port, duration=1, bidirectional=True, rate=4_000_000)
+        ClientConfig(
+            server=host,
+            port=port,
+            duration=1,
+            parallel=2,
+            protocol=Protocol.UDP if scenario == "udp" else Protocol.TCP,
+            reverse=scenario == "tcp-reverse",
+            bidirectional=scenario == "tcp-bidirectional",
+            rate=4_000_000,
+            blksize=1200 if scenario == "udp" else None,
+        )
     ).run()
 
     assert result.ok, result.error
-    assert result.raw["start"]["test_start"]["bidir"] == 1
-    assert result.bidirectional is True
-    assert len(result.flows) == 2
+    assert result.reporting_role == "client"
+    assert result.raw["start"]["test_start"]["bidir"] == (scenario == "tcp-bidirectional")
+    assert result.raw["start"]["test_start"]["reverse"] == (scenario == "tcp-reverse")
+    assert result.raw["start"]["test_start"]["num_streams"] == 2
+    assert result.bidirectional == (scenario == "tcp-bidirectional")
+    primary = "server_to_client" if scenario == "tcp-reverse" else "client_to_server"
     flows = {flow.direction: flow for flow in result.flows}
-    assert set(flows) == {"client_to_server", "server_to_client"}
-    for direction, suffix in (("client_to_server", ""), ("server_to_client", "_bidir_reverse")):
+    expected_flows = [(primary, "")]
+    if scenario == "tcp-bidirectional":
+        expected_flows.append(("server_to_client", "_bidir_reverse"))
+    assert set(flows) == {direction for direction, _ in expected_flows}
+    for direction, suffix in expected_flows:
         flow = flows[direction]
         for observer, native_key in (("sender", "sum_sent"), ("receiver", "sum_received")):
             stats = getattr(flow, observer)
@@ -121,3 +138,25 @@ def test_client_normalizes_both_directions_from_native_bidirectional_run(iperf3_
                 stats.bits_per_second
                 == result.raw["end"][f"{native_key}{suffix}"]["bits_per_second"]
             )
+    assert result.end is not None
+    assert result.end.sum_sent == flows[primary].sender
+    assert result.end.sum_received == flows[primary].receiver
+    native_streams = [
+        stream for interval in result.raw["intervals"] for stream in interval["streams"]
+    ]
+    normalized_streams = [
+        interval for interval in result.intervals if interval.stream_id is not None
+    ]
+    assert len(normalized_streams) == len(native_streams)
+    for normalized, native in zip(normalized_streams, native_streams, strict=True):
+        direction = (
+            ("client_to_server" if native["sender"] else "server_to_client")
+            if scenario == "tcp-bidirectional"
+            else primary
+        )
+        assert normalized.stream_id == native["socket"]
+        assert normalized.direction == direction
+        assert normalized.observation == ("sender" if native["sender"] else "receiver")
+        assert normalized.start_seconds == native["start"]
+        assert normalized.end_seconds == native["end"]
+        assert normalized.bits_per_second == native["bits_per_second"]

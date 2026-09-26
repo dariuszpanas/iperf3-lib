@@ -19,17 +19,17 @@ Documentation tracks the development branch. The following foundation is on
 | Area | Current foundation | Remaining work |
 | --- | --- | --- |
 | Configuration | Dataclasses with explicit type/value validation and a direct CFFI execution path. | Intent-based rates, profiles, verified effective configuration, and a structured capability report. |
-| Results | Directional flow summaries, aggregate and per-stream interval rates, timestamps, retained native JSON, and a diagnostics container. | Correct edge-case direction/missing-data handling; add a durable schema, richer stream/interval metadata, and populated diagnostics. |
+| Results | Consistent directional summaries, aggregate and per-stream interval rates, explicit missing values, reporting-role evidence, and data-quality diagnostics. | A durable schema, richer stream/interval metadata, and execution provenance. |
 | Serialization | `Result.to_dict()` returns dataclass fields as a dictionary. | A versioned artifact contract and documented compatibility/reading behavior. |
-| Metrics | Latest-run Prometheus gauges, freshness fields, atomic replacement, and a local Grafana qualification fixture. | Resolve the remaining result missing-data contract and repeat integration qualification for the release candidate. |
+| Metrics | Latest-run Prometheus gauges, omitted unavailable values, freshness fields, atomic replacement, and a local Grafana qualification fixture. | Repeat integration qualification for the final release candidate. |
 | Execution | Synchronous APIs and asynchronous convenience methods using executor threads. | Live events and isolated execution for stronger deadline, cancellation, or concurrency guarantees. |
 | Analysis and plans | Applications can compose individual runs. | Built-in statistics, repeated trials, assessments, baselines, and bounded sweeps. |
 
-The richer result model remains a foundation in progress. In particular,
-missing throughput in a present summary can currently become zero, reverse
-nested observations can retain the wrong direction, and bidirectional stream
-intervals need more precise direction mapping. These are tracked correctness
-work, not stable analysis semantics to build on blindly.
+Result correctness is covered by captures from both reporting endpoints on
+the minimum and latest libiperf versions. Missing values remain distinct from
+zero, reverse summaries agree, and bidirectional stream mapping uses explicit
+native role evidence. Richer aggregation metadata and a durable artifact
+contract are the next foundation for analysis.
 
 ## 1. Documentation and release decisions
 
