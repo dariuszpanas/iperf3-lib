@@ -111,10 +111,11 @@ result = await Client(config).arun()
 `Result` keeps the complete native JSON in `raw` and provides normalized
 `flows`, `intervals`, protocol, duration, and timestamp fields. Each flow
 identifies its direction independently from whether the native measurement was
-reported by the sender or receiver. The normalization contract is still being
-completed: optional measurements may be `None`, while some legacy summary
-values default to zero. Review the
-[current result limitations](https://dariuszpanas.github.io/iperf3-lib/guides/results.html)
+reported by the sender or receiver. Missing measurements are `None`; measured
+zeros remain zero. Ambiguous stream direction is `"unknown"` with diagnostics,
+and native error documents are failed results. The legacy `summary_mbps`
+convenience still returns `0.0` when no rate is available. Review the
+[result semantics](https://dariuszpanas.github.io/iperf3-lib/guides/results.html)
 before using the development API for automated acceptance decisions.
 Configuration strings for protocols are normalized to `Protocol`; numeric
 configuration fields require integers (not booleans or numeric strings), and

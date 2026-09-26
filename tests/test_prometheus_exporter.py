@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from iperf3_lib.exporters.prometheus import render_text, write_textfile
-from iperf3_lib.result import EndStats, FlowStats, Result, SumStats
+from iperf3_lib.result import EndStats, FlowStats, Result, SumStats, result_from_iperf_json
 
 
 def test_render_text_uses_snapshot_gauges_consistent_units_and_escaped_labels():
@@ -218,3 +218,92 @@ def test_write_textfile_invalid_sample_has_no_filesystem_side_effects(tmp_path):
         write_textfile(destination, result)
 
     assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("missing_value", [{}, {"bits_per_second": None}])
+def test_native_missing_bitrate_does_not_hide_other_measurements(tmp_path, missing_value):
+    """Carry absent bitrate through parsing and atomic output without inventing zero."""
+    result = result_from_iperf_json(
+        {
+            "start": {"test_start": {"reverse": 1}},
+            "end": {
+                "sum_sent": missing_value | {"retransmits": 0},
+                "sum_received": {"bits_per_second": 0, "lost_percent": 0, "jitter_ms": 0},
+            },
+        }
+    )
+    destination = tmp_path / "iperf.prom"
+    write_textfile(destination, result)
+    samples = {
+        line
+        for line in destination.read_text(encoding="utf-8").splitlines()
+        if not line.startswith("#")
+    }
+
+    assert samples == {
+        "iperf3_last_run_success 1",
+        'iperf3_last_run_retransmissions{direction="server_to_client",observer="sender"} 0',
+        'iperf3_last_run_throughput_bytes_per_second{direction="server_to_client",observer="receiver"} 0',
+        'iperf3_last_run_packet_loss_ratio{direction="server_to_client",observer="receiver"} 0',
+        'iperf3_last_run_jitter_seconds{direction="server_to_client",observer="receiver"} 0',
+    }
+
+
+def test_native_bidirectional_missing_endpoints_remain_absent():
+    """Keep absent summaries and absent fields distinct across independent directions."""
+    result = result_from_iperf_json(
+        {
+            "start": {"test_start": {"bidir": 1}},
+            "end": {
+                "sum_sent": {},
+                "sum_received": {"bits_per_second": 0},
+                "sum_sent_bidir_reverse": {"bits_per_second": 800},
+                "sum_received_bidir_reverse": {"jitter_ms": 2},
+            },
+        }
+    )
+
+    samples = [line for line in render_text(result).splitlines() if not line.startswith("#")]
+
+    assert samples == [
+        "iperf3_last_run_success 1",
+        'iperf3_last_run_throughput_bytes_per_second{direction="client_to_server",observer="receiver"} 0',
+        'iperf3_last_run_throughput_bytes_per_second{direction="server_to_client",observer="sender"} 100',
+        'iperf3_last_run_jitter_seconds{direction="server_to_client",observer="receiver"} 0.002',
+    ]
+
+
+def test_saved_native_error_never_exports_partial_throughput():
+    """Suppress partial measurements from a saved native error document."""
+    result = result_from_iperf_json(
+        {"error": "control connection closed", "end": {"sum_sent": {"bits_per_second": 800}}}
+    )
+    result.completed_at_seconds = 123
+    text = render_text(result, last_success_timestamp_seconds=100)
+
+    assert "iperf3_last_run_success 0" in text
+    assert "throughput" not in text
+    assert "iperf3_last_run_completed_timestamp_seconds 123" in text
+    assert "iperf3_last_success_timestamp_seconds 100" in text
+
+
+@pytest.mark.parametrize("failure", [{"error": "interrupted"}, {}])
+def test_saved_failed_or_incomplete_run_never_invents_completion_from_planned_duration(failure):
+    """Do not treat an aborted run's requested duration as a completion timestamp."""
+    result = result_from_iperf_json(
+        failure
+        | {
+            "start": {
+                "timestamp": {"timesecs": 100},
+                "test_start": {"duration": 10, "reverse": 0},
+            }
+        }
+    )
+
+    text = render_text(result, last_success_timestamp_seconds=90)
+
+    assert not result.ok
+    assert result.completed_at_seconds is None
+    assert "iperf3_last_run_success 0" in text
+    assert "completed_timestamp_seconds" not in text
+    assert "iperf3_last_success_timestamp_seconds 90" in text

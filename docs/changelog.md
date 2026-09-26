@@ -16,9 +16,12 @@ These pages describe `main`. Released versions remain available through
   on failed atomic replacement.
 - Read libiperf's native `bidir` flag so simultaneous bidirectional runs retain
   both flows. Keep the `bidirectional` spelling compatible and reject conflicts.
+- Preserve missing throughput and interval boundaries as `None`, retain measured
+  zero values, and omit unavailable Prometheus measurements. Keep reverse
+  summary directions consistent and diagnose ambiguous bidirectional stream
+  mappings. Saved native errors and incomplete output no longer appear successful.
 - Add a [Docker Desktop Kubernetes/Grafana example](guides/grafana.md) with
   native JSON-to-metric comparison and success/failure freshness checks.
-  Other normalized-result correctness work remains in the [roadmap](roadmap.md).
 - Refresh development dependencies and use current stable uv in CI and Docker.
 - Adopt YAGA commit, workflow, repository, and source/test-change policies here.
 - Add a Zensical site, GitHub Pages deployment, documentation checks, and
@@ -32,6 +35,15 @@ errors are no longer provided by these models. Use dataclass constructors,
 validation raises `TypeError` or `ValueError`; unsupported native features raise
 `UnsupportedFeatureError` when applied. Numeric strings and booleans are not
 accepted as integer configuration values. See [configuration](reference/configuration.md).
+
+`SumStats.bits_per_second` and interval boundaries can now be `None` when
+native measurements are absent. Check for `None` before arithmetic. The
+legacy `summary_mbps` property still falls back to `0.0` when unavailable,
+but it preserves a genuine zero instead of skipping to another endpoint.
+Saved native errors and empty/incomplete documents produce failed results.
+Applications importing bidirectional JSON without reporting-endpoint evidence
+can pass `reporting_role="client"` or `"server"`; unproven stream direction
+is reported as `"unknown"` with diagnostics.
 
 `Result.to_dict()` returns the dataclass fields, including native JSON. A
 versioned interchange schema and importer have not been introduced; see

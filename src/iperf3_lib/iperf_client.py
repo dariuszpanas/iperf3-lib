@@ -175,7 +175,7 @@ class Client:
 
             if json_text is not None:
                 raw = json.loads(json_text)
-                result = result_from_iperf_json(raw)
+                result = result_from_iperf_json(raw, reporting_role="client")
                 result.completed_at_seconds = time.time()
                 return result
             return Result(

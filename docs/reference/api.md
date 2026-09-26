@@ -38,9 +38,10 @@ perform native-JSON validation.
 | `end: EndStats \| None` | Compatibility view of primary native end summaries. |
 | `protocol: str \| None` | Native protocol string normalized to lowercase. |
 | `bidirectional: bool` | Native simultaneous-bidirectional flag. |
+| `reporting_role: str \| None` | Reporting endpoint (`"client"` or `"server"`) when established. |
 | `flows: list[FlowStats]` | Directional flows with sender/receiver observations. |
 | `intervals: list[IntervalStats]` | Aggregate and per-stream interval observations. |
-| `diagnostics: list[Diagnostic]` | Diagnostic storage; currently not populated automatically. |
+| `diagnostics: list[Diagnostic]` | Missing-data, incomplete-output, native-error, and ambiguous-mapping diagnostics. |
 | `started_at_seconds: float \| None` | Native start Unix timestamp. |
 | `duration_seconds: float \| None` | Duration from native test configuration. |
 | `completed_at_seconds: float \| None` | Live completion Unix timestamp, or an estimate for directly parsed JSON. |
@@ -58,11 +59,11 @@ direction and optional `SumStats` objects for each observation point.
 
 | Attribute | Default | Units |
 | --- | --- | --- |
-| `bits_per_second` | `0` | Bits/s. |
+| `bits_per_second` | `None` | Optional bits/s; a measured zero remains zero. |
 | `retransmits` | `None` | Native retransmission count. |
 | `lost_percent` | `None` | Percentage; `1.0` means one percent. |
 | `jitter_ms` | `None` | Milliseconds. |
-| `direction` | `None` | Direction metadata; use the parent flow for reverse runs. |
+| `direction` | `None` | Direction metadata, consistent with the parent flow. |
 | `observation` | `None` | `"sender"` or `"receiver"` metadata. |
 
 `EndStats(sum_sent=None, sum_received=None)` holds two optional `SumStats`
@@ -72,8 +73,8 @@ directions.
 ### IntervalStats and Diagnostic
 
 `IntervalStats(start_seconds, end_seconds, bits_per_second=None,
-direction="client_to_server", observation="receiver", stream_id=None)` uses
-elapsed interval boundaries in seconds and an optional bitrate in bits/s.
+direction="unknown", observation=None, stream_id=None)` uses
+optional elapsed interval boundaries in seconds and an optional bitrate in bits/s.
 `stream_id` is the native socket identifier when available.
 
 `Diagnostic(message, severity="info")` stores a message and severity
@@ -81,11 +82,20 @@ elapsed interval boundaries in seconds and an optional bitrate in bits/s.
 
 ### Native JSON normalization
 
-`iperf3_lib.result.result_from_iperf_json(raw)` normalizes a native JSON
-dictionary. Invalid shapes or numeric values raise `ValueError`. The function
-does not run a benchmark and does not independently verify execution success;
-its normal return currently has `ok=True`. Preserve run status separately
-when importing saved native data, especially native error payloads.
+`iperf3_lib.result.result_from_iperf_json(raw, *, reporting_role=None)` normalizes a native JSON
+dictionary without running a benchmark. Invalid shapes or numeric values raise
+`ValueError`. Native error documents and incomplete output with no numeric
+end-of-test endpoint evidence return `ok=False`, preserving the raw data and
+diagnostics. Valid partial measurements remain available; successful parsing
+does not certify that every requested measurement was reported.
+
+`reporting_role` accepts `"client"`, `"server"`, or `None`. `Client.run()`
+provides `"client"`. Saved JSON can establish its role through native
+`start.connecting_to` or `start.accepted_connection` markers; a generic
+`start.connected` list alone does not establish a role. Contradictory evidence
+produces an unknown role and a diagnostic. Bidirectional stream direction
+requires both reporting role and local sender evidence; aggregate summary
+keys remain relative to the client on either reporting endpoint.
 
 Direction parsing recognizes native `start.test_start.bidir` and the earlier
 `bidirectional` spelling. Both must agree when present together. Direction
@@ -104,8 +114,8 @@ write_textfile(path, result, labels=None, *, last_success_timestamp_seconds=None
 `labels` is an optional mapping of strings to strings. `path` accepts a
 string or path-like object. See [Prometheus snapshots](../guides/prometheus.md)
 for metric units, freshness, label validation, and collector integration.
-The [results guide](../guides/results.md) records the remaining normalization
-and missing-data limitations.
+The [results guide](../guides/results.md) explains direction and missing-data
+semantics.
 
 ## Exceptions and capabilities
 

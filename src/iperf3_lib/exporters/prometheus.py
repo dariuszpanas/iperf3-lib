@@ -78,7 +78,8 @@ def render_text(
     )
     completed_at = result.completed_at_seconds
     if (
-        completed_at is None
+        result.ok
+        and completed_at is None
         and result.started_at_seconds is not None
         and result.duration_seconds is not None
     ):
@@ -114,7 +115,7 @@ def render_text(
                 emit(
                     "iperf3_last_run_throughput_bytes_per_second",
                     "Throughput observed during the latest run.",
-                    stats.bits_per_second / 8,
+                    stats.bits_per_second / 8 if stats.bits_per_second is not None else None,
                     direction=flow.direction,
                     observer=observer,
                 )
