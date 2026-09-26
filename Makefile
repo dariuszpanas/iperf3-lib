@@ -88,17 +88,19 @@ build:
 	$(UV) run --frozen --no-dev --group release check-wheel-contents dist/*.whl
 
 docker-build:
-	docker build \
-		--build-arg PYTHON_BASE=$(PYTHON_BASE) \
-		--build-arg IPERF3_VERSION=$(IPERF3_VERSION) \
-		-t $(DOCKER_IMAGE) .
+	$(UV) run --frozen python scripts/docker_validate.py build \
+		--python-base "$(PYTHON_BASE)" --iperf-version "$(IPERF3_VERSION)" \
+		--image "$(DOCKER_IMAGE)"
 
-docker-test: docker-build
-	docker run --rm $(DOCKER_IMAGE) \
-		pytest -vv --cov=iperf3_lib --cov-report=term-missing
+docker-test:
+	$(UV) run --frozen python scripts/docker_validate.py test \
+		--python-base "$(PYTHON_BASE)" --iperf-version "$(IPERF3_VERSION)" \
+		--image "$(DOCKER_IMAGE)"
 
-docker-shell: docker-build
-	docker run --rm -it $(DOCKER_IMAGE) bash
+docker-shell:
+	$(UV) run --frozen python scripts/docker_validate.py shell \
+		--python-base "$(PYTHON_BASE)" --iperf-version "$(IPERF3_VERSION)" \
+		--image "$(DOCKER_IMAGE)"
 
 clean:
 	rm -rf build dist *.egg-info .pytest_cache .coverage htmlcov .ruff_cache coverage.xml

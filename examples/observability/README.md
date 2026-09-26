@@ -34,7 +34,7 @@ to exercise the minimum supported version as well.
 uv sync --frozen --dev
 uv run make check test workflow-lint
 uv run make docker-test DOCKER_IMAGE=iperf3-lib-test:local
-docker build --file examples/observability/Dockerfile --build-arg BASE_IMAGE=iperf3-lib-test:local --tag iperf3-lib-observability:dev .
+uv run --frozen python scripts/docker_validate.py build --dockerfile examples/observability/Dockerfile --build-arg BASE_IMAGE=iperf3-lib-test:local --image iperf3-lib-observability:dev
 kubectl --context docker-desktop apply --dry-run=client -k examples/observability
 kubectl --context docker-desktop apply -k examples/observability
 kubectl --context docker-desktop -n iperf3-lib-observability rollout status deployment/benchmark --timeout=120s
