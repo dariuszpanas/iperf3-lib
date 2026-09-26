@@ -36,7 +36,7 @@ repository root:
 
 ```bash
 make docker-build DOCKER_IMAGE=iperf3-lib-test:local
-docker build -f examples/observability/Dockerfile -t iperf3-lib-observability:dev .
+uv run --frozen python scripts/docker_validate.py build --dockerfile examples/observability/Dockerfile --image iperf3-lib-observability:dev
 kubectl --context docker-desktop apply -k examples/observability
 kubectl --context docker-desktop -n iperf3-lib-observability rollout status deployment/benchmark
 kubectl --context docker-desktop -n iperf3-lib-observability rollout status deployment/prometheus

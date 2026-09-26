@@ -26,6 +26,51 @@ The Docker compatibility dimensions can be selected explicitly:
 make docker-test PYTHON_BASE=python:3.14-slim IPERF3_VERSION=3.19.1
 ```
 
+### Reuse one local Docker context
+
+Local Docker targets stage the current checkout into a fixed directory shared
+by all worktrees. Docker receives that stable context path. The default is
+`iperf3-lib/docker-validation` under the platform's user cache directory.
+
+To select a persistent location for this repository and its worktrees:
+
+```bash
+git config --local iperf3-lib.dockerStagingRoot /absolute/path/to/docker-validation
+```
+
+For example, a Windows checkout at `D:\Repos\iperf3-lib` can use
+`D:/Repos/iperf3-lib/.vault/docker-validation`. The directory must be dedicated
+to this helper and initially empty. A location within a checkout must be ignored
+by Git. `--staging-root` overrides `IPERF3_DOCKER_STAGING_ROOT`, which overrides
+the shared repository setting and then the user-cache default.
+
+The helper selects tracked and nonignored untracked files, including dirty
+changes and deletions. It excludes Git internals, vaults, caches, build output
+and common credential files even when tracked. Symlinks, Windows reparse points,
+and submodules are rejected. Git selection or file changes during staging abort
+the build. Review `source-manifest.json` alongside the fixed `context` directory
+for the selected revision, dirty state and file hashes.
+
+An ownership marker protects existing unrelated directories. Only the owned
+`context` child is replaced; other files in the staging root are preserved. An
+OS file lock covers staging, build, and tests. Concurrent attempts fail with an
+in-use error; retry after the current run finishes. Process exit releases the
+lock automatically.
+
+The underlying commands are:
+
+```bash
+uv run --frozen python scripts/docker_validate.py stage
+uv run --frozen python scripts/docker_validate.py test --python-base python:3.14-slim --iperf-version 3.21
+uv run --frozen python scripts/docker_validate.py build --dockerfile examples/observability/Dockerfile --image iperf3-lib-observability:dev
+```
+
+These commands build and run without host bind mounts. For manual `docker cp`
+validation, first copy inputs and collect outputs under the same chosen staging
+root so Docker Desktop sees stable host paths. Hosted Linux workflows continue
+using their checked-out build contexts. YAGA uses named Docker workspace volumes
+and streamed copies; its configuration needs no change.
+
 ## Checks
 
 Run non-mutating static checks before submitting a change:

@@ -19,6 +19,29 @@ repository policies. `make test` runs non-native tests. Docker is required for
 workflow lint and the full native suite; see [compatibility](reference/compatibility.md)
 for supported versions. Run non-native gates before native tests.
 
+## Stable local Docker validation
+
+`make docker-build` and `make docker-test` copy the selected checkout into one
+fixed staging directory, then build there without host bind mounts. This path
+stays the same across worktrees. Set a dedicated absolute path once for the
+repository:
+
+```bash
+git config --local iperf3-lib.dockerStagingRoot /absolute/path/to/docker-validation
+```
+
+The default uses the platform's user cache. The CLI `--staging-root` and
+`IPERF3_DOCKER_STAGING_ROOT` environment variable can override the saved setting.
+An empty directory is claimed with an ownership marker; an OS lock prevents
+overlapping staging/build/test operations. Dirty tracked files and nonignored
+untracked files are included, while vaults, caches, Git metadata and common
+credential files are excluded. Symlinks and reparse points are rejected.
+
+The fixed `context` child is replaced for each run. `source-manifest.json`
+records the source commit, dirty state and copied hashes outside that context.
+Use the same stable root for any manual Docker file copies. See the
+[full setup and safeguards](https://github.com/dariuszpanas/iperf3-lib/blob/main/CONTRIBUTING.md#reuse-one-local-docker-context).
+
 ## Track the work
 
 Use [GitHub issues](https://github.com/dariuszpanas/iperf3-lib/issues) for bugs,
