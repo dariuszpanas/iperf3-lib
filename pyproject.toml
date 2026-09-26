@@ -57,6 +57,7 @@ dev = [
     "ruff>=0.15.22,<0.17",
     # ty is beta; review each upgrade before changing this exact pin.
     "ty==0.0.83",
+    "yaga-cli>=0.2,<0.3",
 ]
 release = [
     "check-wheel-contents>=0.6.3,<0.7",
@@ -65,6 +66,23 @@ release = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/iperf3_lib"]
+
+[tool.yaga]
+config-version = 1
+
+[tool.yaga.commit]
+allowed-types = ["build", "chore", "ci", "docs", "feat", "fix", "perf", "refactor", "revert", "style", "test"]
+type-case = "lower"
+scope-policy = "optional"
+scope-case = "lower"
+header-max-length = 100
+description-min-length = 3
+description-ending = "forbid"
+body-policy = "required"
+body-min-words = 8
+dependabot-pull-requests = "skip"
+merge-commits = "reject"
+max-commits = 64
 
 [tool.ruff]
 line-length = 100

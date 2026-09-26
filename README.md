@@ -184,8 +184,10 @@ make docker-test PYTHON_BASE=python:3.14-slim IPERF3_VERSION=3.19.1
 ```
 
 `make check` never changes source files. Run `make format` explicitly to apply
-formatting and safe lint fixes. See [CONTRIBUTING.md](CONTRIBUTING.md) for the
-full development and review checklist.
+formatting and safe lint fixes. YAGA is included in the development environment
+and enforces this repository's commit, workflow, and file policies in local
+commands and CI. See [CONTRIBUTING.md](CONTRIBUTING.md#yaga-checks-and-policies)
+for policy commands and the full development and review checklist.
 
 ## Changelog
 

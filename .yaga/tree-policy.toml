@@ -1,0 +1,32 @@
+tree-policy-version = 1
+required-paths = [
+  ".yaga/checks/repository.toml",
+  ".yaga/change-policy.toml",
+  ".yaga/mode-policy.toml",
+  ".yaga/path-policy.toml",
+  ".yaga/size-policy.toml",
+  ".yaga/tree-policy.toml",
+  "LICENSE",
+  "README.md",
+  "CONTRIBUTING.md",
+  "SECURITY.md",
+  "pyproject.toml",
+  "uv.lock",
+  "src/iperf3_lib/py.typed",
+  ".github/workflows/ci.yml",
+]
+forbidden-patterns = [
+  ".vault/**",
+  "**/.env",
+  "**/.venv/**",
+  "**/__pycache__/**",
+  "**/.pytest_cache/**",
+  "**/.ruff_cache/**",
+  "**/*.pyc",
+  "**/*.pyo",
+  "**/.coverage",
+  "build/**",
+  "dist/**",
+  "htmlcov/**",
+  "coverage.xml",
+]

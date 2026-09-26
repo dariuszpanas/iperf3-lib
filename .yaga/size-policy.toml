@@ -1,0 +1,7 @@
+size-policy-version = 1
+default-max-blob-bytes = 131072
+max-total-blob-bytes = 8388608
+
+[[path-limits]]
+pattern = "uv.lock"
+max-blob-bytes = 1048576

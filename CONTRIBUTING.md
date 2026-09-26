@@ -49,6 +49,54 @@ make build
 
 Run `make format` only when you intend to modify source formatting.
 
+## YAGA checks and policies
+
+`make install` includes the published `yaga-cli` package in the development
+environment. No YAGA source checkout or global YAGA installation is needed.
+The project's policy lives in `[tool.yaga]` in `pyproject.toml` and `.yaga/`.
+Dependabot's existing uv and GitHub Actions updates cover the CLI and Action.
+
+`make check` runs Ruff, ty, and the YAGA repository plan. That plan checks
+immutable Action references, workflow permissions and checkout settings,
+Windows-compatible file names, regular file modes, file size limits, required
+project files, and accidental commits of local vaults or generated files.
+File mode, name, size, and tree checks read the committed `HEAD` snapshot;
+workflow checks read the working files. Commit changes before validating the
+complete candidate, or select another committed snapshot with `REVISION`.
+
+```bash
+make policy-check REVISION=HEAD
+make commit-check REVISION=HEAD
+make change-check RANGE=origin/main...HEAD
+make workflow-lint
+```
+
+`workflow-lint` uses YAGA's Docker-backed actionlint runner. `make ci` runs
+the non-native quality and unit gates, workflow lint, then native Docker tests.
+Fetch the base branch before using a commit or change range: YAGA does not
+fetch missing Git history automatically.
+
+Before opening or updating a PR, also check its complete commit range and
+source/test changes. These explicit range checks are additional to `make ci`:
+
+```bash
+uv run --frozen yaga commit check --range origin/main...HEAD
+make change-check RANGE=origin/main...HEAD
+```
+
+Commit subjects use Conventional Commits with an optional scope and a maximum
+of 100 characters. Include an explanatory body of at least eight words.
+For feedback before committing, run:
+
+```bash
+uv run --frozen yaga commit check --file .git/COMMIT_EDITMSG
+```
+
+PR CI checks the title and every PR commit using complete history, and requires
+test changes when Python source changes. The event-aware commit Action skips
+message rules for verified Dependabot PRs; repository policies and tests still
+run. The aggregate `ci` check requires the commit-policy job for PRs.
+
 ## Native API changes
 
 - Keep CFFI declarations compatible with both supported libiperf releases.

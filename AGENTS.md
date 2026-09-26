@@ -17,3 +17,10 @@
 ## Validation
 
 Run the non-native quality and unit gates first, then the Docker/native integration matrix. Record exact commands and outcomes in the vault rather than relying on historical green checks.
+
+YAGA is a development dependency of this repository. Use `make check` for its
+repository plan, `make workflow-lint` for Docker-backed workflow lint, and
+`make commit-check` / `make change-check` for explicit commit and change
+selections. Tree policies inspect committed revisions. Keep the consumer
+policies in `pyproject.toml` and `.yaga/`; adopting YAGA here requires no changes
+to the YAGA repository.

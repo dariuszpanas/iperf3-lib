@@ -4,8 +4,10 @@ UV ?= uv
 PYTHON_BASE ?= python:3.12-slim
 IPERF3_VERSION ?= 3.21
 DOCKER_IMAGE ?= iperf3-lib-test:local
+REVISION ?= HEAD
+RANGE ?= origin/main...HEAD
 
-.PHONY: help install test test-cov test-integration lint format format-check type-check check ci build clean docker-build docker-test docker-shell all
+.PHONY: help install test test-cov test-integration lint format format-check type-check policy-check commit-check change-check workflow-lint check ci build clean docker-build docker-test docker-shell all
 
 help:
 	@echo "Available targets:"
@@ -17,8 +19,12 @@ help:
 	@echo "  format           - Apply Ruff formatting and safe lint fixes"
 	@echo "  format-check     - Check formatting without changing files"
 	@echo "  type-check       - Run ty against the package"
+	@echo "  policy-check     - Run YAGA workflow and repository policies (REVISION=HEAD)"
+	@echo "  commit-check     - Check one commit message (REVISION=HEAD)"
+	@echo "  change-check     - Require tests with source changes (RANGE=origin/main...HEAD)"
+	@echo "  workflow-lint    - Run YAGA actionlint checks (requires Docker)"
 	@echo "  check            - Run all non-mutating static checks"
-	@echo "  ci               - Run static checks and the full Docker test suite"
+	@echo "  ci               - Run quality/unit checks, workflow lint, and Docker tests"
 	@echo "  build             - Build and validate wheel/sdist artifacts"
 	@echo "  docker-build     - Build the Docker test image"
 	@echo "  docker-test      - Build the image and run the full suite"
@@ -50,9 +56,21 @@ format-check:
 type-check:
 	$(UV) run --frozen ty check src scripts
 
-check: lint format-check type-check
+policy-check:
+	$(UV) run --frozen yaga repo check --plan .yaga/checks/repository.toml --revision "$(REVISION)"
 
-ci: check docker-test
+commit-check:
+	$(UV) run --frozen yaga commit check --commit "$(REVISION)"
+
+change-check:
+	$(UV) run --frozen yaga change check --policy .yaga/change-policy.toml --range "$(RANGE)"
+
+workflow-lint:
+	$(UV) run --frozen yaga workflow lint .github/workflows
+
+check: lint format-check type-check policy-check
+
+ci: check test workflow-lint docker-test
 
 build:
 	$(UV) build --no-sources
