@@ -55,8 +55,9 @@ loaded raises `IperfLibraryError` rather than falling back to another name.
 
 An iperf3 command-line option is not automatically a Python API option. Only
 the fields in the [configuration reference](configuration.md) are exposed.
-Additional native options and richer capability reporting are tracked in the
-[roadmap](../roadmap.md).
+[Capability reports](../guides/configuration-intent.md) distinguish wrapper,
+native, and qualification evidence. Additional native options remain evaluated
+follow-ups in the [roadmap](../roadmap.md).
 
 ## Troubleshooting
 

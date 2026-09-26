@@ -18,7 +18,7 @@ Documentation tracks the development branch. The following foundation is on
 
 | Area | Current foundation | Remaining work |
 | --- | --- | --- |
-| Configuration | Validated dataclasses, detached run snapshots, and requested versus verified native configuration. | Intent-based rates, profiles, and a structured capability report. |
+| Configuration | Validated dataclasses, explicit rate intent and admission estimates, configuration provenance, and layered capability reports. | Qualify additional native options; retain application-owned profiles and defer asymmetric simultaneous budgets. |
 | Results | Directional and per-stream summaries, interval scope/bytes/duration/warm-up metadata, explicit missing values, and execution provenance. | Evidence-based analysis built on this model. |
 | Serialization | Strict version-1 artifacts, portable loading, legacy snapshot conversion, and documented evolution rules. | Report contracts for multi-run experiments. |
 | Metrics | Latest-run Prometheus gauges, omitted unavailable values, freshness fields, atomic replacement, and a local Grafana qualification fixture. | Repeat integration qualification for the final release candidate. |
@@ -109,15 +109,18 @@ completed run, not per scrape.
 
 Tracking: [configuration and capability design #30](https://github.com/dariuszpanas/iperf3-lib/issues/30).
 
-Evaluate per-stream bitrate versus aggregate bitrate per direction, explicit
-bidirectional budgets, named profiles, unit-aware inputs, and plan-wide
-duration/traffic limits. Reject contradictory intent and record the derived
-native settings.
+Implemented: strict per-stream/aggregate-per-direction intent, uniform floor
+allocation with remainder, explicit simultaneous-direction estimates, exact SI
+unit parsing, sequential admission budgets, and layered capability reports.
+See [the configuration guide](guides/configuration-intent.md) for the public
+contract and concrete native-option qualification decisions. Named profiles
+remain application-owned; built-in opinionated defaults and asymmetric
+simultaneous budgets are deferred.
 
-Requested settings and verified effective settings should be separate.
-Verification may be unavailable; the result must say so. Capability reporting
-should distinguish wrapper support, native symbol availability, tested
-platform/version constraints, and runtime outcomes.
+Requested settings and verified effective settings remain separate, with
+unavailable verification explicit. Capability reports distinguish wrapper
+support, native symbol availability, tested platform/version constraints, and
+supplied runtime outcomes.
 
 Additional wrapper coverage may include pacing, socket buffers,
 congestion-control selection, and server output. These expose native
@@ -237,7 +240,7 @@ criteria.
 | Normalization correctness | [#27](https://github.com/dariuszpanas/iperf3-lib/issues/27) | Qualify the existing model first. |
 | Canonical schema and versioned JSON | [#28](https://github.com/dariuszpanas/iperf3-lib/issues/28) | #27 |
 | Prometheus and textfile qualification | [#29](https://github.com/dariuszpanas/iperf3-lib/issues/29) | #27 |
-| Configuration intent and capabilities | [#30](https://github.com/dariuszpanas/iperf3-lib/issues/30) | No implementation prerequisite selected. |
+| Configuration intent and capabilities | [#30](https://github.com/dariuszpanas/iperf3-lib/issues/30) | #28 for retained intent provenance. |
 | Analysis and diagnostics | [#31](https://github.com/dariuszpanas/iperf3-lib/issues/31) | #28 |
 | Repeated trials, baselines, and CI reports | [#32](https://github.com/dariuszpanas/iperf3-lib/issues/32) | #28, #30, #31 |
 | Parameter sweeps | [#33](https://github.com/dariuszpanas/iperf3-lib/issues/33) | #30, #32 |

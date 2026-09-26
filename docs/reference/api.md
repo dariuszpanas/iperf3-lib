@@ -8,7 +8,7 @@ example with the published package.
 
 | API | Return value | Behavior |
 | --- | --- | --- |
-| `Client(cfg: ClientConfig)` | `Client` | Retains the supplied configuration. |
+| `Client(cfg: ClientConfig, *, rate_intent=None)` | `Client` | Retains configuration and optional `RateIntent`; admission snapshots and resolves them. |
 | `Client.run()` | `Result` | Performs one blocking native client run. |
 | `await Client.arun()` | `Result` | Executes `run()` in an executor thread. |
 | `Server(port=5201, bind_host=None)` | `Server` | Creates the Python server wrapper; native allocation happens when serving. |
@@ -20,6 +20,35 @@ example with the published package.
 Import `Client`, `ClientConfig`, `Protocol`, and `Server` from `iperf3_lib`.
 Read [running tests](../guides/running-tests.md) for error handling, async
 cancellation, and process-isolation limits.
+
+## Rate intent and capability reports
+
+Import rate APIs from `iperf3_lib.intent` and capability APIs from
+`iperf3_lib.capabilities`. All configuration integers remain strict; parsing
+text is an explicit separate operation. See [rate intent and capabilities](../guides/configuration-intent.md)
+for allocation, unit grammar, admission limits, profiles, and native-option decisions.
+
+| API | Return value | Contract |
+| --- | --- | --- |
+| `RateIntent(per_stream_bps=None, aggregate_bps_per_direction=None)` | `RateIntent` | Exactly one strict integer intent; frozen dataclass. |
+| `resolve_rate(config, intent=None)` | `ResolvedRate` | Uniform floor allocation per direction; preserves unused remainder and unlimited unknowns. Does not mutate config. |
+| `parse_rate(text)` | `int` | Exact decimal SI bits/s or bytes/s conversion with explicit units. |
+| `estimate_plan(configs, intents=None, *, max_payload_bytes=None, max_active_seconds=None)` | `PlanEstimate` | Finite sequential admission estimates including warm-up and both directions; raises on exceeded/unknown bounded costs. |
+| `get_capabilities(*, probe_native=True, result=None)` | `CapabilityReport` | Separate wrapper/ABI/native/qualification evidence and optional supplied execution outcome. Offline mode never loads native code. |
+
+`ResolvedRate` fields are `native_per_stream_bps`,
+`aggregate_bps_per_direction`, `aggregate_bps_all_directions`,
+`unused_bps_per_direction`, `active_directions`, and `source`. `to_dict()`
+returns detached JSON-safe metadata. `PlanEstimate` contains a tuple of `runs`,
+total `active_seconds`, `estimated_payload_bits`, and
+`estimated_payload_bytes`; each `RunEstimate` has `rate`, `active_seconds`,
+and `estimated_payload_bits`. Neither type reports observed traffic.
+
+`CapabilityReport` contains `library`, `features`, `execution`, current host
+platform/Python, and explicit tested platform/Python/native-version tuples.
+The nested frozen dataclasses are `LibraryCapability`, `SymbolCapability`,
+`FeatureCapability`, and `ExecutionEvidence`. Use `dataclasses.asdict` when an
+application needs a serializable snapshot; this is not a versioned result artifact.
 
 ## Result dataclasses
 
@@ -177,12 +206,12 @@ semantics.
 
 `iperf3_lib.capabilities.has_symbol(name)` reports whether the loaded CFFI
 interface exposes a symbol, returning `False` on loading/detection failures.
-Importing this module computes `HAS_BIDIR`, `HAS_JSON_OUTPUT`,
-`HAS_JSON_CALLBACK`, `HAS_PROTOCOL_SELECTION`, and `HAS_BIND_ADDRESS`.
+Accessing `HAS_BIDIR`, `HAS_JSON_OUTPUT`, `HAS_JSON_CALLBACK`,
+`HAS_PROTOCOL_SELECTION`, or `HAS_BIND_ADDRESS` performs a lazy symbol probe.
 `HAS_MPTCP` and `HAS_JSON_STREAM` are always `False` for this backend.
 
-These flags are an import-time symbol snapshot. They do not prove operating
-system support or a successful native run. Importing the capabilities module
-can trigger a native load attempt even though importing `iperf3_lib` alone
-does not.
+These flags do not prove operating system support or a successful native run.
+Importing the module does not load libiperf. `get_capabilities(probe_native=False)`
+provides an offline report; an explicit native probe distinguishes library and
+symbol availability from wrapper support and qualification.
 

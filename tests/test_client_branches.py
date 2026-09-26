@@ -432,3 +432,67 @@ def test_native_failure_retains_returned_json_and_request_metadata(monkeypatch):
     assert result.execution.configuration.requested["duration"] == 2
     assert result.execution.timing.elapsed_seconds >= 0
     assert any(d.code == "execution.native_error" for d in result.diagnostics)
+
+
+@pytest.mark.parametrize("failed", [False, True])
+def test_client_rate_intent_applied_once_with_detached_artifact_metadata(monkeypatch, failed):
+    """Resolve once, retain caller intent, and free the test once on either native outcome."""
+    import iperf3_lib.ffi.api as api_mod
+    import iperf3_lib.iperf_client as client_mod
+    from iperf3_lib.artifacts import artifact_from_result, dumps_artifact, loads_artifact
+    from iperf3_lib.config import ClientConfig
+    from iperf3_lib.intent import RateIntent
+
+    cfg = ClientConfig("127.0.0.1", parallel=3)
+
+    class IntentLib(RecorderLib):
+        """Count rate setter and cleanup while returning matching native rate evidence."""
+
+        def iperf_set_test_rate(self, test, rate):
+            """Apply only the resolved rate and mutate caller state after admission."""
+            self._record["rate_count"] = self._record.get("rate_count", 0) + 1
+            self._record["rate"] = rate
+            cfg.parallel = 100
+
+        def iperf_get_test_json_output_string(self, test):
+            """Report the native setting independently of requested metadata."""
+            return b'{"start":{"test_start":{"reverse":0,"target_bitrate":3,"num_streams":3}},"end":{"sum_sent":{"bits_per_second":1}}}'
+
+        def iperf_free_test(self, test):
+            """Count exact native lifecycle cleanup."""
+            self._record["free_count"] = self._record.get("free_count", 0) + 1
+
+    native = IntentLib(run_client_ret=-1 if failed else 0)
+    monkeypatch.setattr(api_mod, "ffi", DummyFFI())
+    monkeypatch.setattr(api_mod, "lib", native)
+    importlib.reload(client_mod)
+    result = client_mod.Client(cfg, rate_intent=RateIntent(aggregate_bps_per_direction=10)).run()
+    assert native._record["rate_count"] == native._record["free_count"] == 1
+    assert native._record["rate"] == 3
+    assert result.ok is not failed
+    assert result.execution.configuration.requested["rate"] == 3
+    assert result.execution.configuration.requested["parallel"] == 3
+    assert result.execution.configuration.effective["rate"].value == 3
+    assert not any(d.code == "configuration.difference" for d in result.diagnostics)
+    extension = result.extensions["iperf3_lib.rate_intent"]
+    assert extension["caller_config"]["rate"] is None
+    assert extension["caller_config"]["parallel"] == 3
+    assert extension["intent"]["aggregate_bps_per_direction"] == 10
+    assert extension["resolution"]["unused_bps_per_direction"] == 1
+    assert (
+        loads_artifact(dumps_artifact(artifact_from_result(result))).result.extensions
+        == result.extensions
+    )
+
+
+def test_conflicting_rate_intent_is_rejected_before_native_allocation(monkeypatch):
+    """Invalid rate admission must not allocate native resources."""
+    import iperf3_lib.iperf_client as client_mod
+    from iperf3_lib.config import ClientConfig
+    from iperf3_lib.intent import RateIntent
+
+    monkeypatch.setattr(client_mod, "lib", None)
+    with pytest.raises(ValueError, match="cannot both"):
+        client_mod.Client(
+            ClientConfig("host", rate=0), rate_intent=RateIntent(per_stream_bps=0)
+        ).run()

@@ -13,6 +13,7 @@ from functools import partial
 from .config import ClientConfig, Protocol
 from .exceptions import IperfError, IperfLibraryError, UnsupportedFeatureError
 from .ffi.api import ffi, lib
+from .intent import RateIntent, resolve_rate
 from .result import Diagnostic, ExecutionMetadata, Result, VerifiedSetting, result_from_iperf_json
 
 TCP_PROTOCOL_ID = 1
@@ -21,7 +22,6 @@ SCTP_PROTOCOL_ID = 12
 
 DEFAULT_UDP_BLOCK_SIZE = 0  # select the control connection's MSS, with libiperf fallback
 DEFAULT_SCTP_BLOCK_SIZE = 64 * 1024
-DEFAULT_UDP_RATE = 1024 * 1024
 
 PROTOCOL_IDS = {
     Protocol.TCP: TCP_PROTOCOL_ID,
@@ -86,13 +86,20 @@ def _install_json_callback(t) -> tuple[list[str], object | None]:
 class Client:
     """Client for running iperf3 tests using the provided configuration."""
 
-    def __init__(self, cfg: ClientConfig):
+    def __init__(self, cfg: ClientConfig, *, rate_intent: RateIntent | None = None):
         """Initialize the client with a configuration object."""
         self.cfg = cfg
+        self.rate_intent = rate_intent
 
     def run(self) -> Result:
         """Run the iperf3 test synchronously and return the result."""
         cfg = replace(self.cfg)
+        caller_config = asdict(cfg)
+        caller_config["server"] = str(cfg.server)
+        caller_config["protocol"] = cfg.protocol.value
+        admitted_intent = replace(self.rate_intent) if self.rate_intent is not None else None
+        resolved = resolve_rate(cfg, admitted_intent)
+        cfg = replace(cfg, rate=resolved.native_per_stream_bps)
         requested = asdict(cfg)
         requested["server"] = str(cfg.server)
         requested["protocol"] = cfg.protocol.value
@@ -112,6 +119,12 @@ class Client:
             metadata.timing.elapsed_seconds = elapsed
             metadata.timing.requested_duration_seconds = cfg.duration
             metadata.configuration.requested = requested
+            result.extensions["iperf3_lib.rate_intent"] = {
+                "schema_version": 1,
+                "caller_config": caller_config,
+                "intent": asdict(admitted_intent) if admitted_intent is not None else None,
+                "resolution": resolved.to_dict(),
+            }
             for name in requested:
                 metadata.configuration.effective.setdefault(name, VerifiedSetting())
             metadata.python_version = platform.python_version()
@@ -196,8 +209,6 @@ class Client:
                     raise UnsupportedFeatureError("Bidirectional not supported by this libiperf")
 
             rate = cfg.rate
-            if rate is None and cfg.protocol is Protocol.UDP:
-                rate = DEFAULT_UDP_RATE
             if rate is not None:
                 rate_setter = _try_set("iperf_set_test_rate")
                 if rate_setter is None:
