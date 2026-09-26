@@ -93,3 +93,69 @@ values for some remote end summaries; these fixtures retain those values.
 actual native summaries and intervals and reverses real stream arrays to guard
 against assumptions about their positions. Native integration tests repeat the
 direction checks against newly returned JSON in the minimum/latest CI matrix.
+
+## Artifact v1 capture expansion
+
+An additional 24 endpoint documents were captured on 2026-09-26 from source
+`b366c2c88f4edb1e415d243592227d83b235234d` with the artifact implementation working
+tree overlaid. The original 16 documents above were retained. The added cases
+are UDP reverse and bidirectional, SCTP forward/reverse/bidirectional, and TCP
+with one second of omitted warm-up. Every case succeeded on both versions;
+none was synthesized or skipped. The same duration, stream count, rate, loopback,
+resource limits, and server cleanup contract apply.
+
+The expansion used these already-built Linux images, with the current
+`src/iperf3_lib/result.py`, `src/iperf3_lib/iperf_client.py`, and capture script
+copied into each isolated container:
+
+| Native version | Python | Image | Image identity |
+| --- | --- | --- | --- |
+| 3.19.1 | 3.12.14 | `iperf3-lib-test:semantics-min` | `sha256:2db3903f1ee26bbfb61a54b28897f5b0530b1888fa2bec9f0c885bb011eb6131` |
+| 3.21 | 3.14.7 | `iperf3-lib-test:semantics-latest` | `sha256:daf709b6c657a3824e8f352e19db3ce8cd493d54711234dd8fa70ecde4d91911` |
+
+Before capture, focused Ruff and ty checks passed, and 122 normalization/native
+fixture tests passed. The capture script accepts repeated `--scenario` flags to
+select the six new cases; omitting that option captures all ten cases. Its
+`preserve_raw` adapter replaces only the result normalization callback, so an
+unsupported native value or parser defect cannot filter out the evidence being
+captured. Native allocation, configuration setters, protocol getter checks,
+blocking CFFI execution, JSON retrieval, and native cleanup still execute. The
+new raw fixtures are then parsed independently by the normal regression tests.
+
+Warm-up fixtures preserve both `omitted: true` and `omitted: false` intervals.
+Native interval boundaries restart near zero after warm-up; canonical duration
+comes from the native `seconds` field rather than subtraction or requested time.
+
+### Official producer semantics
+
+The versioned upstream source explains two intentionally conservative mappings:
+
+- The UDP stream end object mixes sender bytes/rate with receiver loss/jitter,
+  and chooses its packet count according to available endpoint information.
+  Preserve the complete object as an unattributed stream observation. See
+  [3.19.1 UDP summary emitter](https://github.com/esnet/iperf/blob/3.19.1/src/iperf_api.c#L4114-L4135)
+  and [3.21 UDP summary emitter](https://github.com/esnet/iperf/blob/3.21/src/iperf_api.c#L4294-L4315).
+- Retransmission support and collection are restricted to TCP, while SCTP
+  emitters still output retransmission fields. Exchange can supply `-1`, default
+  summaries contain zero, and SCTP interval storage is not populated with a
+  retransmission measurement. These captures include the uninitialized integer
+  `3684054920433006592` in 3.19.1 server intervals. See
+  [3.19.1 capability check](https://github.com/esnet/iperf/blob/3.19.1/src/iperf_api.c#L630-L636),
+  [exchange sentinel](https://github.com/esnet/iperf/blob/3.19.1/src/iperf_api.c#L2599),
+  [collector](https://github.com/esnet/iperf/blob/3.19.1/src/iperf_api.c#L3562-L3639),
+  [summary emitter](https://github.com/esnet/iperf/blob/3.19.1/src/iperf_api.c#L4081-L4084),
+  and [interval emitter](https://github.com/esnet/iperf/blob/3.19.1/src/iperf_api.c#L4533-L4536).
+  The corresponding 3.21 paths are its
+  [capability check](https://github.com/esnet/iperf/blob/3.21/src/iperf_api.c#L634-L640),
+  [exchange sentinel](https://github.com/esnet/iperf/blob/3.21/src/iperf_api.c#L2764),
+  [collector](https://github.com/esnet/iperf/blob/3.21/src/iperf_api.c#L3738-L3815),
+  [summary emitter](https://github.com/esnet/iperf/blob/3.21/src/iperf_api.c#L4261-L4264),
+  and [interval emitter](https://github.com/esnet/iperf/blob/3.21/src/iperf_api.c#L4720-L4723).
+
+For these two qualified producer versions, every emitted SCTP retransmission
+integer is normalized to `None` with `unsupported` availability. Other or
+missing producer versions receive `unknown` availability because their support
+has not been established. Raw values and protocol/version pointers remain as
+evidence. Wrong types are rejected; unrelated negative measurements are rejected.
+Synthetic tests cover additional signed values without claiming they appeared
+in these captures.

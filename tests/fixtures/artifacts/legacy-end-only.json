@@ -1,0 +1,43 @@
+{
+  "bidirectional": false,
+  "completed_at_seconds": 101,
+  "diagnostics": [
+    {
+      "message": "Historical snapshot.",
+      "severity": "info"
+    }
+  ],
+  "duration_seconds": 1,
+  "end": {
+    "sum_received": null,
+    "sum_sent": {
+      "bits_per_second": 0,
+      "direction": null,
+      "jitter_ms": null,
+      "lost_percent": null,
+      "observation": null,
+      "retransmits": null
+    }
+  },
+  "error": null,
+  "flows": [],
+  "intervals": [
+    {
+      "bits_per_second": 0,
+      "direction": "unknown",
+      "end_seconds": 1,
+      "observation": null,
+      "start_seconds": 0,
+      "stream_id": null
+    }
+  ],
+  "ok": true,
+  "protocol": "tcp",
+  "raw": {
+    "native_extension": {
+      "zero": 0
+    }
+  },
+  "reporting_role": null,
+  "started_at_seconds": 100
+}

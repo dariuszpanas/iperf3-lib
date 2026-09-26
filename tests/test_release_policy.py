@@ -12,6 +12,7 @@ import sys
 import tarfile
 import textwrap
 import zipfile
+from dataclasses import asdict
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -26,7 +27,13 @@ from scripts.release_artifacts import (
     verify_manifest,
     write_manifest,
 )
-from scripts.smoke_release import native_server, require_installed_package
+from scripts.smoke_release import (
+    native_server,
+    require_installed_package,
+    round_trip_artifact,
+    verify_native_artifact,
+    verify_saved_result_semantics,
+)
 from scripts.validate_release import (
     project_version,
     validate,
@@ -307,6 +314,128 @@ def test_installed_smoke_rejects_the_current_source_interpreter() -> None:
     """Do not allow a normal pytest/source import to qualify an installed artifact."""
     with pytest.raises(ValueError, match="isolated interpreter"):
         require_installed_package("0.2.0")
+
+
+def _recorded_native_run(version="3.21", profile="tcp-forward"):
+    from iperf3_lib import ClientConfig
+    from iperf3_lib.result import result_from_iperf_json
+
+    raw = json.loads(
+        (ROOT / "tests/fixtures/native" / version / f"{profile}-client.json").read_text()
+    )
+    native = raw["start"]["test_start"]
+    config = ClientConfig(
+        "127.0.0.1",
+        duration=native["duration"],
+        protocol=native["protocol"].lower(),
+        parallel=native["num_streams"],
+        rate=native["target_bitrate"],
+        reverse=bool(native["reverse"]),
+        bidirectional=bool(native["bidir"]),
+    )
+    result = result_from_iperf_json(raw, reporting_role="client")
+    assert result.execution is not None
+    timing = result.execution.timing
+    timing.started_at_seconds = raw["start"]["timestamp"]["timesecs"] - 0.25
+    timing.completed_at_seconds = timing.started_at_seconds + config.duration + 0.5
+    timing.elapsed_seconds = config.duration + 0.5
+    result.completed_at_seconds = timing.completed_at_seconds
+    requested = asdict(config)
+    requested["protocol"] = config.protocol.value
+    requested["server"] = str(config.server)
+    result.execution.configuration.requested = requested
+    result.execution.python_version = "3.14.7"
+    result.execution.platform = "recorded qualification environment"
+    return result, config
+
+
+@pytest.mark.parametrize("version", ["3.19.1", "3.21"])
+@pytest.mark.parametrize(
+    "profile", ["tcp-forward", "tcp-reverse", "tcp-bidirectional", "udp", "sctp-forward"]
+)
+def test_installed_artifact_helper_preserves_native_profiles(version: str, profile: str) -> None:
+    """Exercise each smoke method's native fixture through the retained v1 envelope helper."""
+    result, config = _recorded_native_run(version, profile)
+    envelope = verify_native_artifact(result, config)
+    assert envelope["schema_version"] == 1
+    assert envelope["result"] == result.to_dict()
+    assert envelope["result"]["execution"]["configuration"]["requested"]["rate"] == config.rate
+
+
+def test_installed_artifact_helper_preserves_wall_clock_correction() -> None:
+    """UTC can move backwards while independently measured monotonic elapsed stays valid."""
+    result, config = _recorded_native_run()
+    timing = result.execution.timing
+    timing.completed_at_seconds = timing.started_at_seconds - 1
+    result.completed_at_seconds = timing.completed_at_seconds
+    envelope = verify_native_artifact(result, config)
+    assert envelope["result"]["execution"]["timing"]["elapsed_seconds"] > 0
+    assert envelope["result"]["completed_at_seconds"] == timing.completed_at_seconds
+
+
+@pytest.mark.parametrize(
+    "missing", ["execution", "completion", "elapsed", "request", "effective", "environment"]
+)
+def test_installed_artifact_helper_rejects_missing_run_provenance(missing: str) -> None:
+    """A serialization round trip alone cannot qualify missing execution evidence."""
+    result, config = _recorded_native_run()
+    execution = result.execution
+    assert execution is not None
+    if missing == "execution":
+        result.execution = None
+    elif missing == "completion":
+        execution.timing.completed_at_seconds = None
+    elif missing == "elapsed":
+        execution.timing.elapsed_seconds = None
+    elif missing == "request":
+        execution.configuration.requested = None
+    elif missing == "effective":
+        execution.configuration.effective["rate"].state = "unavailable"
+    else:
+        execution.python_version = None
+    with pytest.raises(ValueError, match="native artifact"):
+        verify_native_artifact(result, config)
+
+
+def test_installed_artifact_round_trip_rejects_codec_drift(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Detect a reader that alters recorded evidence even if its output still validates."""
+    import iperf3_lib.artifacts as artifacts
+
+    original_loads = artifacts.loads_artifact
+
+    def _changed_loads(text):
+        artifact = original_loads(text)
+        artifact.extensions["org.example.changed"] = True
+        return artifact
+
+    monkeypatch.setattr(artifacts, "loads_artifact", _changed_loads)
+    result, _ = _recorded_native_run()
+    with pytest.raises(ValueError, match="changed recorded evidence"):
+        round_trip_artifact(result)
+
+
+def test_installed_saved_artifacts_keep_estimates_and_failure_freshness_separate() -> None:
+    """Saved-native estimates and failures survive the codec without manufacturing freshness."""
+    from iperf3_lib.artifacts import artifact_from_dict
+    from iperf3_lib.exporters.prometheus import render_text
+
+    saved = verify_saved_result_semantics()
+    success = artifact_from_dict(saved["saved_native"]).result
+    failure = artifact_from_dict(saved["failed_native"]).result
+    assert success.execution is not None and failure.execution is not None
+    assert success.execution.timing.estimated_completed_at_seconds == 105
+    assert success.completed_at_seconds is None
+    assert success.execution.configuration.requested is None
+    assert "timestamp_seconds" not in render_text(success)
+    assert success.flows[0].sender.bits_per_second is None
+    assert success.flows[0].receiver.bits_per_second == 0
+    assert failure.execution.status == "failed"
+    assert failure.raw == {"error": "saved native failure"}
+    assert failure.completed_at_seconds is None
+    assert "throughput" not in render_text(failure)
+    assert "iperf3_last_success_timestamp_seconds 90" in render_text(
+        failure, last_success_timestamp_seconds=90
+    )
 
 
 @pytest.mark.parametrize("scenario", ["success", "client-error", "not-ready", "exited"])

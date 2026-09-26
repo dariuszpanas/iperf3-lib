@@ -15,6 +15,7 @@ nav = [
     { "Installation and first run" = "getting-started.md" },
     { "Running clients and servers" = "guides/running-tests.md" },
     { "Reading results" = "guides/results.md" },
+    { "Portable result artifacts" = "guides/artifacts.md" },
     { "Prometheus output" = "guides/prometheus.md" },
     { "Local Grafana validation" = "guides/grafana.md" },
   ] },

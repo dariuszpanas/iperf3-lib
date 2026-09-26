@@ -1,0 +1,253 @@
+{
+  "extensions": {
+    "org.example.envelope": {
+      "future": true
+    }
+  },
+  "kind": "iperf3-lib.result",
+  "producer": {
+    "name": "original-writer",
+    "version": "0.3.0"
+  },
+  "result": {
+    "availability": {
+      "/flows/0/receiver/bits_per_second": {
+        "evidence_paths": [
+          "/raw/end/sum_received/bits_per_second"
+        ],
+        "state": "malformed"
+      }
+    },
+    "bidirectional": false,
+    "completed_at_seconds": 1002,
+    "diagnostics": [
+      {
+        "code": "org.example.future_advisory",
+        "evidence_paths": [
+          "/raw/end/sum_received/bits_per_second"
+        ],
+        "message": "Recorded malformed input as absent normalized throughput.",
+        "path": "/flows/0/receiver/bits_per_second",
+        "severity": "warning"
+      }
+    ],
+    "duration_seconds": 1,
+    "end": {
+      "sum_received": {
+        "bits_per_second": null,
+        "bytes": 0,
+        "direction": "client_to_server",
+        "duration_seconds": 1,
+        "end_seconds": null,
+        "jitter_ms": null,
+        "lost_packets": null,
+        "lost_percent": null,
+        "observation": "receiver",
+        "omitted": null,
+        "packets": null,
+        "retransmits": null,
+        "start_seconds": null
+      },
+      "sum_sent": {
+        "bits_per_second": 0,
+        "bytes": 0,
+        "direction": "client_to_server",
+        "duration_seconds": 1,
+        "end_seconds": 1,
+        "jitter_ms": null,
+        "lost_packets": null,
+        "lost_percent": null,
+        "observation": "sender",
+        "omitted": false,
+        "packets": null,
+        "retransmits": null,
+        "start_seconds": 0
+      }
+    },
+    "error": null,
+    "execution": {
+      "configuration": {
+        "effective": {
+          "duration": {
+            "evidence_paths": [
+              "/raw/start/test_start/duration"
+            ],
+            "state": "verified",
+            "value": 1
+          }
+        },
+        "requested": {
+          "bidirectional": false,
+          "blksize": null,
+          "duration": 1,
+          "json_stream": false,
+          "mptcp": false,
+          "omit": 0,
+          "parallel": 1,
+          "port": 5201,
+          "protocol": "tcp",
+          "rate": null,
+          "reverse": false,
+          "server": "127.0.0.1",
+          "tos": null
+        }
+      },
+      "method": "forward",
+      "native_system_info": "recorded native system",
+      "native_version": "iperf 3.21",
+      "platform": "recorded wrapper platform",
+      "python_version": "3.14.7",
+      "status": "completed",
+      "timing": {
+        "completed_at_seconds": 1002,
+        "elapsed_seconds": 3,
+        "estimated_completed_at_seconds": 1001,
+        "native_started_at_seconds": 1000,
+        "requested_duration_seconds": 1,
+        "started_at_seconds": 999
+      }
+    },
+    "extensions": {
+      "org.example.run": {
+        "id": "original",
+        "tags": [
+          "x",
+          null,
+          0
+        ]
+      }
+    },
+    "flows": [
+      {
+        "direction": "client_to_server",
+        "receiver": {
+          "bits_per_second": null,
+          "bytes": 0,
+          "direction": "client_to_server",
+          "duration_seconds": 1,
+          "end_seconds": null,
+          "jitter_ms": null,
+          "lost_packets": null,
+          "lost_percent": null,
+          "observation": "receiver",
+          "omitted": null,
+          "packets": null,
+          "retransmits": null,
+          "start_seconds": null
+        },
+        "sender": {
+          "bits_per_second": 0,
+          "bytes": 0,
+          "direction": "client_to_server",
+          "duration_seconds": 1,
+          "end_seconds": 1,
+          "jitter_ms": null,
+          "lost_packets": null,
+          "lost_percent": null,
+          "observation": "sender",
+          "omitted": false,
+          "packets": null,
+          "retransmits": null,
+          "start_seconds": 0
+        }
+      }
+    ],
+    "intervals": [
+      {
+        "bits_per_second": 0,
+        "bytes": 0,
+        "direction": "client_to_server",
+        "duration_seconds": 1,
+        "end_seconds": 0,
+        "jitter_ms": null,
+        "lost_packets": null,
+        "lost_percent": null,
+        "observation": "sender",
+        "omitted": true,
+        "packets": null,
+        "retransmits": null,
+        "scope": "aggregate",
+        "start_seconds": -1,
+        "stream_id": null
+      },
+      {
+        "bits_per_second": 0,
+        "bytes": 0,
+        "direction": "client_to_server",
+        "duration_seconds": 1,
+        "end_seconds": 1,
+        "jitter_ms": null,
+        "lost_packets": null,
+        "lost_percent": null,
+        "observation": "sender",
+        "omitted": false,
+        "packets": null,
+        "retransmits": null,
+        "scope": "stream",
+        "start_seconds": 0,
+        "stream_id": 5
+      }
+    ],
+    "ok": true,
+    "protocol": "tcp",
+    "raw": {
+      "end": {
+        "sum_received": {
+          "bits_per_second": "malformed"
+        }
+      },
+      "extra": [
+        null,
+        false,
+        0
+      ],
+      "start": {
+        "test_start": {
+          "blksize": 131072,
+          "duration": 1,
+          "num_streams": 2
+        }
+      }
+    },
+    "reporting_role": "client",
+    "started_at_seconds": 1000,
+    "streams": [
+      {
+        "direction": "client_to_server",
+        "receiver": {
+          "bits_per_second": null,
+          "bytes": 0,
+          "direction": "client_to_server",
+          "duration_seconds": 1,
+          "end_seconds": null,
+          "jitter_ms": null,
+          "lost_packets": null,
+          "lost_percent": null,
+          "observation": "receiver",
+          "omitted": null,
+          "packets": null,
+          "retransmits": null,
+          "start_seconds": null
+        },
+        "sender": {
+          "bits_per_second": 0,
+          "bytes": 0,
+          "direction": "client_to_server",
+          "duration_seconds": 1,
+          "end_seconds": 1,
+          "jitter_ms": null,
+          "lost_packets": null,
+          "lost_percent": null,
+          "observation": "sender",
+          "omitted": false,
+          "packets": null,
+          "retransmits": null,
+          "start_seconds": 0
+        },
+        "stream_id": 5,
+        "unattributed": null
+      }
+    ]
+  },
+  "schema_version": 1
+}

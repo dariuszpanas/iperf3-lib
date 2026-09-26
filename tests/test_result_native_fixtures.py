@@ -13,7 +13,44 @@ from iperf3_lib.result import result_from_iperf_json
 
 FIXTURES = Path(__file__).parent / "fixtures" / "native"
 VERSIONS = ("3.19.1", "3.21")
-SCENARIOS = ("tcp-forward", "tcp-reverse", "tcp-bidirectional", "udp")
+SCENARIOS = (
+    "tcp-forward",
+    "tcp-reverse",
+    "tcp-bidirectional",
+    "udp",
+    "udp-reverse",
+    "udp-bidirectional",
+    "sctp-forward",
+    "sctp-reverse",
+    "sctp-bidirectional",
+    "tcp-warmup",
+)
+MEASUREMENTS = (
+    ("bits_per_second", "bits_per_second"),
+    ("retransmits", "retransmits"),
+    ("lost_percent", "lost_percent"),
+    ("jitter_ms", "jitter_ms"),
+    ("bytes", "bytes"),
+    ("duration_seconds", "seconds"),
+    ("start_seconds", "start"),
+    ("end_seconds", "end"),
+    ("packets", "packets"),
+    ("lost_packets", "lost_packets"),
+    ("omitted", "omitted"),
+)
+
+
+def native_measurements(native, scenario):
+    """Use captured values except source-proven unsupported SCTP retransmissions."""
+    return tuple(
+        None if key == "retransmits" and scenario.startswith("sctp") else native.get(key)
+        for _, key in MEASUREMENTS
+    )
+
+
+def normalized_measurements(stats):
+    """Read the same unit-preserving canonical measurements across summary and interval models."""
+    return tuple(getattr(stats, field) for field, _ in MEASUREMENTS)
 
 
 @pytest.mark.parametrize("version", VERSIONS)
@@ -34,10 +71,12 @@ def test_native_endpoint_fixture_preserves_summary_and_interval_semantics(
     assert raw["start"]["test_start"]["num_streams"] == 2
     assert raw["start"]["test_start"]["target_bitrate"] == 4_000_000
 
-    primary = "server_to_client" if scenario == "tcp-reverse" else "client_to_server"
-    directions = [primary, "server_to_client"] if scenario == "tcp-bidirectional" else [primary]
+    is_reverse = scenario.endswith("-reverse")
+    is_bidirectional = scenario.endswith("-bidirectional")
+    primary = "server_to_client" if is_reverse else "client_to_server"
+    directions = [primary, "server_to_client"] if is_bidirectional else [primary]
     assert [flow.direction for flow in result.flows] == directions
-    assert result.bidirectional == (scenario == "tcp-bidirectional")
+    assert result.bidirectional == is_bidirectional
     for index, flow in enumerate(result.flows):
         suffix = "_bidir_reverse" if index else ""
         for observation, key in (("sender", "sum_sent"), ("receiver", "sum_received")):
@@ -49,8 +88,7 @@ def test_native_endpoint_fixture_preserves_summary_and_interval_semantics(
             assert stats is not None
             assert stats.direction == flow.direction
             assert stats.observation == observation
-            for field in ("bits_per_second", "retransmits", "lost_percent", "jitter_ms"):
-                assert getattr(stats, field) == native.get(field)
+            assert normalized_measurements(stats) == native_measurements(native, scenario)
 
     assert result.end is not None
     for observation, key in (("sender", "sum_sent"), ("receiver", "sum_received")):
@@ -69,29 +107,27 @@ def test_native_endpoint_fixture_preserves_summary_and_interval_semantics(
                     None,
                     direction,
                     "sender" if native["sender"] else "receiver",
-                    native["start"],
-                    native["end"],
-                    native["bits_per_second"],
+                    "aggregate",
+                    native_measurements(native, scenario),
                 )
             )
         for stream in interval["streams"]:
             assert stream["socket"] in connected_sockets
             local_sender = stream["sender"]
-            if scenario == "tcp-bidirectional":
+            if is_bidirectional:
                 direction = (
                     "client_to_server" if local_sender == (role == "client") else "server_to_client"
                 )
             else:
                 direction = primary
-                assert local_sender == ((role == "client") != (scenario == "tcp-reverse"))
+                assert local_sender == ((role == "client") != is_reverse)
             expected.append(
                 (
                     stream["socket"],
                     direction,
                     "sender" if local_sender else "receiver",
-                    stream["start"],
-                    stream["end"],
-                    stream["bits_per_second"],
+                    "stream",
+                    native_measurements(stream, scenario),
                 )
             )
     observed = [
@@ -99,9 +135,8 @@ def test_native_endpoint_fixture_preserves_summary_and_interval_semantics(
             interval.stream_id,
             interval.direction,
             interval.observation,
-            interval.start_seconds,
-            interval.end_seconds,
-            interval.bits_per_second,
+            interval.scope,
+            normalized_measurements(interval),
         )
         for interval in result.intervals
     ]
@@ -109,6 +144,58 @@ def test_native_endpoint_fixture_preserves_summary_and_interval_semantics(
     assert {
         interval.stream_id for interval in result.intervals if interval.stream_id is not None
     } == connected_sockets
+
+    assert len(result.streams) == len(raw["end"]["streams"])
+    for index, (stream, native_stream) in enumerate(
+        zip(result.streams, raw["end"]["streams"], strict=True)
+    ):
+        native_part = next(iter(native_stream.values()))
+        assert stream.stream_id == native_part["socket"]
+        direction = (
+            "client_to_server"
+            if native_part["sender"] == (role == "client")
+            else "server_to_client"
+        )
+        assert stream.direction == direction
+        if scenario.startswith("udp"):
+            assert stream.sender is None and stream.receiver is None
+            assert stream.unattributed is not None
+            assert stream.unattributed.observation is None
+            assert normalized_measurements(stream.unattributed) == native_measurements(
+                native_stream["udp"], scenario
+            )
+            assert (
+                result.availability[f"/streams/{index}/unattributed/observation"].state == "unknown"
+            )
+        else:
+            assert stream.unattributed is None
+            for observation in ("sender", "receiver"):
+                part = getattr(stream, observation)
+                assert part is not None
+                assert part.direction == direction and part.observation == observation
+                assert normalized_measurements(part) == native_measurements(
+                    native_stream[observation], scenario
+                )
+
+    assert result.execution is not None and result.execution.status == "completed"
+    assert result.execution.native_version == f"iperf {version}"
+    assert result.execution.native_system_info == raw["start"]["system_info"]
+    assert result.execution.configuration.requested is None
+    assert result.execution.configuration.effective["protocol"].value == scenario.split("-")[0]
+    assert result.completed_at_seconds is None
+    assert result.execution.timing.completed_at_seconds is None
+    assert (
+        result.execution.timing.native_started_at_seconds == raw["start"]["timestamp"]["timesecs"]
+    )
+    assert result.execution.timing.requested_duration_seconds == 1
+    if scenario == "tcp-warmup":
+        assert result.execution.configuration.effective["omit"].value == 1
+        assert {interval.omitted for interval in result.intervals} == {True, False}
+    if scenario.startswith("sctp"):
+        assert result.availability
+        assert {value.state for value in result.availability.values()} == {"unsupported"}
+        assert all(path.endswith("/retransmits") for path in result.availability)
+        assert any(d.code == "measurement.unsupported" for d in result.diagnostics)
 
 
 @pytest.mark.parametrize("version", VERSIONS)

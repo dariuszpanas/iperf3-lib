@@ -1,0 +1,84 @@
+{
+  "extensions": {},
+  "kind": "iperf3-lib.result",
+  "producer": {
+    "name": "fixture-writer",
+    "version": "0.3.0-design"
+  },
+  "result": {
+    "availability": {
+      "/intervals/0/observation": {
+        "evidence_paths": [
+          "/raw"
+        ],
+        "state": "unknown"
+      }
+    },
+    "bidirectional": false,
+    "completed_at_seconds": null,
+    "diagnostics": [
+      {
+        "code": "native.incomplete",
+        "evidence_paths": [
+          "/raw"
+        ],
+        "message": "No final measurements were returned.",
+        "path": "/execution/status",
+        "severity": "error"
+      }
+    ],
+    "duration_seconds": null,
+    "end": null,
+    "error": null,
+    "execution": {
+      "configuration": {
+        "effective": {},
+        "requested": null
+      },
+      "method": "unknown",
+      "native_system_info": null,
+      "native_version": null,
+      "platform": null,
+      "python_version": null,
+      "status": "incomplete",
+      "timing": {
+        "completed_at_seconds": null,
+        "elapsed_seconds": null,
+        "estimated_completed_at_seconds": null,
+        "native_started_at_seconds": null,
+        "requested_duration_seconds": null,
+        "started_at_seconds": null
+      }
+    },
+    "extensions": {},
+    "flows": [],
+    "intervals": [
+      {
+        "bits_per_second": 0,
+        "bytes": null,
+        "direction": "unknown",
+        "duration_seconds": null,
+        "end_seconds": null,
+        "jitter_ms": null,
+        "lost_packets": null,
+        "lost_percent": null,
+        "observation": null,
+        "omitted": null,
+        "packets": null,
+        "retransmits": null,
+        "scope": "unknown",
+        "start_seconds": null,
+        "stream_id": null
+      }
+    ],
+    "ok": false,
+    "protocol": null,
+    "raw": {
+      "intervals": []
+    },
+    "reporting_role": null,
+    "started_at_seconds": null,
+    "streams": []
+  },
+  "schema_version": 1
+}

@@ -19,6 +19,7 @@ def test_render_text_uses_snapshot_gauges_consistent_units_and_escaped_labels():
         ),
         started_at_seconds=100,
         duration_seconds=5,
+        completed_at_seconds=105,
     )
 
     text = render_text(result, {"target": 'lab"\\\nserver', "profile": "tcp-4-streams"})
@@ -307,3 +308,25 @@ def test_saved_failed_or_incomplete_run_never_invents_completion_from_planned_du
     assert "iperf3_last_run_success 0" in text
     assert "completed_timestamp_seconds" not in text
     assert "iperf3_last_success_timestamp_seconds 90" in text
+
+
+def test_successful_saved_result_does_not_promote_estimated_completion_to_freshness():
+    """A requested duration cannot establish a real completion event for cached output."""
+    result = result_from_iperf_json(
+        {
+            "start": {
+                "timestamp": {"timesecs": 100},
+                "test_start": {"duration": 10, "reverse": 0},
+            },
+            "end": {"sum_sent": {"bits_per_second": 800}},
+        }
+    )
+
+    text = render_text(result)
+
+    assert result.ok
+    assert result.completed_at_seconds is None
+    assert result.execution.timing.estimated_completed_at_seconds == 110
+    assert "completed_timestamp_seconds" not in text
+    assert "last_success_timestamp_seconds" not in text
+    assert "throughput_bytes_per_second" in text
