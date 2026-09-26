@@ -1,0 +1,442 @@
+{
+  "kind": "sanitized_native_event_observation",
+  "recorded_date": "2026-09-26",
+  "status": "historical exploration; not a public API or regression qualification",
+  "scope": {
+    "operating_system": "Linux",
+    "cpu_limit": 1,
+    "memory_limit_mib": 256,
+    "network": "container loopback only",
+    "duration_seconds": 1,
+    "streams_per_direction": 1,
+    "requested_bits_per_second_per_stream_per_direction": 1000000,
+    "udp_block_size_bytes": 1200,
+    "callback_payload_limit_bytes": 1048576,
+    "retained_callback_limit_per_case": 64,
+    "host_subprocess_timeout_seconds_per_endpoint": 55
+  },
+  "probe_sha256": "6a9c80f9a7aedccb26395565a825f9e68540ec07961a295e2ae5a5bcdb7d375b",
+  "omitted_fields": [
+    "raw event and getter measurement payloads",
+    "local endpoint addresses/ports",
+    "native arrival timings"
+  ],
+  "endpoints": [
+    {
+      "native_version": "3.19.1",
+      "original_receipt_sha256": "3f0c7d226083c0ed8e406be0808a34992de091fd77f62f1149303488bf71f9d0",
+      "cases": [
+        {
+          "protocol": "tcp",
+          "direction_mode": "forward",
+          "full_output_requested": true,
+          "full_output_setter_available": false,
+          "deliberate_refused_connection": false,
+          "return_code": 0,
+          "native_error_code": null,
+          "callback_order": [
+            "start",
+            "interval",
+            "end"
+          ],
+          "complete_getter_present": false,
+          "dropped_payload_count": 0,
+          "harness_allocation_calls": 1,
+          "harness_free_calls": 1
+        },
+        {
+          "protocol": "tcp",
+          "direction_mode": "reverse",
+          "full_output_requested": true,
+          "full_output_setter_available": false,
+          "deliberate_refused_connection": false,
+          "return_code": 0,
+          "native_error_code": null,
+          "callback_order": [
+            "start",
+            "interval",
+            "end"
+          ],
+          "complete_getter_present": false,
+          "dropped_payload_count": 0,
+          "harness_allocation_calls": 1,
+          "harness_free_calls": 1
+        },
+        {
+          "protocol": "tcp",
+          "direction_mode": "bidirectional",
+          "full_output_requested": true,
+          "full_output_setter_available": false,
+          "deliberate_refused_connection": false,
+          "return_code": 0,
+          "native_error_code": null,
+          "callback_order": [
+            "start",
+            "interval",
+            "end"
+          ],
+          "complete_getter_present": false,
+          "dropped_payload_count": 0,
+          "harness_allocation_calls": 1,
+          "harness_free_calls": 1
+        },
+        {
+          "protocol": "udp",
+          "direction_mode": "forward",
+          "full_output_requested": true,
+          "full_output_setter_available": false,
+          "deliberate_refused_connection": false,
+          "return_code": 0,
+          "native_error_code": null,
+          "callback_order": [
+            "start",
+            "interval",
+            "end"
+          ],
+          "complete_getter_present": false,
+          "dropped_payload_count": 0,
+          "harness_allocation_calls": 1,
+          "harness_free_calls": 1
+        },
+        {
+          "protocol": "udp",
+          "direction_mode": "reverse",
+          "full_output_requested": true,
+          "full_output_setter_available": false,
+          "deliberate_refused_connection": false,
+          "return_code": 0,
+          "native_error_code": null,
+          "callback_order": [
+            "start",
+            "interval",
+            "end"
+          ],
+          "complete_getter_present": false,
+          "dropped_payload_count": 0,
+          "harness_allocation_calls": 1,
+          "harness_free_calls": 1
+        },
+        {
+          "protocol": "udp",
+          "direction_mode": "bidirectional",
+          "full_output_requested": true,
+          "full_output_setter_available": false,
+          "deliberate_refused_connection": false,
+          "return_code": 0,
+          "native_error_code": null,
+          "callback_order": [
+            "start",
+            "interval",
+            "end"
+          ],
+          "complete_getter_present": false,
+          "dropped_payload_count": 0,
+          "harness_allocation_calls": 1,
+          "harness_free_calls": 1
+        },
+        {
+          "protocol": "sctp",
+          "direction_mode": "forward",
+          "full_output_requested": true,
+          "full_output_setter_available": false,
+          "deliberate_refused_connection": false,
+          "return_code": 0,
+          "native_error_code": null,
+          "callback_order": [
+            "start",
+            "interval",
+            "end"
+          ],
+          "complete_getter_present": false,
+          "dropped_payload_count": 0,
+          "harness_allocation_calls": 1,
+          "harness_free_calls": 1
+        },
+        {
+          "protocol": "sctp",
+          "direction_mode": "reverse",
+          "full_output_requested": true,
+          "full_output_setter_available": false,
+          "deliberate_refused_connection": false,
+          "return_code": 0,
+          "native_error_code": null,
+          "callback_order": [
+            "start",
+            "interval",
+            "end"
+          ],
+          "complete_getter_present": false,
+          "dropped_payload_count": 0,
+          "harness_allocation_calls": 1,
+          "harness_free_calls": 1
+        },
+        {
+          "protocol": "sctp",
+          "direction_mode": "bidirectional",
+          "full_output_requested": true,
+          "full_output_setter_available": false,
+          "deliberate_refused_connection": false,
+          "return_code": 0,
+          "native_error_code": null,
+          "callback_order": [
+            "start",
+            "interval",
+            "end"
+          ],
+          "complete_getter_present": false,
+          "dropped_payload_count": 0,
+          "harness_allocation_calls": 1,
+          "harness_free_calls": 1
+        },
+        {
+          "protocol": "tcp",
+          "direction_mode": "forward",
+          "full_output_requested": false,
+          "full_output_setter_available": false,
+          "deliberate_refused_connection": false,
+          "return_code": 0,
+          "native_error_code": null,
+          "callback_order": [
+            "start",
+            "interval",
+            "end"
+          ],
+          "complete_getter_present": false,
+          "dropped_payload_count": 0,
+          "harness_allocation_calls": 1,
+          "harness_free_calls": 1
+        },
+        {
+          "protocol": "tcp",
+          "direction_mode": "forward",
+          "full_output_requested": true,
+          "full_output_setter_available": false,
+          "deliberate_refused_connection": true,
+          "return_code": -1,
+          "native_error_code": 103,
+          "callback_order": [
+            "error",
+            "end"
+          ],
+          "complete_getter_present": false,
+          "dropped_payload_count": 0,
+          "harness_allocation_calls": 1,
+          "harness_free_calls": 1
+        }
+      ]
+    },
+    {
+      "native_version": "3.21",
+      "original_receipt_sha256": "863c42da3007649314fa51f271d68028193f4bc0dc20cc37153e33c2eab52a85",
+      "cases": [
+        {
+          "protocol": "tcp",
+          "direction_mode": "forward",
+          "full_output_requested": true,
+          "full_output_setter_available": true,
+          "deliberate_refused_connection": false,
+          "return_code": 0,
+          "native_error_code": null,
+          "callback_order": [
+            "start",
+            "interval",
+            "end",
+            "complete_document"
+          ],
+          "complete_getter_present": true,
+          "dropped_payload_count": 0,
+          "harness_allocation_calls": 1,
+          "harness_free_calls": 1
+        },
+        {
+          "protocol": "tcp",
+          "direction_mode": "reverse",
+          "full_output_requested": true,
+          "full_output_setter_available": true,
+          "deliberate_refused_connection": false,
+          "return_code": 0,
+          "native_error_code": null,
+          "callback_order": [
+            "start",
+            "interval",
+            "end",
+            "complete_document"
+          ],
+          "complete_getter_present": true,
+          "dropped_payload_count": 0,
+          "harness_allocation_calls": 1,
+          "harness_free_calls": 1
+        },
+        {
+          "protocol": "tcp",
+          "direction_mode": "bidirectional",
+          "full_output_requested": true,
+          "full_output_setter_available": true,
+          "deliberate_refused_connection": false,
+          "return_code": 0,
+          "native_error_code": null,
+          "callback_order": [
+            "start",
+            "interval",
+            "end",
+            "complete_document"
+          ],
+          "complete_getter_present": true,
+          "dropped_payload_count": 0,
+          "harness_allocation_calls": 1,
+          "harness_free_calls": 1
+        },
+        {
+          "protocol": "udp",
+          "direction_mode": "forward",
+          "full_output_requested": true,
+          "full_output_setter_available": true,
+          "deliberate_refused_connection": false,
+          "return_code": 0,
+          "native_error_code": null,
+          "callback_order": [
+            "start",
+            "interval",
+            "end",
+            "complete_document"
+          ],
+          "complete_getter_present": true,
+          "dropped_payload_count": 0,
+          "harness_allocation_calls": 1,
+          "harness_free_calls": 1
+        },
+        {
+          "protocol": "udp",
+          "direction_mode": "reverse",
+          "full_output_requested": true,
+          "full_output_setter_available": true,
+          "deliberate_refused_connection": false,
+          "return_code": 0,
+          "native_error_code": null,
+          "callback_order": [
+            "start",
+            "interval",
+            "end",
+            "complete_document"
+          ],
+          "complete_getter_present": true,
+          "dropped_payload_count": 0,
+          "harness_allocation_calls": 1,
+          "harness_free_calls": 1
+        },
+        {
+          "protocol": "udp",
+          "direction_mode": "bidirectional",
+          "full_output_requested": true,
+          "full_output_setter_available": true,
+          "deliberate_refused_connection": false,
+          "return_code": 0,
+          "native_error_code": null,
+          "callback_order": [
+            "start",
+            "interval",
+            "end",
+            "complete_document"
+          ],
+          "complete_getter_present": true,
+          "dropped_payload_count": 0,
+          "harness_allocation_calls": 1,
+          "harness_free_calls": 1
+        },
+        {
+          "protocol": "sctp",
+          "direction_mode": "forward",
+          "full_output_requested": true,
+          "full_output_setter_available": true,
+          "deliberate_refused_connection": false,
+          "return_code": 0,
+          "native_error_code": null,
+          "callback_order": [
+            "start",
+            "interval",
+            "end",
+            "complete_document"
+          ],
+          "complete_getter_present": true,
+          "dropped_payload_count": 0,
+          "harness_allocation_calls": 1,
+          "harness_free_calls": 1
+        },
+        {
+          "protocol": "sctp",
+          "direction_mode": "reverse",
+          "full_output_requested": true,
+          "full_output_setter_available": true,
+          "deliberate_refused_connection": false,
+          "return_code": 0,
+          "native_error_code": null,
+          "callback_order": [
+            "start",
+            "interval",
+            "end",
+            "complete_document"
+          ],
+          "complete_getter_present": true,
+          "dropped_payload_count": 0,
+          "harness_allocation_calls": 1,
+          "harness_free_calls": 1
+        },
+        {
+          "protocol": "sctp",
+          "direction_mode": "bidirectional",
+          "full_output_requested": true,
+          "full_output_setter_available": true,
+          "deliberate_refused_connection": false,
+          "return_code": 0,
+          "native_error_code": null,
+          "callback_order": [
+            "start",
+            "interval",
+            "end",
+            "complete_document"
+          ],
+          "complete_getter_present": true,
+          "dropped_payload_count": 0,
+          "harness_allocation_calls": 1,
+          "harness_free_calls": 1
+        },
+        {
+          "protocol": "tcp",
+          "direction_mode": "forward",
+          "full_output_requested": false,
+          "full_output_setter_available": true,
+          "deliberate_refused_connection": false,
+          "return_code": 0,
+          "native_error_code": null,
+          "callback_order": [
+            "start",
+            "interval",
+            "end"
+          ],
+          "complete_getter_present": false,
+          "dropped_payload_count": 0,
+          "harness_allocation_calls": 1,
+          "harness_free_calls": 1
+        },
+        {
+          "protocol": "tcp",
+          "direction_mode": "forward",
+          "full_output_requested": true,
+          "full_output_setter_available": true,
+          "deliberate_refused_connection": true,
+          "return_code": -1,
+          "native_error_code": 103,
+          "callback_order": [
+            "error",
+            "end",
+            "complete_document"
+          ],
+          "complete_getter_present": true,
+          "dropped_payload_count": 0,
+          "harness_allocation_calls": 1,
+          "harness_free_calls": 1
+        }
+      ]
+    }
+  ]
+}

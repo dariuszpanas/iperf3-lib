@@ -28,6 +28,8 @@ nav = [
   ] },
   { "Project" = [
     { "Roadmap and issues" = "roadmap.md" },
+    { "Advanced execution design" = "design/advanced-execution.md" },
+    { "Native event observations" = "design/native-event-observations.md" },
     { "Contributing" = "contributing.md" },
     { "Documentation maintenance" = "documentation.md" },
     { "Releasing" = "releasing.md" },

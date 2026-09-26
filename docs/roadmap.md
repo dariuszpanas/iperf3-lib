@@ -11,6 +11,13 @@ and a version will be chosen after the review, with a decision to include,
 defer, investigate, or decline each area. GitHub issues carry the actionable
 work and acceptance criteria.
 
+The planned 0.3.0 experiment scope is finite sequential trials and explicit
+sweeps. Adaptive UDP selection, live-event delivery, and isolated workers are
+follow-on candidates after 0.3.0. Their
+[design disposition](design/advanced-execution.md) records proposed contracts,
+bounded native observations, and the remaining qualification work. Those
+issues remain open; the designs do not expose new APIs.
+
 ## What exists today
 
 Documentation tracks the development branch. The following foundation is on
@@ -19,11 +26,12 @@ Documentation tracks the development branch. The following foundation is on
 | Area | Current foundation | Remaining work |
 | --- | --- | --- |
 | Configuration | Validated dataclasses, explicit rate intent and admission estimates, configuration provenance, and layered capability reports. | Qualify additional native options; retain application-owned profiles and defer asymmetric simultaneous budgets. |
-| Results | Directional and per-stream summaries, interval scope/bytes/duration/warm-up metadata, explicit missing values, and execution provenance. | Evidence-based analysis built on this model. |
+| Results | Directional and per-stream summaries, interval scope/bytes/duration/warm-up metadata, explicit missing values, and execution provenance. | Preserve this evidence contract as analysis and experiments expand. |
 | Serialization | Strict version-1 artifacts, portable loading, legacy snapshot conversion, and documented evolution rules. | Report contracts for multi-run experiments. |
 | Metrics | Latest-run Prometheus gauges, omitted unavailable values, freshness fields, atomic replacement, and a local Grafana qualification fixture. | Repeat integration qualification for the final release candidate. |
 | Execution | Synchronous APIs and asynchronous convenience methods using executor threads. | Live events and isolated execution for stronger deadline, cancellation, or concurrency guarantees. |
-| Analysis and plans | Applications can compose individual runs. | Built-in statistics, repeated trials, assessments, baselines, and bounded sweeps. |
+| Analysis | Measured throughput, interval stability, stream balance/scaling, directional comparisons, and retained transport/CPU evidence. | Repeat qualification for the final candidate and consume these functions in experiment reports. |
+| Plans | Applications can compose individual runs. | Selected for 0.3.0 and in progress: finite sequential trials, assessments, baselines, and bounded explicit sweeps. |
 
 Result correctness is covered by captures from both reporting endpoints on
 the minimum and latest libiperf versions. Missing values remain distinct from
@@ -131,12 +139,15 @@ or a matching getter.
 
 ## 5. Analysis and diagnostic evidence
 
-Tracking: [analysis design #31](https://github.com/dariuszpanas/iperf3-lib/issues/31).
+Tracking: [analysis implementation #31](https://github.com/dariuszpanas/iperf3-lib/issues/31).
 
-Proposed independent analysis functions include:
+Implemented in the development `iperf3_lib.analysis` module. The
+[analysis guide](guides/analysis.md) documents formulas, selectors, evidence
+quality, comparison policies, and diagnostic limits. Independent functions
+provide:
 
 - **Throughput stability:** minimum/median interval throughput, variability,
-  and time below a chosen threshold. Exclude omitted warm-up intervals,
+  and measured-time fraction below a chosen threshold. Exclude omitted warm-up intervals,
   account for unequal duration, and derive overall throughput from bytes
   and elapsed time.
 - **Stream balance and scaling:** compare per-stream measurements and find
@@ -145,8 +156,8 @@ Proposed independent analysis functions include:
 - **Directional asymmetry:** compare recorded methodologies while keeping
   sequential forward/reverse tests distinct from simultaneous bidirectional
   tests.
-- **Diagnostics:** retain available TCP RTT/window and endpoint CPU evidence,
-  separating observations, derivations, and hypotheses.
+- **Diagnostics:** retain available TCP RTT/window and endpoint CPU evidence
+  with units and provenance, without asserting a physical root cause.
 
 An interval-average percentile is not a packet-performance percentile.
 Retransmissions are not an exact packet-loss percentage, jitter is not
@@ -157,9 +168,10 @@ not establish the physical bottleneck.
 
 Tracking: [trial plans and assessment reports #32](https://github.com/dariuszpanas/iperf3-lib/issues/32).
 
-A proposed plan records repetitions, warm-up policy, pauses/cooldowns,
-budgets, and acceptance criteria. Keep every trial, including failures;
-retries must never conceal unreliable execution.
+Selected for 0.3.0; implementation and qualification are in progress. A plan
+records repetitions, warm-up policy, pauses/cooldowns, budgets, and acceptance
+criteria. Keep every trial, including failures; retries must never conceal
+unreliable execution.
 
 Execution success and performance acceptance are separate outcomes.
 Insufficient evidence should be inconclusive. Baseline comparisons check
@@ -177,7 +189,8 @@ inconclusive evidence map to CI outcomes.
 
 Tracking: [bounded parameter sweeps #33](https://github.com/dariuszpanas/iperf3-lib/issues/33).
 
-Explore finite matrices such as stream count, direction, and repetitions.
+Selected for 0.3.0; implementation and qualification are in progress. Use
+finite matrices such as stream count, direction, and repetitions.
 Record order and any randomization seed, provide cooldowns, and enforce
 total duration and traffic limits. Preserve failed cells and partial
 completion instead of returning only the winning result.
@@ -190,6 +203,11 @@ Explore a bounded offered-load sweep with repeated trials around promising
 rates. Do not assume observations are perfectly monotonic. Report requested
 load, achieved sender/receiver rates, loss, and variation as a **tested
 operating range**, not the network's exact physical capacity.
+
+This is a follow-on candidate after 0.3.0. The
+[adaptive UDP design](design/advanced-execution.md#adaptive-udp-exploration)
+specifies admission, non-monotonic selection, under-driven senders, and
+inconclusive outcomes. Controlled impaired-link qualification remains open.
 
 Both ideas build on trial plans and configuration intent. Run plans
 sequentially under the current execution contract.
@@ -213,6 +231,13 @@ summary.
 Until those designs are implemented and qualified, cancelling an await does
 not stop the blocking native call and concurrent native operations within
 one process remain unsupported.
+
+Both proposals are follow-on candidates after 0.3.0. The
+[execution design](design/advanced-execution.md#typed-live-events) and
+[native observation report](design/native-event-observations.md) explain the
+minimum/latest streaming difference, proposed transport and cleanup contracts,
+and tests still needed. In particular, the small loopback probe does not
+establish a supported event API or cancellation guarantee.
 
 ## Working principles
 
