@@ -117,6 +117,11 @@ and native error documents are failed results. The legacy `summary_mbps`
 convenience still returns `0.0` when no rate is available. Review the
 [result semantics](https://dariuszpanas.github.io/iperf3-lib/guides/results.html)
 before using the development API for automated acceptance decisions.
+For durable storage, the unreleased
+[versioned artifact API](https://dariuszpanas.github.io/iperf3-lib/guides/artifacts.html)
+preserves normalized measurements, native JSON, requested and verified settings,
+and timing provenance. It loads without libiperf. `Result.to_dict()` remains
+an unversioned dataclass snapshot.
 Configuration strings for protocols are normalized to `Protocol`; numeric
 configuration fields require integers (not booleans or numeric strings), and
 boolean options require actual booleans. Hostnames remain strings, and standard

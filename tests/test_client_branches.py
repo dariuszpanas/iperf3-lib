@@ -1,6 +1,8 @@
 """Unit tests for iperf3 client code branches and setters."""
 
 import importlib
+import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -297,3 +299,136 @@ def test_client_uses_json_callback_when_supported(monkeypatch):
     assert res.ok is True
     assert res.raw["end"]["sum_sent"]["bits_per_second"] == 99.0
     assert record["json_callback"] is True
+
+
+def test_client_records_requested_native_and_observed_execution_metadata(monkeypatch):
+    """Keep the request, returned settings, and actual operation clocks separate."""
+    import iperf3_lib.ffi.api as api_mod
+    import iperf3_lib.iperf_client as client_mod
+    from iperf3_lib.config import ClientConfig
+
+    raw = {
+        "start": {
+            "version": "iperf 3.21",
+            "system_info": "fixture-native-system",
+            "timestamp": {"timesecs": 90},
+            "connecting_to": {"host": "127.0.0.1", "port": 5201},
+            "test_start": {
+                "protocol": "TCP",
+                "duration": 10,
+                "num_streams": 2,
+                "reverse": 0,
+                "bidir": 0,
+                "target_bitrate": 500000,
+            },
+        },
+        "end": {"sum_sent": {"bits_per_second": 800}},
+    }
+
+    class MetadataLib(RecorderLib):
+        """Expose independently returned native configuration and timing evidence."""
+
+        def iperf_get_test_json_output_string(self, test):
+            """Return a result with native settings deliberately different from the request."""
+            return json.dumps(raw).encode()
+
+    wall = iter([100.0, 112.5])
+    elapsed = iter([200.0, 213.0])
+    native = MetadataLib()
+    monkeypatch.setattr(api_mod, "ffi", DummyFFI())
+    monkeypatch.setattr(api_mod, "lib", native)
+    importlib.reload(client_mod)
+    monkeypatch.setattr(
+        client_mod,
+        "time",
+        SimpleNamespace(time=lambda: next(wall), monotonic=lambda: next(elapsed)),
+    )
+    result = client_mod.Client(ClientConfig(server="127.0.0.1", parallel=2, rate=400000)).run()
+    record = native._record
+
+    metadata = result.execution
+    assert metadata.status == "completed"
+    assert metadata.native_version == "iperf 3.21"
+    assert metadata.native_system_info == "fixture-native-system"
+    assert metadata.python_version
+    assert metadata.platform
+    assert metadata.timing.started_at_seconds == 100
+    assert metadata.timing.completed_at_seconds == 112.5
+    assert metadata.timing.elapsed_seconds == 13
+    assert metadata.timing.native_started_at_seconds == 90
+    assert metadata.timing.requested_duration_seconds == 10
+    assert metadata.configuration.requested["rate"] == record["rate"] == 400000
+    assert metadata.configuration.effective["rate"].value == 500000
+    assert metadata.configuration.effective["rate"].state == "verified"
+    assert metadata.configuration.effective["json_stream"].state == "unavailable"
+    assert metadata.configuration.effective["json_stream"].value is None
+    assert any(d.code == "configuration.difference" for d in result.diagnostics)
+
+
+def test_client_executes_detached_configuration_snapshot(monkeypatch):
+    """Caller mutations after admission cannot change the run or its recorded request."""
+    import iperf3_lib.ffi.api as api_mod
+    import iperf3_lib.iperf_client as client_mod
+    from iperf3_lib.config import ClientConfig
+
+    config = ClientConfig(server="127.0.0.1", duration=2, rate=400000)
+
+    class MutatingLib(RecorderLib):
+        """Mutate the original Python configuration after the native test is allocated."""
+
+        def iperf_defaults(self, test):
+            """Change caller-owned values during setup to exercise the snapshot boundary."""
+            config.duration = 50
+            config.rate = 1
+            return 0
+
+    native = MutatingLib()
+    monkeypatch.setattr(api_mod, "ffi", DummyFFI())
+    monkeypatch.setattr(api_mod, "lib", native)
+    importlib.reload(client_mod)
+    result = client_mod.Client(config).run()
+
+    assert config.duration == 50
+    assert native._record["duration"] == 2
+    assert native._record["rate"] == 400000
+    assert result.execution.configuration.requested["duration"] == 2
+    assert result.execution.configuration.requested["rate"] == 400000
+    config.rate = 123
+    assert result.execution.configuration.requested["rate"] == 400000
+
+
+def test_client_revalidates_mutated_config_before_native_allocation(monkeypatch):
+    """Invalid post-construction values are rejected before any native resources exist."""
+    import iperf3_lib.ffi.api as api_mod
+    import iperf3_lib.iperf_client as client_mod
+    from iperf3_lib.config import ClientConfig
+
+    config = ClientConfig(server="127.0.0.1")
+    config.duration = 0
+
+    class UnallocatedLib(RecorderLib):
+        """Fail if native allocation occurs before configuration validation."""
+
+        def iperf_new_test(self):
+            """Prevent an invalid request from reaching native code."""
+            pytest.fail("invalid request allocated a native test")
+
+    monkeypatch.setattr(api_mod, "ffi", DummyFFI())
+    monkeypatch.setattr(api_mod, "lib", UnallocatedLib())
+    importlib.reload(client_mod)
+    with pytest.raises(ValueError, match="duration"):
+        client_mod.Client(config).run()
+
+
+def test_native_failure_retains_returned_json_and_request_metadata(monkeypatch):
+    """A negative native status must not discard its available result document."""
+    native = RecorderLib(run_client_ret=-1)
+    result, _ = _setup_and_run(monkeypatch, native, {"duration": 2})
+
+    assert not result.ok
+    assert result.error == "err"
+    assert result.raw["end"]["sum_sent"]["bits_per_second"] == 1234.0
+    assert result.execution.status == "failed"
+    assert result.execution.configuration.requested["duration"] == 2
+    assert result.execution.timing.elapsed_seconds >= 0
+    assert any(d.code == "execution.native_error" for d in result.diagnostics)

@@ -24,7 +24,8 @@ cancellation, and process-isolation limits.
 ## Result dataclasses
 
 Import `Result`, `FlowStats`, `SumStats`, `IntervalStats`, and `Diagnostic`
-from `iperf3_lib`. `EndStats` is available from `iperf3_lib.result`.
+from `iperf3_lib`. `EndStats` and `StreamStats` are available from
+`iperf3_lib.result`.
 These are ordinary dataclasses; manually constructing a result does not
 perform native-JSON validation.
 
@@ -41,10 +42,14 @@ perform native-JSON validation.
 | `reporting_role: str \| None` | Reporting endpoint (`"client"` or `"server"`) when established. |
 | `flows: list[FlowStats]` | Directional flows with sender/receiver observations. |
 | `intervals: list[IntervalStats]` | Aggregate and per-stream interval observations. |
+| `streams: list[StreamStats]` | Terminal per-stream observations, including mixed UDP summaries marked unattributed. |
+| `execution: ExecutionMetadata \| None` | Status, methodology, timing, configuration evidence, and producer environment. |
+| `availability: dict[str, FieldAvailability]` | Explicit uncertainty or absence keyed by normalized JSON pointer. |
+| `extensions: dict[str, JSONValue]` | Namespaced application metadata preserved by artifacts. |
 | `diagnostics: list[Diagnostic]` | Missing-data, incomplete-output, native-error, and ambiguous-mapping diagnostics. |
 | `started_at_seconds: float \| None` | Native start Unix timestamp. |
 | `duration_seconds: float \| None` | Duration from native test configuration. |
-| `completed_at_seconds: float \| None` | Live completion Unix timestamp, or an estimate for directly parsed JSON. |
+| `completed_at_seconds: float \| None` | Observed completion Unix timestamp; unknown for directly parsed native JSON. |
 
 `to_dict()` returns a recursive dataclass dictionary. `summary_mbps` is a
 read-only convenience property in decimal megabits per second. Consult the
@@ -65,6 +70,11 @@ direction and optional `SumStats` objects for each observation point.
 | `jitter_ms` | `None` | Milliseconds. |
 | `direction` | `None` | Direction metadata, consistent with the parent flow. |
 | `observation` | `None` | `"sender"` or `"receiver"` metadata. |
+| `bytes` | `None` | Native measured byte count. |
+| `duration_seconds` | `None` | Measured summary duration in seconds. |
+| `start_seconds`, `end_seconds` | `None` | Native elapsed boundaries in seconds. |
+| `packets`, `lost_packets` | `None` | Native packet counts. |
+| `omitted` | `None` | Whether native output marks this observation as warm-up. |
 
 `EndStats(sum_sent=None, sum_received=None)` holds two optional `SumStats`
 objects. Both are observations of the primary flow, not separate traffic
@@ -76,9 +86,51 @@ directions.
 direction="unknown", observation=None, stream_id=None)` uses
 optional elapsed interval boundaries in seconds and an optional bitrate in bits/s.
 `stream_id` is the native socket identifier when available.
+Additional fields are `scope`, `bytes`, `duration_seconds`, `omitted`,
+`packets`, `lost_packets`, `retransmits`, `lost_percent`, and `jitter_ms`.
+Scope comes from the native container; all optional measurements retain `None`
+when absent. `StreamStats` groups terminal `sender`, `receiver`, or `unattributed`
+summaries by direction and optional stream identifier.
 
-`Diagnostic(message, severity="info")` stores a message and severity
-(`"info"`, `"warning"`, or `"error"`).
+`Diagnostic(message, severity="info", code="unspecified", path=None,
+evidence_paths=[])` stores a message, severity (`"info"`, `"warning"`, or
+`"error"`), stable machine-readable code, and JSON pointer evidence.
+
+### Execution provenance
+
+Import these dataclasses from `iperf3_lib.result`:
+
+- `ExecutionMetadata`: `status` (`completed`, `failed`, or `incomplete`),
+  `method`, `timing`, `configuration`, native version/system information,
+  Python version, and platform.
+- `RunTiming`: observed UTC start/completion, monotonic elapsed time, native
+  start, requested duration, and separately named estimated completion.
+- `ConfigurationSnapshot`: optional `requested` values and `effective` settings.
+- `VerifiedSetting`: value, verification state, and native evidence paths.
+- `FieldAvailability`: absent, unsupported, malformed, or unknown state and
+  evidence paths. Absence alone does not establish unsupported behavior.
+
+See [portable artifacts](../guides/artifacts.md) for field interpretation and
+strict interchange validation. Direct dataclass construction remains permissive;
+the artifact encoder validates constructed and mutated instances.
+
+## Versioned result artifacts
+
+Import from `iperf3_lib.artifacts`:
+
+```text
+artifact_from_result(result) -> ResultArtifact
+artifact_to_dict(artifact) -> dict
+artifact_from_dict(value) -> ResultArtifact
+dumps_artifact(artifact, *, indent=None) -> str
+loads_artifact(text: str | bytes) -> ResultArtifact
+artifact_from_legacy_dict(value) -> ResultArtifact
+```
+
+`ResultArtifact` contains schema version, kind, `ArtifactProducer`, normalized
+result, and extension metadata. `ArtifactValidationError` is a `ValueError`;
+`UnsupportedArtifactVersion` identifies unknown versions. Decoding does not run
+a benchmark, load libiperf, or reinterpret `raw` using the current native parser.
 
 ### Native JSON normalization
 

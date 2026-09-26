@@ -77,13 +77,6 @@ def render_text(
         int(result.ok),
     )
     completed_at = result.completed_at_seconds
-    if (
-        result.ok
-        and completed_at is None
-        and result.started_at_seconds is not None
-        and result.duration_seconds is not None
-    ):
-        completed_at = result.started_at_seconds + result.duration_seconds
     if completed_at is not None:
         emit(
             "iperf3_last_run_completed_timestamp_seconds",

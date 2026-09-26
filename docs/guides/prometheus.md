@@ -72,10 +72,11 @@ For a successful result with a known completion time, that time takes
 precedence over the supplied previous success time. There is no stored state
 inside the exporter.
 
-Saved failed or incomplete documents without an actual completion timestamp
-omit the completion metric. Their requested duration is never used to invent
-a completion time. A live `Client.run()` records its return time for both
-successful and failed runs.
+Saved native documents without an observed completion timestamp omit the
+completion metric, including successful documents. Requested duration is never
+used to invent freshness. The separately named estimate in execution metadata
+is not an observed completion. A live `Client.run()` records its return time
+for both successful and failed runs. Portable artifacts preserve that evidence.
 
 ## Write a node_exporter textfile
 

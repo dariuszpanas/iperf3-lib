@@ -10,6 +10,15 @@ These pages describe `main`. Released versions remain available through
   `ClientConfig` validation. Runtime dependencies now consist of CFFI.
 - Add normalized directional flow and interval models alongside the original
   native JSON, execution metadata, and a `to_dict()` helper.
+- Add strict version-1 JSON artifacts with producer identity, portable import,
+  explicit legacy snapshot conversion, configuration evidence, structured
+  diagnostics, per-stream summaries, and interval bytes/duration/warm-up state.
+- Snapshot and revalidate configuration before each client run. Preserve native
+  failure JSON and record observed UTC and monotonic timing separately from
+  estimates derived from saved native output.
+- Qualify both reporting endpoints across TCP, UDP, and SCTP directions and
+  warm-up intervals. Keep mixed UDP stream summaries unattributed and mark
+  unsupported SCTP retransmission values unavailable on qualified native versions.
 - Add a dependency-free Prometheus renderer and atomic textfile writer.
 - Emit each Prometheus metric family's metadata once, group its samples, and
   reject reserved caller labels and duplicate samples. Preserve existing files
@@ -45,9 +54,12 @@ Applications importing bidirectional JSON without reporting-endpoint evidence
 can pass `reporting_role="client"` or `"server"`; unproven stream direction
 is reported as `"unknown"` with diagnostics.
 
-`Result.to_dict()` returns the dataclass fields, including native JSON. A
-versioned interchange schema and importer have not been introduced; see
-[results](guides/results.md) for storing current snapshots.
+`Result.to_dict()` still returns an unversioned dataclass snapshot, including
+native JSON. Use the [artifact API](guides/artifacts.md) for durable storage;
+`artifact_from_legacy_dict()` imports old snapshots with explicit uncertainty.
+Parsing saved native JSON no longer estimates `completed_at_seconds`.
+The estimate is separately available in `execution.timing`; Prometheus
+completion/freshness metrics require an observed completion timestamp.
 
 ## 0.2.0 — 2026-07-22
 

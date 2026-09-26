@@ -2,8 +2,7 @@
 
 !!! note "Unreleased result model"
     The normalized dataclass result model is available on `main` after `0.2.0`.
-    Its remaining correctness and schema work is tracked in the
-    [roadmap](../roadmap.md).
+    See the [artifact guide](artifacts.md) for the versioned storage contract.
 
 `Result` contains the original native JSON in `raw`, end-of-test summaries,
 normalized flows and intervals, and timing metadata. Normalization currently
@@ -66,16 +65,21 @@ for interval in result.intervals:
 ```
 
 The list contains both native aggregate summaries and per-stream records.
-Aggregate entries have `stream_id=None`; per-stream entries use the native
-socket identifier when present. A missing socket identifier also produces
-`None`, so it is not an unconditional guarantee that a record is an aggregate.
+Use `scope` (`"aggregate"`, `"stream"`, or `"unknown"`) to distinguish them.
+Per-stream entries use the native socket identifier when present; a missing
+identifier does not make a record an aggregate.
 Do not add aggregate and per-stream records together.
 
 Bidirectional per-stream mapping uses reporting-endpoint and native role
 evidence. Unproven direction is `"unknown"` and produces a diagnostic; it is
 never silently assigned to the first flow. A missing observation point is
-`None`. Omission flags, byte counts, and other interval fields remain in `raw`
-rather than the normalized model.
+`None`. Byte counts, measured duration, and omitted warm-up flags are retained
+when available. An absent omission flag remains `None`, not `False`.
+
+`result.streams` contains terminal per-stream observations. Native UDP stream
+summaries combine sender throughput with receiver loss/jitter, so those mixed
+objects are retained as `unattributed`, with a diagnostic. Use attributed
+flow summaries for endpoint comparisons and keep the original evidence in `raw`.
 
 `Client.run()` supplies its known client role. When importing saved native
 JSON, `result_from_iperf_json(raw, reporting_role="server")` can supply the
@@ -94,25 +98,27 @@ explicit in application calculations.
 ## Preserve results
 
 ```python
-import json
 from pathlib import Path
+from iperf3_lib.artifacts import artifact_from_result, dumps_artifact, loads_artifact
 
 Path("result.json").write_text(
-    json.dumps(result.to_dict(), indent=2),
+    dumps_artifact(artifact_from_result(result), indent=2),
     encoding="utf-8",
 )
+restored = loads_artifact(Path("result.json").read_text(encoding="utf-8")).result
 ```
 
-`to_dict()` uses `dataclasses.asdict()` and includes `raw`. This is a Python
-dataclass snapshot; a versioned interchange schema and corresponding importer
-have not been introduced. Store your package version alongside it for
-long-lived archives.
+The [versioned artifact](artifacts.md) preserves the normalized model, native
+JSON, provenance, diagnostics, and producer version without loading libiperf.
+`to_dict()` remains an unversioned `dataclasses.asdict()` snapshot for Python
+callers. Existing snapshots have an explicit legacy import path.
 
 `started_at_seconds` comes from the native timestamp and `duration_seconds`
 from native test configuration. A live client records `completed_at_seconds`
-after the call completes. Direct use of `result_from_iperf_json()` estimates
-completion as start plus configured duration when both are present, rather
-than measuring elapsed wall time.
+after the call completes. Direct use of `result_from_iperf_json()` leaves
+completion unknown. Start plus requested duration is retained separately as
+`execution.timing.estimated_completed_at_seconds` and never used for exporter
+freshness. Live runs also record monotonic elapsed time, independently of UTC.
 
 `diagnostics` records incomplete output, missing measurements, and ambiguous
 direction or observation evidence. A saved native `error` document has
@@ -123,6 +129,9 @@ with some valid measurements remains usable, with diagnostics for gaps.
 
 Invalid object shapes, malformed flags, nonnumeric measurements, and
 non-finite values raise `ValueError`; they do not become zero measurements.
-Normalized requested/effective configuration and richer TCP/CPU analysis
-remain future work.
+`execution.configuration` separates the admitted request snapshot from native
+settings verified through returned JSON. Unavailable verification stays explicit;
+setting a native option alone is not proof of its effective value. Structured
+diagnostics have stable codes and evidence paths. Richer TCP/CPU analysis remains
+future work.
 

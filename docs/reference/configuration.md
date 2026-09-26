@@ -16,7 +16,10 @@ print(asdict(config))
 
 Use a fresh instance or `dataclasses.replace()` when changing a validated
 configuration. Direct attribute assignment does not rerun validation, and a
-`Client` retains the configuration object passed to it.
+`Client` retains the configuration object passed to it. Each `run()` validates
+and executes a detached snapshot at admission, so later mutations cannot change
+an active run. The result records that request separately from settings verified
+through native output.
 
 ## Client fields
 

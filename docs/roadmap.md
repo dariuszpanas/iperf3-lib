@@ -18,9 +18,9 @@ Documentation tracks the development branch. The following foundation is on
 
 | Area | Current foundation | Remaining work |
 | --- | --- | --- |
-| Configuration | Dataclasses with explicit type/value validation and a direct CFFI execution path. | Intent-based rates, profiles, verified effective configuration, and a structured capability report. |
-| Results | Consistent directional summaries, aggregate and per-stream interval rates, explicit missing values, reporting-role evidence, and data-quality diagnostics. | A durable schema, richer stream/interval metadata, and execution provenance. |
-| Serialization | `Result.to_dict()` returns dataclass fields as a dictionary. | A versioned artifact contract and documented compatibility/reading behavior. |
+| Configuration | Validated dataclasses, detached run snapshots, and requested versus verified native configuration. | Intent-based rates, profiles, and a structured capability report. |
+| Results | Directional and per-stream summaries, interval scope/bytes/duration/warm-up metadata, explicit missing values, and execution provenance. | Evidence-based analysis built on this model. |
+| Serialization | Strict version-1 artifacts, portable loading, legacy snapshot conversion, and documented evolution rules. | Report contracts for multi-run experiments. |
 | Metrics | Latest-run Prometheus gauges, omitted unavailable values, freshness fields, atomic replacement, and a local Grafana qualification fixture. | Repeat integration qualification for the final release candidate. |
 | Execution | Synchronous APIs and asynchronous convenience methods using executor threads. | Live events and isolated execution for stronger deadline, cancellation, or concurrency guarantees. |
 | Analysis and plans | Applications can compose individual runs. | Built-in statistics, repeated trials, assessments, baselines, and bounded sweeps. |
@@ -28,8 +28,8 @@ Documentation tracks the development branch. The following foundation is on
 Result correctness is covered by captures from both reporting endpoints on
 the minimum and latest libiperf versions. Missing values remain distinct from
 zero, reverse summaries agree, and bidirectional stream mapping uses explicit
-native role evidence. Richer aggregation metadata and a durable artifact
-contract are the next foundation for analysis.
+native role evidence. Richer aggregation metadata and a durable
+[artifact contract](guides/artifacts.md) provide the foundation for analysis.
 
 ## 1. Documentation and release decisions
 
@@ -55,7 +55,7 @@ First correct direction and missing-measurement semantics. Then define one
 canonical model that exporters and analysis can consume without independently
 interpreting native JSON.
 
-The proposed artifact includes:
+The version-1 artifact includes:
 
 - Requested configuration, execution metadata, and available native-version
   and platform information.

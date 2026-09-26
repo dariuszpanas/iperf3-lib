@@ -19,7 +19,89 @@ import tempfile
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import asdict
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from iperf3_lib import ClientConfig, Result
+
+
+def round_trip_artifact(result: Result) -> dict:
+    """Qualify the installed v1 JSON codec and retain its complete decoded envelope."""
+    from iperf3_lib.artifacts import (
+        artifact_from_result,
+        artifact_to_dict,
+        dumps_artifact,
+        loads_artifact,
+    )
+
+    original = artifact_from_result(result)
+    expected = artifact_to_dict(original)
+    encoded = dumps_artifact(original)
+    restored = loads_artifact(encoded)
+    actual = artifact_to_dict(restored)
+    if actual != expected or dumps_artifact(restored) != encoded:
+        raise ValueError("installed artifact codec changed recorded evidence during round trip")
+    if actual["schema_version"] != 1 or actual["kind"] != "iperf3-lib.result":
+        raise ValueError("installed artifact codec did not produce the v1 result envelope")
+    if actual["producer"] != {
+        "name": "iperf3-lib",
+        "version": importlib.metadata.version("iperf3-lib"),
+    }:
+        raise ValueError("installed artifact producer does not match the installed distribution")
+    return actual
+
+
+def verify_native_artifact(result: Result, config: ClientConfig) -> dict:
+    """Check observed timing and requested/effective provenance before serializing a run."""
+    execution = result.execution
+    method = "bidirectional" if config.bidirectional else "reverse" if config.reverse else "forward"
+    if execution is None or execution.status != "completed" or execution.method != method:
+        raise ValueError("native artifact execution status or method differs from the run")
+    timing = execution.timing
+    if (
+        timing.started_at_seconds is None
+        or timing.completed_at_seconds is None
+        or timing.elapsed_seconds is None
+        or timing.elapsed_seconds <= 0
+        or timing.completed_at_seconds != result.completed_at_seconds
+        or timing.requested_duration_seconds != config.duration
+    ):
+        raise ValueError("native artifact is missing consistent observed operation timing")
+    native_start = result.raw["start"]
+    native_timestamp = native_start["timestamp"]["timesecs"]
+    if (
+        timing.native_started_at_seconds != native_timestamp
+        or timing.estimated_completed_at_seconds
+        != native_timestamp + native_start["test_start"]["duration"]
+    ):
+        raise ValueError("native artifact does not preserve native timing separately")
+    requested = asdict(config)
+    requested["server"] = str(config.server)
+    requested["protocol"] = config.protocol.value
+    recorded = execution.configuration
+    if recorded.requested != requested or set(recorded.effective) != set(requested):
+        raise ValueError("native artifact lost the complete admitted configuration snapshot")
+    for key in ("protocol", "duration", "parallel", "rate"):
+        setting = recorded.effective[key]
+        if (
+            setting.state != "verified"
+            or setting.value != requested[key]
+            or not setting.evidence_paths
+        ):
+            raise ValueError(f"native artifact effective {key} lacks matching native evidence")
+    for key in ("mptcp", "json_stream"):
+        setting = recorded.effective[key]
+        if setting.state != "unavailable" or setting.value is not None or setting.evidence_paths:
+            raise ValueError(f"native artifact claims unobserved {key} is verified")
+    if (
+        execution.native_version != native_start["version"]
+        or not execution.python_version
+        or not execution.platform
+    ):
+        raise ValueError("native artifact is missing native or wrapper environment metadata")
+    return round_trip_artifact(result)
 
 
 def require_installed_package(expected_version: str) -> str:
@@ -59,18 +141,17 @@ def native_cases(executable: str) -> list[dict]:
     receipts: list[dict] = []
     for name, protocol, parallel, reverse, bidirectional in cases:
         with native_server(executable) as (host, port):
-            result = Client(
-                ClientConfig(
-                    server=host,
-                    port=port,
-                    duration=1,
-                    rate=1_000_000,
-                    protocol=protocol,
-                    parallel=parallel,
-                    reverse=reverse,
-                    bidirectional=bidirectional,
-                )
-            ).run()
+            config = ClientConfig(
+                server=host,
+                port=port,
+                duration=1,
+                rate=1_000_000,
+                protocol=protocol,
+                parallel=parallel,
+                reverse=reverse,
+                bidirectional=bidirectional,
+            )
+            result = Client(config).run()
         if not result.ok:
             raise ValueError(f"{name} native benchmark failed: {result.error}")
         if result.reporting_role != "client":
@@ -133,22 +214,49 @@ def native_cases(executable: str) -> list[dict]:
                     item.direction != direction or item.observation != observer for item in matches
                 ):
                     raise ValueError(f"{name} per-stream interval disagrees with native provenance")
-        receipts.append({"profile": name, "result": result.to_dict()})
+        receipts.append(
+            {
+                "profile": name,
+                "result": result.to_dict(),
+                "artifact": verify_native_artifact(result, config),
+            }
+        )
     return receipts
 
 
-def verify_saved_result_semantics() -> None:
-    """Exercise the installed parser/exporter on missing, zero, and native-error payloads."""
+def verify_saved_result_semantics() -> dict:
+    """Round-trip saved native evidence without inventing completion or freshness."""
+    from iperf3_lib.artifacts import artifact_from_dict
     from iperf3_lib.exporters.prometheus import render_text
     from iperf3_lib.result import result_from_iperf_json
 
     result = result_from_iperf_json(
         {
-            "start": {"test_start": {"protocol": "TCP", "reverse": 0, "bidir": 0}},
+            "start": {
+                "timestamp": {"timesecs": 100},
+                "test_start": {"protocol": "TCP", "reverse": 0, "bidir": 0, "duration": 5},
+            },
             "end": {"sum_sent": {"retransmits": 2}, "sum_received": {"bits_per_second": 0}},
         },
         reporting_role="client",
     )
+    saved_artifact = round_trip_artifact(result)
+    result = artifact_from_dict(saved_artifact).result
+    execution = result.execution
+    if (
+        execution is None
+        or execution.timing.estimated_completed_at_seconds != 105
+        or execution.timing.native_started_at_seconds != 100
+        or execution.timing.started_at_seconds is not None
+        or execution.timing.completed_at_seconds is not None
+        or execution.timing.elapsed_seconds is not None
+        or result.completed_at_seconds is not None
+        or execution.configuration.requested is not None
+        or "timestamp_seconds" in render_text(result)
+    ):
+        raise ValueError(
+            "saved native artifact invented observed timing, requested intent, or freshness"
+        )
     flow = result.flows[0]
     if flow.sender is None or flow.sender.bits_per_second is not None:
         raise ValueError("installed parser manufactured an absent throughput measurement")
@@ -166,10 +274,22 @@ def verify_saved_result_semantics() -> None:
     ):
         raise ValueError("installed exporter conflates absent and zero measurements")
     failure = result_from_iperf_json({"error": "saved native failure"}, reporting_role="client")
-    if failure.ok or "throughput" in render_text(failure):
+    failed_artifact = round_trip_artifact(failure)
+    failure = artifact_from_dict(failed_artifact).result
+    failure_text = render_text(failure, last_success_timestamp_seconds=90)
+    if (
+        failure.ok
+        or failure.error != "saved native failure"
+        or failure.execution is None
+        or failure.execution.status != "failed"
+        or failure.completed_at_seconds is not None
+        or "throughput" in failure_text
+        or "iperf3_last_success_timestamp_seconds 90" not in failure_text
+    ):
         raise ValueError(
             "installed parser/exporter treats a native error as a successful measurement"
         )
+    return {"saved_native": saved_artifact, "failed_native": failed_artifact}
 
 
 @contextmanager
@@ -213,7 +333,7 @@ def native_server(executable: str) -> Iterator[tuple[str, int]]:
 def qualify(expected_version: str, expected_native_version: str) -> dict:
     """Run native clients against temporary, bounded loopback servers."""
     location = require_installed_package(expected_version)
-    verify_saved_result_semantics()
+    saved_artifacts = verify_saved_result_semantics()
     from iperf3_lib.ffi.api import ffi, lib
 
     native_version = ffi.string(lib.iperf_get_iperf_version()).decode()
@@ -233,6 +353,7 @@ def qualify(expected_version: str, expected_native_version: str) -> dict:
         "python": sys.version,
         "installed_location": location,
         "cases": receipts,
+        "saved_artifacts": saved_artifacts,
     }
 
 

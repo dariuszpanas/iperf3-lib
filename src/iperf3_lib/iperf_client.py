@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import json
+import platform
 import time
 from collections.abc import Callable
+from dataclasses import asdict, replace
 from functools import partial
 
 from .config import ClientConfig, Protocol
 from .exceptions import IperfError, IperfLibraryError, UnsupportedFeatureError
 from .ffi.api import ffi, lib
-from .result import Result, result_from_iperf_json
+from .result import Diagnostic, ExecutionMetadata, Result, VerifiedSetting, result_from_iperf_json
 
 TCP_PROTOCOL_ID = 1
 UDP_PROTOCOL_ID = 2
@@ -90,13 +92,58 @@ class Client:
 
     def run(self) -> Result:
         """Run the iperf3 test synchronously and return the result."""
+        cfg = replace(self.cfg)
+        requested = asdict(cfg)
+        requested["server"] = str(cfg.server)
+        requested["protocol"] = cfg.protocol.value
         run_started_at = time.time()
-        if self.cfg.mptcp:
+        run_started_monotonic = time.monotonic()
+
+        def finish(result: Result) -> Result:
+            """Attach observed operation timing and the admitted configuration snapshot."""
+            completed_at = time.time()
+            elapsed = time.monotonic() - run_started_monotonic
+            metadata = result.execution
+            if metadata is None:
+                metadata = ExecutionMetadata(status="completed" if result.ok else "failed")
+                result.execution = metadata
+            metadata.timing.started_at_seconds = run_started_at
+            metadata.timing.completed_at_seconds = completed_at
+            metadata.timing.elapsed_seconds = elapsed
+            metadata.timing.requested_duration_seconds = cfg.duration
+            metadata.configuration.requested = requested
+            for name in requested:
+                metadata.configuration.effective.setdefault(name, VerifiedSetting())
+            metadata.python_version = platform.python_version()
+            metadata.platform = platform.platform()
+            result.completed_at_seconds = completed_at
+            if result.started_at_seconds is None:
+                result.started_at_seconds = run_started_at
+            if not result.raw:
+                result.reporting_role = "client"
+            for name, setting in metadata.configuration.effective.items():
+                intent = requested.get(name)
+                if setting.state == "verified" and intent is not None and setting.value != intent:
+                    result.diagnostics.append(
+                        Diagnostic(
+                            f"Native setting {name} differs from the recorded request.",
+                            "warning",
+                            code="configuration.difference",
+                            path=f"/execution/configuration/effective/{name}",
+                            evidence_paths=[
+                                f"/execution/configuration/requested/{name}",
+                                *setting.evidence_paths,
+                            ],
+                        )
+                    )
+            return result
+
+        if cfg.mptcp:
             raise UnsupportedFeatureError(
                 "MPTCP is unavailable through the direct libiperf ABI backend; "
                 "libiperf does not publish an MPTCP setter"
             )
-        if self.cfg.json_stream:
+        if cfg.json_stream:
             raise UnsupportedFeatureError(
                 "Streaming JSON is unavailable through the direct libiperf ABI backend; "
                 "Client.run() requires one complete JSON result"
@@ -108,11 +155,11 @@ class Client:
         try:
             _check(lib.iperf_defaults(t))
             lib.iperf_set_test_role(t, b"c")
-            _set_str(lib.iperf_set_test_server_hostname, t, str(self.cfg.server))
-            lib.iperf_set_test_server_port(t, int(self.cfg.port))
-            lib.iperf_set_test_duration(t, int(self.cfg.duration))
+            _set_str(lib.iperf_set_test_server_hostname, t, str(cfg.server))
+            lib.iperf_set_test_server_port(t, int(cfg.port))
+            lib.iperf_set_test_duration(t, int(cfg.duration))
 
-            protocol_id = PROTOCOL_IDS[self.cfg.protocol]
+            protocol_id = PROTOCOL_IDS[cfg.protocol]
             protocol_setter = _try_set("set_protocol")
             protocol_getter = _try_set("iperf_get_test_protocol_id")
             if protocol_setter is None or protocol_getter is None:
@@ -122,34 +169,34 @@ class Client:
             _check(protocol_setter(t, protocol_id))
             if int(protocol_getter(t)) != protocol_id:
                 raise IperfLibraryError(
-                    f"libiperf did not apply requested protocol {self.cfg.protocol.value}"
+                    f"libiperf did not apply requested protocol {cfg.protocol.value}"
                 )
 
-            if self.cfg.omit:
-                lib.iperf_set_test_omit(t, int(self.cfg.omit))
-            if self.cfg.parallel and self.cfg.parallel > 1:
-                lib.iperf_set_test_num_streams(t, int(self.cfg.parallel))
+            if cfg.omit:
+                lib.iperf_set_test_omit(t, int(cfg.omit))
+            if cfg.parallel and cfg.parallel > 1:
+                lib.iperf_set_test_num_streams(t, int(cfg.parallel))
 
-            block_size = self.cfg.blksize
-            if block_size is None and self.cfg.protocol is Protocol.UDP:
+            block_size = cfg.blksize
+            if block_size is None and cfg.protocol is Protocol.UDP:
                 block_size = DEFAULT_UDP_BLOCK_SIZE
-            elif block_size is None and self.cfg.protocol is Protocol.SCTP:
+            elif block_size is None and cfg.protocol is Protocol.SCTP:
                 block_size = DEFAULT_SCTP_BLOCK_SIZE
             if block_size is not None:
                 lib.iperf_set_test_blksize(t, int(block_size))
 
-            if self.cfg.tos is not None:
-                lib.iperf_set_test_tos(t, int(self.cfg.tos))
+            if cfg.tos is not None:
+                lib.iperf_set_test_tos(t, int(cfg.tos))
 
             # reverse / bidirectional
-            if self.cfg.reverse:
+            if cfg.reverse:
                 lib.iperf_set_test_reverse(t, 1)
-            if self.cfg.bidirectional:
+            if cfg.bidirectional:
                 if not _maybe_set("iperf_set_test_bidirectional", t, 1):
                     raise UnsupportedFeatureError("Bidirectional not supported by this libiperf")
 
-            rate = self.cfg.rate
-            if rate is None and self.cfg.protocol is Protocol.UDP:
+            rate = cfg.rate
+            if rate is None and cfg.protocol is Protocol.UDP:
                 rate = DEFAULT_UDP_RATE
             if rate is not None:
                 rate_setter = _try_set("iperf_set_test_rate")
@@ -163,7 +210,12 @@ class Client:
                 raise UnsupportedFeatureError("This libiperf lacks JSON output support")
 
             callback_payloads, callback = _install_json_callback(t)
-            _check(lib.iperf_run_client(t))
+            native_error = None
+            try:
+                _check(lib.iperf_run_client(t))
+            except IperfError as exc:
+                # Read process-global error text before any further native operation.
+                native_error = str(exc)
             # Keep the cdata callback alive through iperf_run_client().
             _ = callback
 
@@ -176,21 +228,24 @@ class Client:
             if json_text is not None:
                 raw = json.loads(json_text)
                 result = result_from_iperf_json(raw, reporting_role="client")
-                result.completed_at_seconds = time.time()
-                return result
-            return Result(
-                ok=False,
-                error="No JSON returned by libiperf",
-                started_at_seconds=run_started_at,
-                completed_at_seconds=time.time(),
+                if native_error is not None:
+                    result.ok = False
+                    result.error = native_error
+                    if result.execution is not None:
+                        result.execution.status = "failed"
+                    result.diagnostics.append(
+                        Diagnostic(native_error, "error", code="execution.native_error")
+                    )
+                return finish(result)
+            return finish(
+                Result(
+                    ok=False,
+                    error=native_error or "No JSON returned by libiperf",
+                    execution=ExecutionMetadata(status="failed" if native_error else "incomplete"),
+                )
             )
         except IperfError as e:
-            return Result(
-                ok=False,
-                error=str(e),
-                started_at_seconds=run_started_at,
-                completed_at_seconds=time.time(),
-            )
+            return finish(Result(ok=False, error=str(e)))
         finally:
             lib.iperf_free_test(t)
 

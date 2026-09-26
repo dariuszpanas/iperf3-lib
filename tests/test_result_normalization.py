@@ -1,10 +1,21 @@
 """Tests for normalized result models and native JSON mapping."""
 
 import json
+from dataclasses import fields
 
 import pytest
 
-from iperf3_lib.result import EndStats, FlowStats, Result, SumStats, result_from_iperf_json
+from iperf3_lib.result import (
+    ConfigurationSnapshot,
+    Diagnostic,
+    EndStats,
+    ExecutionMetadata,
+    FlowStats,
+    IntervalStats,
+    Result,
+    SumStats,
+    result_from_iperf_json,
+)
 
 
 def test_normalizes_summary_direction_and_intervals():
@@ -277,7 +288,7 @@ def test_incomplete_native_json_cannot_report_success(raw):
     assert any(d.severity == "error" and "Incomplete" in d.message for d in result.diagnostics)
 
 
-@pytest.mark.parametrize("measurement", [{"bytes": 0}, {"seconds": 1}, {"retransmits": 0}])
+@pytest.mark.parametrize("measurement", [{"bytes": 0}, {"packets": 0}, {"retransmits": 0}])
 def test_partial_end_measurements_remain_usable_without_bitrate(measurement):
     """Allow a measured endpoint result without manufacturing its absent throughput."""
     result = result_from_iperf_json({"end": {"sum_sent": measurement}})
@@ -518,3 +529,372 @@ def test_reverse_interval_without_direction_metadata_retains_evidence_with_diagn
     assert result.intervals[0].direction == "server_to_client"
     assert result.intervals[0].bits_per_second == 1
     assert any("without bidirectional mode metadata" in d.message for d in result.diagnostics)
+
+
+def test_model_additions_preserve_existing_positional_field_order_and_independent_defaults():
+    """Append artifact foundations without changing existing dataclass constructors."""
+    assert [f.name for f in fields(SumStats)][:6] == [
+        "bits_per_second",
+        "retransmits",
+        "lost_percent",
+        "jitter_ms",
+        "direction",
+        "observation",
+    ]
+    assert [f.name for f in fields(IntervalStats)][:6] == [
+        "start_seconds",
+        "end_seconds",
+        "bits_per_second",
+        "direction",
+        "observation",
+        "stream_id",
+    ]
+    assert [f.name for f in fields(Diagnostic)][:2] == ["message", "severity"]
+    first = ExecutionMetadata("completed")
+    second = ExecutionMetadata("completed")
+    first.configuration.requested = {"duration": 1}
+    first.timing.elapsed_seconds = 2
+    assert second.configuration == ConfigurationSnapshot()
+    assert second.timing.elapsed_seconds is None
+    first_result = Result(True)
+    second_result = Result(True)
+    first_result.extensions["example.test"] = {"value": 1}
+    assert second_result.extensions == {}
+
+
+def test_native_interval_scope_and_measurements_are_explicit_and_preserve_warmup():
+    """Keep native bytes, seconds, omissions and scope without deriving them from socket presence."""
+    data = {
+        "start": -1,
+        "end": 0,
+        "seconds": 1.01,
+        "bytes": 1200,
+        "bits_per_second": 9504.95,
+        "omitted": True,
+        "packets": 10,
+        "lost_packets": 1,
+        "retransmits": 2,
+        "lost_percent": 10,
+        "jitter_ms": 0.5,
+        "sender": False,
+    }
+    result = result_from_iperf_json(
+        {
+            "start": {"test_start": {"reverse": 0}},
+            "intervals": [{"sum": {**data, "socket": 7}, "streams": [data]}],
+        }
+    )
+
+    aggregate, stream = result.intervals
+    assert aggregate.scope == "aggregate"
+    assert stream.scope == "stream"
+    assert aggregate.stream_id is None and stream.stream_id is None
+    for interval in result.intervals:
+        assert interval.bytes == 1200
+        assert interval.duration_seconds == 1.01
+        assert interval.start_seconds == -1 and interval.end_seconds == 0
+        assert interval.omitted is True
+        assert interval.packets == 10 and interval.lost_packets == 1
+        assert interval.retransmits == 2 and interval.lost_percent == 10
+        assert interval.jitter_ms == 0.5
+
+
+def test_saved_native_timing_preserves_estimate_without_claiming_actual_completion():
+    """Separate inferred timestamps from observed operation timing in saved native JSON."""
+    result = result_from_iperf_json(
+        {
+            "start": {"timestamp": {"timesecs": 100}, "test_start": {"duration": 10, "reverse": 0}},
+            "end": {"sum_sent": {"bits_per_second": 1}},
+        }
+    )
+
+    assert result.execution is not None
+    assert result.execution.status == "completed"
+    assert result.execution.method == "forward"
+    assert result.started_at_seconds == 100 and result.duration_seconds == 10
+    assert result.completed_at_seconds is None
+    timing = result.execution.timing
+    assert timing.native_started_at_seconds == 100
+    assert timing.requested_duration_seconds == 10
+    assert timing.estimated_completed_at_seconds == 110
+    assert timing.started_at_seconds is None
+    assert timing.completed_at_seconds is None
+    assert timing.elapsed_seconds is None
+
+
+@pytest.mark.parametrize(
+    ("raw", "status"), [({"error": "connection refused"}, "failed"), ({}, "incomplete")]
+)
+def test_execution_status_distinguishes_failed_and_incomplete_native_documents(raw, status):
+    """Retain native failure versus missing terminal evidence as separate outcomes."""
+    result = result_from_iperf_json(raw)
+
+    assert not result.ok
+    assert result.execution is not None
+    assert result.execution.status == status
+    assert result.execution.timing.estimated_completed_at_seconds is None
+    assert any(
+        d.code == ("native.error" if status == "failed" else "native.incomplete")
+        and d.evidence_paths
+        for d in result.diagnostics
+    )
+
+
+def test_native_configuration_and_environment_have_verified_evidence_without_request_fabrication():
+    """Record returned settings and native environment while keeping caller/environment unknowns absent."""
+    raw = {
+        "start": {
+            "version": "iperf 3.21",
+            "system_info": "Linux native-host",
+            "connecting_to": {"host": "target.example", "port": 5201},
+            "test_start": {
+                "protocol": "UDP",
+                "duration": 1,
+                "num_streams": 2,
+                "omit": 1,
+                "reverse": 0,
+                "bidir": 0,
+                "blksize": 1200,
+                "target_bitrate": 4000000,
+                "tos": 16,
+            },
+        },
+        "end": {"sum_sent": {"bytes": 1200}},
+    }
+    result = result_from_iperf_json(raw)
+
+    assert result.execution is not None
+    assert result.execution.native_version == "iperf 3.21"
+    assert result.execution.native_system_info == "Linux native-host"
+    assert result.execution.python_version is None and result.execution.platform is None
+    configuration = result.execution.configuration
+    assert configuration.requested is None
+    expected = {
+        "server": "target.example",
+        "port": 5201,
+        "protocol": "udp",
+        "duration": 1,
+        "parallel": 2,
+        "omit": 1,
+        "reverse": False,
+        "bidirectional": False,
+        "blksize": 1200,
+        "rate": 4000000,
+        "tos": 16,
+    }
+    for name, value in expected.items():
+        assert configuration.effective[name].value == value
+        assert configuration.effective[name].state == "verified"
+        assert configuration.effective[name].evidence_paths[0].startswith("/raw/start/")
+    for name in ("mptcp", "json_stream"):
+        assert configuration.effective[name].value is None
+        assert configuration.effective[name].state == "unavailable"
+
+
+def test_conflicting_native_rate_evidence_is_not_reported_as_verified():
+    """Retain contradictory native rate fields with a diagnostic instead of choosing silently."""
+    result = result_from_iperf_json(
+        {"start": {"target_bitrate": 1, "test_start": {"target_bitrate": 2}}}
+    )
+
+    assert result.execution is not None
+    assert result.execution.configuration.effective["rate"].state == "unavailable"
+    assert any(
+        d.code == "configuration.conflict" and len(d.evidence_paths) == 2
+        for d in result.diagnostics
+    )
+
+
+def test_udp_end_stream_summary_remains_unattributed_with_native_evidence():
+    """Preserve mixed native UDP fields without assigning the whole object to one endpoint."""
+    udp = {
+        "socket": 5,
+        "sender": False,
+        "start": 0,
+        "end": 1,
+        "seconds": 1,
+        "bytes": 0,
+        "bits_per_second": 0,
+        "packets": 10,
+        "lost_packets": 1,
+        "lost_percent": 10,
+        "jitter_ms": 0.25,
+    }
+    result = result_from_iperf_json(
+        {
+            "start": {"accepted_connection": {}, "test_start": {"protocol": "UDP", "reverse": 0}},
+            "end": {"streams": [{"udp": udp}]},
+        }
+    )
+
+    assert result.ok
+    stream = result.streams[0]
+    assert stream.stream_id == 5 and stream.direction == "client_to_server"
+    assert stream.sender is None and stream.receiver is None
+    assert stream.unattributed is not None
+    assert stream.unattributed.observation is None
+    assert stream.unattributed.bytes == 0
+    assert stream.unattributed.lost_packets == 1
+    assert stream.unattributed.jitter_ms == 0.25
+    assert result.availability["/streams/0/unattributed/observation"].state == "unknown"
+    assert any(
+        d.code == "provenance.mixed_udp_summary" and d.evidence_paths == ["/raw/end/streams/0/udp"]
+        for d in result.diagnostics
+    )
+
+
+def test_tcp_stream_summary_preserves_endpoint_fields_and_conflicting_socket_evidence():
+    """Retain endpoint measurements while flagging an invalid pairing of local socket IDs."""
+    result = result_from_iperf_json(
+        {
+            "start": {"test_start": {"reverse": 0}},
+            "end": {
+                "streams": [
+                    {
+                        "sender": {
+                            "socket": 7,
+                            "sender": True,
+                            "bytes": 1200,
+                            "seconds": 1,
+                            "start": 0,
+                            "end": 1,
+                        },
+                        "receiver": {"socket": 9, "sender": True, "bytes": 1100, "seconds": 1},
+                    }
+                ]
+            },
+        }
+    )
+
+    stream = result.streams[0]
+    assert stream.stream_id is None and stream.direction == "unknown"
+    assert stream.sender is not None and stream.receiver is not None
+    assert stream.sender.bytes == 1200 and stream.receiver.bytes == 1100
+    assert stream.sender.observation == "sender" and stream.receiver.observation == "receiver"
+    assert any(
+        d.code == "provenance.conflict" and d.path == "/streams/0" for d in result.diagnostics
+    )
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        {"start": {"test_start": {"protocol": "unknown"}}},
+        {"start": {"version": 1}},
+        {"end": {"sum_sent": {"bytes": -1}}},
+        {"intervals": [{"sum": {"seconds": -1}}]},
+        {"end": {"sum_sent": {"packets": True}}},
+    ],
+)
+def test_rejects_malformed_canonical_metadata_and_measurements(raw):
+    """Keep unsupported protocol values and invalid counts outside canonical models."""
+    with pytest.raises(ValueError):
+        result_from_iperf_json(raw)
+
+
+@pytest.mark.parametrize("summary", [{"seconds": 10}, {"start": 0, "end": 10, "seconds": 10}])
+def test_terminal_duration_without_measurements_is_incomplete(summary):
+    """Timing alone does not establish that native terminal traffic was measured."""
+    result = result_from_iperf_json({"end": {"sum_sent": summary}})
+
+    assert not result.ok
+    assert result.execution is not None and result.execution.status == "incomplete"
+    assert result.end is not None and result.end.sum_sent is not None
+    assert result.end.sum_sent.duration_seconds == 10
+
+
+@pytest.mark.parametrize("field", ["bytes", "packets"])
+def test_terminal_zero_counts_are_valid_measurement_evidence(field):
+    """Measured zero traffic remains distinct from absent measurements."""
+    result = result_from_iperf_json({"end": {"sum_sent": {field: 0}}})
+
+    assert result.ok
+    assert result.execution is not None and result.execution.status == "completed"
+
+
+@pytest.mark.parametrize("version", ["iperf 3.19.1", "iperf 3.21"])
+@pytest.mark.parametrize("value", [-2, -1, 0, 3684054920433006592])
+def test_verified_sctp_retransmissions_are_unsupported_with_explicit_evidence(version, value):
+    """Keep native sentinel, zero and uninitialized SCTP values solely in raw evidence."""
+    raw = {
+        "start": {"version": version, "test_start": {"protocol": "SCTP", "reverse": 0}},
+        "end": {
+            "sum_sent": {"retransmits": value, "bytes": 0},
+            "streams": [{"sender": {"retransmits": value, "bytes": 0}}],
+        },
+        "intervals": [{"sum": {"retransmits": value, "sender": True}}],
+    }
+    result = result_from_iperf_json(raw)
+
+    assert result.ok and result.raw == raw
+    assert result.flows[0].sender is not None and result.flows[0].sender.retransmits is None
+    assert result.streams[0].sender is not None and result.streams[0].sender.retransmits is None
+    assert result.intervals[0].retransmits is None
+    for path, source_path in (
+        ("/flows/0/sender/retransmits", "/raw/end/sum_sent/retransmits"),
+        ("/streams/0/sender/retransmits", "/raw/end/streams/0/sender/retransmits"),
+        ("/intervals/0/retransmits", "/raw/intervals/0/sum/retransmits"),
+    ):
+        unavailable = result.availability[path]
+        assert unavailable.state == "unsupported"
+        assert unavailable.evidence_paths == [
+            source_path,
+            "/raw/start/test_start/protocol",
+            "/raw/start/version",
+        ]
+        assert any(
+            d.code == "measurement.unsupported"
+            and d.path == path
+            and d.evidence_paths == unavailable.evidence_paths
+            for d in result.diagnostics
+        )
+
+
+@pytest.mark.parametrize(
+    ("version", "protocol", "value"),
+    [
+        ("iperf 3.21", "SCTP", True),
+        ("iperf 3.21", "SCTP", 0.0),
+        ("iperf 3.21", "SCTP", float("inf")),
+        ("iperf 3.21", "TCP", -1),
+    ],
+)
+def test_sctp_unsupported_rule_does_not_accept_unrelated_invalid_values(version, protocol, value):
+    """Require a verified producer and valid native sentinel/count shapes."""
+    with pytest.raises(ValueError, match="retransmits"):
+        result_from_iperf_json(
+            {
+                "start": {"version": version, "test_start": {"protocol": protocol}},
+                "end": {"sum_sent": {"retransmits": value}},
+            }
+        )
+
+
+def test_unsupported_retransmissions_alone_do_not_establish_completed_execution():
+    """An emitted unsupported field supplies no terminal measurement evidence."""
+    result = result_from_iperf_json(
+        {
+            "start": {"version": "iperf 3.21", "test_start": {"protocol": "SCTP"}},
+            "end": {"sum_sent": {"retransmits": 0, "seconds": 1}},
+        }
+    )
+
+    assert not result.ok
+    assert result.execution is not None and result.execution.status == "incomplete"
+
+
+@pytest.mark.parametrize("version", [None, "iperf unknown", "iperf 3.22"])
+@pytest.mark.parametrize("value", [-2, 0, 7])
+def test_unqualified_sctp_producer_keeps_retransmission_availability_unknown(version, value):
+    """An unqualified producer cannot establish retransmission support or a real measurement."""
+    result = result_from_iperf_json(
+        {
+            "start": {"version": version, "test_start": {"protocol": "SCTP"}},
+            "end": {"sum_sent": {"retransmits": value, "bytes": 0}},
+        }
+    )
+
+    assert result.ok
+    assert result.flows[0].sender is not None and result.flows[0].sender.retransmits is None
+    assert result.availability["/flows/0/sender/retransmits"].state == "unknown"
+    assert any(d.code == "measurement.unknown" for d in result.diagnostics)
