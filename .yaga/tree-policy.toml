@@ -14,6 +14,10 @@ required-paths = [
   "uv.lock",
   "src/iperf3_lib/py.typed",
   ".github/workflows/ci.yml",
+  ".github/workflows/docs.yml",
+  "zensical.toml",
+  "docs/index.md",
+  "scripts/check_docs.py",
 ]
 forbidden-patterns = [
   ".vault/**",
@@ -29,4 +33,6 @@ forbidden-patterns = [
   "dist/**",
   "htmlcov/**",
   "coverage.xml",
+  "site/**",
+  ".cache/**",
 ]

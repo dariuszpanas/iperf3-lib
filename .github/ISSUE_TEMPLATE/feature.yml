@@ -1,0 +1,30 @@
+name: Feature or design proposal
+description: Describe a use case and a bounded proposal.
+labels: [enhancement, planning]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and use case
+      description: Describe the workflow this would improve and the current workaround.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior and boundaries
+      description: Include API ideas, alternatives, and what is outside the proposed scope.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria and evidence
+      description: Include native verification or Prometheus/Grafana checks when relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Related issues and compatibility
+      description: Link dependencies and describe migration or platform considerations.

@@ -1,0 +1,35 @@
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: #185f84;
+  --md-primary-fg-color--light: #347ea2;
+  --md-primary-fg-color--dark: #10455f;
+  --md-accent-fg-color: #185f84;
+  --md-typeset-a-color: #185f84;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #7fc4e5;
+  --md-primary-bg-color: #101b23;
+  --md-accent-fg-color: #7fc4e5;
+  --md-typeset-a-color: #7fc4e5;
+}
+
+.md-typeset h1 {
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  color: var(--md-default-fg-color);
+}
+
+.md-typeset .md-button {
+  border-radius: 0.4rem;
+  margin: 0 0.4rem 0.4rem 0;
+}
+
+.md-typeset .project-facts {
+  color: var(--md-default-fg-color--light);
+  font-size: 0.72rem;
+  margin: 0.8rem 0 1.8rem;
+}
+
+.md-typeset .grid.cards > ul > li {
+  border-radius: 0.5rem;
+}

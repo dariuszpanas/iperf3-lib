@@ -44,20 +44,22 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/dariuszpanas/iperf3-lib"
-Documentation = "https://github.com/dariuszpanas/iperf3-lib#readme"
+Documentation = "https://dariuszpanas.github.io/iperf3-lib/"
 Repository = "https://github.com/dariuszpanas/iperf3-lib"
 Issues = "https://github.com/dariuszpanas/iperf3-lib/issues"
-Changelog = "https://github.com/dariuszpanas/iperf3-lib#changelog"
+Changelog = "https://dariuszpanas.github.io/iperf3-lib/changelog.html"
 
 [dependency-groups]
 dev = [
     "pytest>=9.1,<10",
     "pytest-asyncio>=1.4,<2",
     "pytest-cov>=7.1,<8",
+    "readme-renderer[md]>=44",
     "ruff>=0.15.22,<0.17",
     # ty is beta; review each upgrade before changing this exact pin.
     "ty==0.0.83",
     "yaga-cli>=0.2,<0.3",
+    "zensical>=0.0.20",
 ]
 release = [
     "check-wheel-contents>=0.6.3,<0.7",
@@ -120,7 +122,7 @@ python-version = "3.12"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short --strict-markers"
