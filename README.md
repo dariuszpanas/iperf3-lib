@@ -14,6 +14,10 @@
 > [installation guide](https://dariuszpanas.github.io/iperf3-lib/getting-started.html)
 > for installing the development version.
 
+For an existing 0.2.0 application, follow the
+[dataclass migration guide](https://dariuszpanas.github.io/iperf3-lib/guides/migration-0.3.html)
+before changing model methods or loading saved results.
+
 `iperf3-lib` is a typed Python wrapper around the native iperf3 `libiperf`
 library. It uses CFFI's ABI mode and provides synchronous and asynchronous
 client APIs, a minimal server wrapper, validated dataclass configuration, and
@@ -227,7 +231,9 @@ Build the documentation with `make docs`, or preview it with `make docs-serve`.
   add a Docker Desktop Kubernetes/Grafana qualification example.
 
 See the [full changelog](https://dariuszpanas.github.io/iperf3-lib/changelog.html)
-for migration notes and release history.
+for release history and the
+[migration guide](https://dariuszpanas.github.io/iperf3-lib/guides/migration-0.3.html)
+for configuration, result, and serialization changes.
 
 ### 0.2.0 — 2026-07-22
 

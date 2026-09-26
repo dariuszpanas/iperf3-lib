@@ -62,9 +62,12 @@ does not validate whether a hostname is reachable.
 | UDP | Wrapper sets 1,048,576 bits/s per stream. | Wrapper selects libiperf's dynamic block-size path. |
 | SCTP | Native default. | Wrapper sets 65,536 bytes. |
 
-There is currently no aggregate-rate field, unit-string parser, or plan-wide
-traffic budget. `rate` retains the native
+`ClientConfig.rate` retains the native
 [per-stream bitrate meaning](https://software.es.net/iperf/invoking.html).
+Aggregate targets and explicit unit strings use the separate `RateIntent`
+and `parse_rate()` APIs; `estimate_plan()` checks sequential admission
+budgets. See [rate intent and capabilities](../guides/configuration-intent.md).
+These estimates do not impose a hard deadline on a blocking native call.
 
 ## Server arguments
 

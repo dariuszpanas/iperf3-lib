@@ -10,6 +10,10 @@ library and returns Python objects for your application to inspect.
     [published releases](https://github.com/dariuszpanas/iperf3-lib/releases)
     describe the versions available on PyPI.
 
+Upgrading an existing 0.2.0 application? Read the
+[dataclass migration guide](guides/migration-0.3.md) for API substitutions,
+stricter inputs, missing-data handling, and saved-result formats.
+
 ## Install the Python package
 
 For the published package, choose the installer used by your application:
@@ -84,12 +88,14 @@ else:
     print(f"Test failed: {result.error}")
 ```
 
-`summary_mbps` is a convenience value: it picks the first nonzero summary
-rate, preferring the sender. It returns `0.0` when unavailable. For directional
-analysis or missing-data decisions, use [normalized results](guides/results.md).
+`summary_mbps` is a convenience value: it picks the first available summary
+rate, including zero and preferring the sender. It returns `0.0` when
+unavailable. For directional analysis or missing-data decisions, use
+[normalized results](guides/results.md).
 
 ## Next steps
 
+- [Migrate a 0.2.0 application to dataclasses](guides/migration-0.3.md).
 - [Run TCP, UDP, reverse, or bidirectional tests](guides/running-tests.md).
 - [Choose configuration values and understand validation](reference/configuration.md).
 - [Read flows, observations, intervals, and native JSON](guides/results.md).

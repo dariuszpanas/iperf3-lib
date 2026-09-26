@@ -51,6 +51,10 @@ These pages describe `main`. Released versions remain available through
 
 ### Migration from 0.2.0
 
+The [dedicated migration guide](guides/migration-0.3.md) gives API substitutions,
+strict-input examples, and separate paths for native JSON, Pydantic dumps,
+development snapshots, and versioned artifacts.
+
 Pydantic APIs such as `model_dump()`, `model_validate()`, and Pydantic validation
 errors are no longer provided by these models. Use dataclass constructors,
 `Result.to_dict()`, or `dataclasses.asdict()` as appropriate. Configuration
@@ -67,12 +71,14 @@ Applications importing bidirectional JSON without reporting-endpoint evidence
 can pass `reporting_role="client"` or `"server"`; unproven stream direction
 is reported as `"unknown"` with diagnostics.
 
-`Result.to_dict()` still returns an unversioned dataclass snapshot, including
-native JSON. Use the [artifact API](guides/artifacts.md) for durable storage;
-`artifact_from_legacy_dict()` imports old snapshots with explicit uncertainty.
-Parsing saved native JSON no longer estimates `completed_at_seconds`.
-The estimate is separately available in `execution.timing`; Prometheus
-completion/freshness metrics require an observed completion timestamp.
+`Result.to_dict()` is a new unversioned dataclass snapshot helper, including
+native JSON. Use the [artifact API](guides/artifacts.md) for durable storage.
+`artifact_from_legacy_dict()` imports only the documented historical development
+snapshot shape; published Pydantic dumps need an explicit migration preserving
+their original outcome. Timing is new since published 0.2.0. Saved native JSON
+keeps inferred completion separately in `execution.timing`; Prometheus freshness
+requires an observed completion event. Unverified completion fields in older
+development snapshots remain estimates after conversion.
 
 ## 0.2.0 — 2026-07-22
 

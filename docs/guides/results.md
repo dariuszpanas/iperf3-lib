@@ -90,10 +90,11 @@ diagnosed and left unknown. The interval's local `sender` flag, or compatible
 end-of-test evidence for the same socket, determines its direction relative
 to that role. It does not depend on the order of stream records.
 
-The package does not yet calculate stability statistics or interval
-percentiles. Any percentile calculated from interval rates describes interval
-rates, not packet latency. Duration weighting and warm-up handling need to be
-explicit in application calculations.
+The [analysis module](analysis.md) calculates duration-weighted stability and
+interval-average throughput quantiles with explicit selectors, warm-up policy,
+and coverage evidence. These describe interval-average rates, not packet
+latency or packet-throughput percentiles. Review its data-quality results
+before using a calculation for a performance decision.
 
 ## Preserve results
 
