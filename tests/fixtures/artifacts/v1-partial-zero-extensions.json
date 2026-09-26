@@ -20,6 +20,7 @@
     },
     "bidirectional": false,
     "completed_at_seconds": 1002,
+    "cpu": [],
     "diagnostics": [
       {
         "code": "org.example.future_advisory",
@@ -46,7 +47,8 @@
         "omitted": null,
         "packets": null,
         "retransmits": null,
-        "start_seconds": null
+        "start_seconds": null,
+        "tcp": null
       },
       "sum_sent": {
         "bits_per_second": 0,
@@ -61,7 +63,8 @@
         "omitted": false,
         "packets": null,
         "retransmits": null,
-        "start_seconds": 0
+        "start_seconds": 0,
+        "tcp": null
       }
     },
     "error": null,
@@ -133,7 +136,8 @@
           "omitted": null,
           "packets": null,
           "retransmits": null,
-          "start_seconds": null
+          "start_seconds": null,
+          "tcp": null
         },
         "sender": {
           "bits_per_second": 0,
@@ -148,7 +152,8 @@
           "omitted": false,
           "packets": null,
           "retransmits": null,
-          "start_seconds": 0
+          "start_seconds": 0,
+          "tcp": null
         }
       }
     ],
@@ -168,7 +173,8 @@
         "retransmits": null,
         "scope": "aggregate",
         "start_seconds": -1,
-        "stream_id": null
+        "stream_id": null,
+        "tcp": null
       },
       {
         "bits_per_second": 0,
@@ -185,7 +191,8 @@
         "retransmits": null,
         "scope": "stream",
         "start_seconds": 0,
-        "stream_id": 5
+        "stream_id": 5,
+        "tcp": null
       }
     ],
     "ok": true,
@@ -227,7 +234,8 @@
           "omitted": null,
           "packets": null,
           "retransmits": null,
-          "start_seconds": null
+          "start_seconds": null,
+          "tcp": null
         },
         "sender": {
           "bits_per_second": 0,
@@ -242,7 +250,8 @@
           "omitted": false,
           "packets": null,
           "retransmits": null,
-          "start_seconds": 0
+          "start_seconds": 0,
+          "tcp": null
         },
         "stream_id": 5,
         "unattributed": null

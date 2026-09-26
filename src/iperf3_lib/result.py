@@ -64,6 +64,43 @@ class FieldAvailability:
 
 
 @dataclass
+class TcpIntervalEvidence:
+    """Local TCP sender samples, with seconds and bytes as explicit units."""
+
+    smoothed_rtt_seconds: float | None = None
+    rtt_variation_seconds: float | None = None
+    send_congestion_window_bytes: int | None = None
+    advertised_send_window_bytes: int | None = None
+    path_mtu_bytes: int | None = None
+    evidence_paths: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
+class TcpSummaryEvidence:
+    """Native sampled TCP sender summaries, not packet latency statistics."""
+
+    minimum_sampled_rtt_seconds: float | None = None
+    maximum_sampled_rtt_seconds: float | None = None
+    native_mean_sampled_rtt_seconds: float | None = None
+    maximum_send_congestion_window_bytes: int | None = None
+    maximum_advertised_send_window_bytes: int | None = None
+    evidence_paths: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
+class EndpointCpuEvidence:
+    """Native iperf process CPU utilization; multithreaded values may exceed 100%."""
+
+    endpoint: Literal["client", "server", "unknown"]
+    locality: Literal["local", "remote"]
+    total_percent: float | None = None
+    user_percent: float | None = None
+    system_percent: float | None = None
+    scope: Literal["iperf_process"] = "iperf_process"
+    evidence_paths: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
 class StreamStats:
     """Endpoint observations for one local native stream identifier."""
 
@@ -102,6 +139,7 @@ class IntervalStats:
     retransmits: int | None = None
     lost_percent: float | None = None
     jitter_ms: float | None = None
+    tcp: TcpIntervalEvidence | None = None
 
 
 @dataclass
@@ -132,6 +170,7 @@ class SumStats:
     packets: int | None = None
     lost_packets: int | None = None
     omitted: bool | None = None
+    tcp: TcpSummaryEvidence | None = None
 
 
 @dataclass
@@ -163,6 +202,7 @@ class Result:
     streams: list[StreamStats] = field(default_factory=list)
     availability: dict[str, FieldAvailability] = field(default_factory=dict)
     extensions: dict[str, JSONValue] = field(default_factory=dict)
+    cpu: list[EndpointCpuEvidence] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         """Return the normalized result as JSON-compatible data."""
@@ -360,6 +400,83 @@ def result_from_iperf_json(
         )
 
     has_end_measurements = False
+    qualified_native = (
+        start.get("version") in ("iperf 3.19.1", "iperf 3.21")
+        and isinstance(start.get("system_info"), str)
+        and start["system_info"].startswith("Linux ")
+    )
+
+    def _tcp_evidence(data, canonical_path, source_path, *, summary=False, attributable=True):
+        if protocol != "tcp":
+            return None
+        names = (
+            {
+                "minimum_sampled_rtt_seconds": "min_rtt",
+                "maximum_sampled_rtt_seconds": "max_rtt",
+                "native_mean_sampled_rtt_seconds": "mean_rtt",
+                "maximum_send_congestion_window_bytes": "max_snd_cwnd",
+                "maximum_advertised_send_window_bytes": "max_snd_wnd",
+            }
+            if summary
+            else {
+                "smoothed_rtt_seconds": "rtt",
+                "rtt_variation_seconds": "rttvar",
+                "send_congestion_window_bytes": "snd_cwnd",
+                "advertised_send_window_bytes": "snd_wnd",
+                "path_mtu_bytes": "pmtu",
+            }
+        )
+        if not any(data.get(name) is not None for name in names.values()):
+            return None
+        # TCP_INFO belongs to the local socket. A remote sender summary can
+        # contain placeholder values or the local receiver's TCP_INFO samples.
+        if _optional_flag(data, "sender") is not True or not attributable or not qualified_native:
+            evidence = [
+                source_path,
+                f"{source_path}/sender",
+                "/raw/start/version",
+                "/raw/start/system_info",
+            ]
+            availability[f"{canonical_path}/tcp"] = FieldAvailability("unknown", evidence)
+            _diagnose(
+                "TCP evidence lacks a qualified producer or attributable local sender.",
+                code="provenance.unknown",
+                path=f"{canonical_path}/tcp",
+                evidence_paths=evidence,
+            )
+            return None
+        values = {}
+        evidence_paths = {}
+        for field_name, native_name in names.items():
+            value = data.get(native_name)
+            if value is None:
+                continue
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise ValueError(f"iperf JSON {native_name} must be an integer")
+            pointer = f"{source_path}/{native_name}"
+            if value == -1:
+                state = (
+                    "unsupported"
+                    if start.get("version") in ("iperf 3.19.1", "iperf 3.21")
+                    else "unknown"
+                )
+                path = f"{canonical_path}/tcp/{field_name}"
+                availability[path] = FieldAvailability(state, [pointer, "/raw/start/version"])
+                _diagnose(
+                    "Native TCP getter returned an unavailable sentinel.",
+                    code=f"measurement.{state}",
+                    path=path,
+                    evidence_paths=[pointer, "/raw/start/version"],
+                )
+            elif value < 0:
+                raise ValueError(
+                    f"iperf JSON {native_name} must be non-negative or the -1 sentinel"
+                )
+            else:
+                values[field_name] = value / 1_000_000 if field_name.endswith("seconds") else value
+                evidence_paths[field_name] = pointer
+        model = TcpSummaryEvidence if summary else TcpIntervalEvidence
+        return model(**values, evidence_paths=evidence_paths)
 
     def _sum(
         data: Any,
@@ -408,6 +525,17 @@ def result_from_iperf_json(
             packets=values["packets"],
             lost_packets=values["lost_packets"],
             omitted=_optional_flag(data, "omitted"),
+            tcp=(
+                _tcp_evidence(
+                    data,
+                    canonical_path,
+                    f"/raw/{name.replace('.', '/')}",
+                    summary=True,
+                    attributable=len(socket_senders.get(data.get("socket"), set())) <= 1,
+                )
+                if name.startswith("end.streams.") and observation == "sender"
+                else None
+            ),
         )
 
     flow_sources = [(primary_direction, "")]
@@ -577,6 +705,11 @@ def result_from_iperf_json(
             retransmits=_retransmits(data, canonical_path, source_path),
             lost_percent=_optional_number(data, "lost_percent"),
             jitter_ms=_optional_number(data, "jitter_ms"),
+            tcp=_tcp_evidence(
+                data, canonical_path, source_path, attributable=observation == "sender"
+            )
+            if scope == "stream"
+            else None,
         )
 
     for interval_index, interval in enumerate(native_intervals):
@@ -786,6 +919,59 @@ def result_from_iperf_json(
         effective["port"] = VerifiedSetting(
             native_port, "verified", ["/raw/start/connecting_to/port"]
         )
+    cpu: list[EndpointCpuEvidence] = []
+    native_cpu = end.get("cpu_utilization_percent")
+    if native_cpu is not None:
+        if not isinstance(native_cpu, dict):
+            raise ValueError("iperf JSON cpu_utilization_percent must be an object")
+        for locality, prefix in (("local", "host"), ("remote", "remote")):
+            keys = {f"{part}_percent": f"{prefix}_{part}" for part in ("total", "user", "system")}
+            if not any(native_cpu.get(key) is not None for key in keys.values()):
+                continue
+            endpoint = (
+                reporting_role
+                if locality == "local"
+                else "server"
+                if reporting_role == "client"
+                else "client"
+                if reporting_role == "server"
+                else None
+            )
+            item = EndpointCpuEvidence(endpoint or "unknown", locality)
+            index = len(cpu)
+            for field_name, native_name in keys.items():
+                value = _optional_number(native_cpu, native_name)
+                if value is None:
+                    continue
+                source = f"/raw/end/cpu_utilization_percent/{native_name}"
+                if (locality == "remote" and reporting_role != "client") or not qualified_native:
+                    path = f"/cpu/{index}/{field_name}"
+                    availability[path] = FieldAvailability(
+                        "unknown",
+                        [source, "/reporting_role", "/raw/start/version", "/raw/start/system_info"],
+                    )
+                    _diagnose(
+                        "CPU measurement lacks a qualified producer or final remote measurement at this reporting endpoint.",
+                        code="provenance.unknown",
+                        path=path,
+                        evidence_paths=[
+                            source,
+                            "/reporting_role",
+                            "/raw/start/version",
+                            "/raw/start/system_info",
+                        ],
+                    )
+                    continue
+                setattr(item, field_name, value)
+                item.evidence_paths[field_name] = source
+            if endpoint is None:
+                _diagnose(
+                    "CPU endpoint identity is unknown; locality is retained.",
+                    code="provenance.unknown",
+                    path=f"/cpu/{index}/endpoint",
+                    evidence_paths=["/reporting_role"],
+                )
+            cpu.append(item)
     execution = ExecutionMetadata(
         status="completed" if ok else "failed" if native_error is not None else "incomplete",
         method="bidirectional"
@@ -823,4 +1009,5 @@ def result_from_iperf_json(
         execution=execution,
         streams=streams,
         availability=availability,
+        cpu=cpu,
     )

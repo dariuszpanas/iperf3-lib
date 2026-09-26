@@ -16,6 +16,7 @@
     },
     "bidirectional": false,
     "completed_at_seconds": null,
+    "cpu": [],
     "diagnostics": [
       {
         "code": "native.incomplete",
@@ -68,7 +69,8 @@
         "retransmits": null,
         "scope": "unknown",
         "start_seconds": null,
-        "stream_id": null
+        "stream_id": null,
+        "tcp": null
       }
     ],
     "ok": false,

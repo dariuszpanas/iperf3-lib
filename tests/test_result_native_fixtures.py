@@ -193,8 +193,11 @@ def test_native_endpoint_fixture_preserves_summary_and_interval_semantics(
         assert {interval.omitted for interval in result.intervals} == {True, False}
     if scenario.startswith("sctp"):
         assert result.availability
-        assert {value.state for value in result.availability.values()} == {"unsupported"}
-        assert all(path.endswith("/retransmits") for path in result.availability)
+        assert {
+            value.state
+            for path, value in result.availability.items()
+            if path.endswith("/retransmits")
+        } == {"unsupported"}
         assert any(d.code == "measurement.unsupported" for d in result.diagnostics)
 
 

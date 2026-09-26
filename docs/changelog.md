@@ -13,7 +13,12 @@ These pages describe `main`. Released versions remain available through
 - Add capability reports separating wrapper coverage, ABI declarations, native
   symbols, tested environments, and supplied execution evidence. Offline import
   and reports do not load libiperf; legacy capability flags remain lazy.
-
+- Add duration-weighted interval stability, measured bytes/time throughput,
+  stream balance/scaling, explicit comparison policies and directional asymmetry.
+- Preserve qualified TCP seconds/bytes and endpoint process CPU evidence with
+  exact provenance; extend the unreleased artifact-v1 development schema.
+- Keep omissions, coverage gaps, unqualified producers and insufficient data
+  explicit. Analysis uses the standard library and does not execute benchmarks.
 - Replace Pydantic runtime models with standard-library dataclasses and explicit
   `ClientConfig` validation. Runtime dependencies now consist of CFFI.
 - Add normalized directional flow and interval models alongside the original

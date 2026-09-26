@@ -32,3 +32,18 @@ for jitter, percent for loss, and nonnegative integer counts. Sender/receiver
 observations and aggregate/component stream values are distinct measurements.
 The corpus is supplemented by round-trip tests over every native minimum/latest
 fixture, including forward, reverse and bidirectional TCP/UDP/SCTP endpoints.
+
+
+## Development schema amendment before 0.3.0
+
+Schema v1 has never been publicly released. The TCP/CPU evidence addition appends
+`tcp: null` and `cpu: []` to the earlier development fixtures. It does not rerun
+the parser over those archived results. `development-v1-original-hashes.json`
+records SHA-256 of each original JSON object using sorted keys and compact JSON;
+a regression removes only the new null/empty fields and verifies every original
+value, diagnostic, producer and raw object is unchanged. This amendment is not a
+migration policy for published schemas.
+
+`v1-native-3.21-tcp-evidence-client.json` is a separate writer output over the
+retained native TCP forward fixture. It qualifies explicit TCP seconds/bytes and
+endpoint CPU percentages; it does not backfill the earlier archives.
