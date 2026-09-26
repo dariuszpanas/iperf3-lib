@@ -5,14 +5,30 @@ library powered by libiperf. Native code generates traffic and measurements;
 the Python layer makes the results easier to interpret, compare, automate,
 and publish.
 
-This roadmap records proposals to review before the next release. It does
-**not** promise that every proposal will ship in that release. Release scope
-and a version will be chosen after the review, with a decision to include,
-defer, investigate, or decline each area. GitHub issues carry the actionable
-work and acceptance criteria.
+The selected **0.3.0** scope builds on the dataclass migration with portable
+measurement evidence, deterministic analysis, operational metrics, finite
+sequential trials, and explicit parameter sweeps. GitHub issues carry acceptance
+criteria and implementation evidence. A selected feature is not a completed
+release qualification, and candidate metadata does not establish publication.
 
-The planned 0.3.0 experiment scope is finite sequential trials and explicit
-sweeps. Adaptive UDP selection, live-event delivery, and isolated workers are
+## 0.3.0 dispositions
+
+| Area | Decision | Evidence or remaining work |
+| --- | --- | --- |
+| Dataclasses and result correctness | Include | Strict inputs, explicit missing values, reporting roles, direction and lifecycle qualification; [#27](https://github.com/dariuszpanas/iperf3-lib/issues/27). |
+| Portable result artifacts | Include | Artifact v1 preserves native/normalized evidence, settings and timing; [#28](https://github.com/dariuszpanas/iperf3-lib/issues/28). |
+| Operational metrics | Include | Snapshot gauges, freshness and atomic textfiles; [#29](https://github.com/dariuszpanas/iperf3-lib/issues/29). Repeat Grafana qualification for the final candidate. |
+| Configuration and capabilities | Include | Explicit rate intent, SI units, admission estimates and layered capability reports; [#30](https://github.com/dariuszpanas/iperf3-lib/issues/30). Profiles remain application-owned. |
+| Analysis and diagnostics | Include | Duration-aware statistics, scaling/asymmetry and qualified TCP/CPU evidence; [#31](https://github.com/dariuszpanas/iperf3-lib/issues/31). |
+| Trials, baselines and CI reports | Include | Finite sequential execution, retained failures, explicit assessments and frozen report v1; [#32](https://github.com/dariuszpanas/iperf3-lib/issues/32). |
+| Explicit parameter sweeps | Include | [Finite reproducible cells](guides/sweeps.md) with observed setting qualification and retained partial outcomes; [#33](https://github.com/dariuszpanas/iperf3-lib/issues/33). |
+| Adaptive UDP selection | Defer beyond 0.3.0 | Controlled impaired-link and non-monotonic operating-range qualification remains open; [#34](https://github.com/dariuszpanas/iperf3-lib/issues/34). |
+| Typed live events | Defer beyond 0.3.0 | Version-specific native observations do not qualify queue, overflow, stress or abandonment behavior; [#35](https://github.com/dariuszpanas/iperf3-lib/issues/35). |
+| Isolated execution | Defer beyond 0.3.0 | Worker ownership, crash, termination and orphan cleanup need qualification; [#36](https://github.com/dariuszpanas/iperf3-lib/issues/36). |
+| Documentation and qualification | Include | Migration guide, public docs, YAGA policies, stable local Docker staging and retained distribution checks; [#25](https://github.com/dariuszpanas/iperf3-lib/issues/25), [#38](https://github.com/dariuszpanas/iperf3-lib/issues/38), [#43](https://github.com/dariuszpanas/iperf3-lib/issues/43). Final candidate evidence remains required. |
+
+The experiment scope is finite sequential trials and explicit sweeps. Adaptive
+UDP selection, live-event delivery, and isolated workers are
 follow-on candidates after 0.3.0. Their
 [design disposition](design/advanced-execution.md) records proposed contracts,
 bounded native observations, and the remaining qualification work. Those
@@ -27,11 +43,11 @@ Documentation tracks the development branch. The following foundation is on
 | --- | --- | --- |
 | Configuration | Validated dataclasses, explicit rate intent and admission estimates, configuration provenance, and layered capability reports. | Qualify additional native options; retain application-owned profiles and defer asymmetric simultaneous budgets. |
 | Results | Directional and per-stream summaries, interval scope/bytes/duration/warm-up metadata, explicit missing values, and execution provenance. | Preserve this evidence contract as analysis and experiments expand. |
-| Serialization | Strict version-1 result artifacts and assessment reports, portable loading, retained trial/baseline evidence, and documented evolution rules. | Additional experiment report envelopes. |
+| Serialization | Strict version-1 result artifacts, assessment and sweep reports, portable loading, and retained trial/cell evidence. | Preserve frozen interpretation and historical producers as new contracts evolve. |
 | Metrics | Latest-run Prometheus gauges, omitted unavailable values, freshness fields, atomic replacement, and a local Grafana qualification fixture. | Repeat integration qualification for the final release candidate. |
 | Execution | Synchronous APIs and asynchronous convenience methods using executor threads. | Live events and isolated execution for stronger deadline, cancellation, or concurrency guarantees. |
-| Analysis | Measured throughput, interval stability, stream balance/scaling, directional comparisons, and retained transport/CPU evidence. | Repeat qualification for the final candidate and consume these functions in experiment reports. |
-| Plans | Finite sequential trials, retained baselines, median assessments, and versioned CI reports. | Finite bounded sweeps with verified cell settings and versioned reports. |
+| Analysis | Measured throughput, interval stability, stream balance/scaling, directional comparisons, and retained transport/CPU evidence. | Repeat installed analysis and report qualification for the final candidate. |
+| Plans | Finite sequential trials, retained baselines, median assessments, and bounded sweeps with verified cell settings and versioned reports. | Final candidate qualification; advanced adaptive selection remains deferred. |
 
 Result correctness is covered by captures from both reporting endpoints on
 the minimum and latest libiperf versions. Missing values remain distinct from
@@ -44,24 +60,24 @@ native role evidence. Richer aggregation metadata and a durable
 Tracking: [documentation setup #25](https://github.com/dariuszpanas/iperf3-lib/issues/25)
 and [next-release scope review #26](https://github.com/dariuszpanas/iperf3-lib/issues/26).
 
-Set up installation and usage guides, reference material, contributor and
-release instructions, a strict documentation build, and GitHub Pages
-deployment. Use issues to track decisions and connect implementation PRs
-to their acceptance criteria.
+Installation and usage guides, reference material, contributor/release
+instructions, strict documentation checks, and GitHub Pages are implemented.
+Issues connect scope decisions to implementation PRs and acceptance evidence.
 
-Before the next release, review every area below and record the selected
-scope. Correctness gaps affecting advertised features need an explicit
-resolution. Review the Pydantic-to-dataclass migration, supported native
-versions, and installed/public documentation as part of release qualification.
+The [migration guide](guides/migration-0.3.md) was checked against the published
+0.2.0 models. Final 0.3.0 qualification still requires the exact combined candidate:
+source and installed-native tests, public documentation, and real Grafana
+integration. [Release instructions](releasing.md) keep preparation, qualification,
+and separately authorized publication explicit.
 
 ## 2. Results and portable artifacts
 
 Tracking: [normalization correctness #27](https://github.com/dariuszpanas/iperf3-lib/issues/27)
 and [canonical artifacts #28](https://github.com/dariuszpanas/iperf3-lib/issues/28).
 
-First correct direction and missing-measurement semantics. Then define one
-canonical model that exporters and analysis can consume without independently
-interpreting native JSON.
+Implemented normalization distinguishes direction, observation, missing data,
+and measured zero. Exporters and analysis consume one canonical model, with
+portable artifact import preserving its recorded interpretation and native JSON.
 
 The version-1 artifact includes:
 
@@ -76,22 +92,21 @@ The version-1 artifact includes:
 - The original native JSON and a versioned normalized JSON representation
   with a documented evolution policy.
 
-Fixture coverage across protocols, directions, and supported native versions
-is part of that contract. Actual completion metadata should remain
-distinguishable from values inferred from a requested duration.
+Fixtures cover protocols, directions, both reporting endpoints, and supported
+native versions. Observed completion stays separate from estimates inferred
+from saved native output. Historical artifact producer identities remain part
+of the preserved evidence when the package version changes.
 
 ## 3. Operational metrics
 
 Tracking: [Prometheus and textfile qualification #29](https://github.com/dariuszpanas/iperf3-lib/issues/29).
 
-Qualify the current Prometheus renderer and textfile writer before release.
-One metric family needs consistent metadata, labels, units, and missing-data
-behavior across all its samples. Validate complete exposition output and
-atomic replacement error paths.
-
-Exercise the full integration with a real native benchmark, node_exporter's
-textfile collector, Prometheus ingestion, and a local Grafana datasource and
-rendered dashboard. Keep the setup and metric/freshness evidence reproducible.
+The renderer and textfile writer have qualified metric-family metadata,
+labels, units, missing-data behavior, complete exposition and atomic replacement
+error paths. The final release candidate must repeat the integration with real
+native benchmarks, node_exporter's textfile collector, Prometheus ingestion,
+and an API-checked and rendered Grafana dashboard. Preserve reproducible native
+values and freshness evidence for that exact revision.
 The [local Grafana guide](guides/grafana.md) provides the repository's executable
 qualification path, including native values and success-to-failure transitions.
 The local qualification uses Docker Desktop's `docker-desktop` Kubernetes
@@ -201,8 +216,9 @@ sequential trial engine and preserve every failure and unstarted record.
 Receiver summaries remain separate by method and direction. Actual axis and
 allocation evidence qualifies cell medians; explicit policies govern cross-cell
 comparison. Sweep-v1 reports retain all artifacts and verify frozen selection and
-arithmetic without choosing a winner. Budgets are estimates, not native cancellation
-or hard traffic limits.
+arithmetic without choosing a winner. Budgets estimate admitted active time and
+payload; between-run elapsed limits stop admission. They cannot interrupt a
+blocking native call or cap actual wire traffic.
 
 ### Adaptive UDP exploration
 
@@ -255,10 +271,12 @@ result model independently; use standard-library JSON, statistics, CSV, XML,
 and process facilities where sufficient. These proposals do not require
 Pydantic or a web framework.
 
-Build in dependency order: result correctness and artifacts, qualified
-metrics, analysis and repeated trials, then advanced experiments and
-execution. Review value and compatibility at each stage instead of treating
-the entire roadmap as one implementation commitment.
+The dependency order is result correctness and artifacts, metrics, analysis,
+trial plans and explicit sweeps, then separately qualified advanced execution.
+Built-in opinionated profiles, asymmetric simultaneous rate budgets, unqualified
+native setters, an HTTP metrics daemon, and cumulative counters remain outside
+the 0.3.0 implementation claims. The configuration guide and advanced designs
+record their boundaries and follow-up rationale.
 
 ## Issue tracking
 

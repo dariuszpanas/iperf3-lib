@@ -8,25 +8,37 @@
 [Roadmap](https://dariuszpanas.github.io/iperf3-lib/roadmap.html) ·
 [Issues](https://github.com/dariuszpanas/iperf3-lib/issues)
 
-> This README and the documentation track `main`. Published **0.2.0** uses
-> Pydantic; the dataclass models, normalized results, and Prometheus exporter
-> described below are **unreleased**. See the
-> [installation guide](https://dariuszpanas.github.io/iperf3-lib/getting-started.html)
-> for installing the development version.
+> The dataclass, artifact, analysis, trial, sweep, and exporter APIs described here
+> are introduced in **0.3**. Use 0.3 or a reviewed source revision; before 0.3
+> is published, install from source. Published **0.2.0** uses Pydantic models.
+> The [documentation](https://dariuszpanas.github.io/iperf3-lib/) follows `main`;
+> check the [installation guide](https://dariuszpanas.github.io/iperf3-lib/getting-started.html)
+> for version-specific instructions.
 
 For an existing 0.2.0 application, follow the
 [dataclass migration guide](https://dariuszpanas.github.io/iperf3-lib/guides/migration-0.3.html)
 before changing model methods or loading saved results.
 
-`iperf3-lib` is a typed Python wrapper around the native iperf3 `libiperf`
-library. It uses CFFI's ABI mode and provides synchronous and asynchronous
-client APIs, a minimal server wrapper, validated dataclass configuration, and
-typed result models.
+`iperf3-lib` is a programmable network benchmarking and analysis library powered
+by native **libiperf**. Native code generates traffic and takes measurements;
+Python provides validated configuration, reusable results, analysis, and finite
+sequential experiments. CFFI is the only direct runtime dependency.
 
-The normalized result model preserves the original native JSON while exposing
-flows, endpoint observations, interval measurements, and execution metadata.
-Completed results can be rendered as Prometheus metrics or atomically written
-for node_exporter's textfile collector; scraping never starts a benchmark.
+- Preserve native JSON alongside normalized directional measurements and
+  [portable artifacts](https://dariuszpanas.github.io/iperf3-lib/guides/artifacts.html).
+- Analyze measured throughput, interval stability, stream balance and scaling,
+  directional asymmetry, and available TCP/CPU evidence with
+  [explicit data-quality rules](https://dariuszpanas.github.io/iperf3-lib/guides/analysis.html).
+- Run [repeated trials and baseline assessments](https://dariuszpanas.github.io/iperf3-lib/guides/trials.html)
+  with admission budgets, retained failures, and JSON, text, JUnit, and CI outcomes.
+- Explore [bounded parameter sweeps](https://dariuszpanas.github.io/iperf3-lib/guides/sweeps.html)
+  with recorded order, qualified cell measurements, and portable reports.
+- Render completed results as Prometheus gauges or atomic node_exporter textfiles;
+  scraping never starts a benchmark.
+
+Synchronous clients, async convenience methods, and a minimal server wrapper
+remain available. The [roadmap](https://dariuszpanas.github.io/iperf3-lib/roadmap.html)
+records selected scope and follow-up designs.
 
 ## Support
 
@@ -61,6 +73,10 @@ export IPERF3_LIB=/usr/local/lib/libiperf.so
   cannot interrupt an active blocking `iperf_run_server()` call.
 
 ## Install
+
+These commands install the published package. Before 0.3 is available, use the
+[source installation instructions](https://dariuszpanas.github.io/iperf3-lib/getting-started.html)
+for the APIs introduced in 0.3.
 
 For an application using uv:
 
@@ -120,8 +136,8 @@ zeros remain zero. Ambiguous stream direction is `"unknown"` with diagnostics,
 and native error documents are failed results. The legacy `summary_mbps`
 convenience still returns `0.0` when no rate is available. Review the
 [result semantics](https://dariuszpanas.github.io/iperf3-lib/guides/results.html)
-before using the development API for automated acceptance decisions.
-For durable storage, the unreleased
+before making automated acceptance decisions.
+For durable storage, the
 [versioned artifact API](https://dariuszpanas.github.io/iperf3-lib/guides/artifacts.html)
 preserves normalized measurements, native JSON, requested and verified settings,
 and timing provenance. It loads without libiperf. `Result.to_dict()` remains
@@ -131,7 +147,7 @@ configuration fields require integers (not booleans or numeric strings), and
 boolean options require actual booleans. Hostnames remain strings, and standard
 library IPv4/IPv6 address objects are accepted.
 
-The exporter is unreleased. A
+A
 [local Grafana integration](https://dariuszpanas.github.io/iperf3-lib/guides/grafana.html)
 provides a reproducible native benchmark, textfile collector, Prometheus,
 and dashboard validation path.
@@ -221,17 +237,20 @@ Build the documentation with `make docs`, or preview it with `make docs-serve`.
 
 ## Changelog
 
-### Unreleased
+### APIs introduced in 0.3
 
-- Replace Pydantic with standard-library dataclasses and explicit configuration
-  validation; add normalized flow/interval results and Prometheus textfile output.
-- Adopt YAGA repository and commit policies, current stable uv, and refreshed tooling.
-- Add a Zensical documentation site and issue-based roadmap.
-- Correct Prometheus metric-family output and native bidirectional parsing;
-  add a Docker Desktop Kubernetes/Grafana qualification example.
+- Replace Pydantic with dataclasses and strict configuration validation; preserve
+  missing measurements separately from measured zero.
+- Add canonical directional results, portable versioned artifacts, rate intent,
+  capability reports, evidence-aware analysis, retained trial/baseline reports,
+  and reproducible finite parameter sweeps.
+- Add Prometheus snapshot gauges, freshness and atomic textfiles, with a
+  Docker Desktop Kubernetes/Grafana qualification example.
+- Adopt YAGA policies, current stable uv, documentation and issue workflows,
+  shared local Docker staging, and retained-artifact release qualification.
 
 See the [full changelog](https://dariuszpanas.github.io/iperf3-lib/changelog.html)
-for release history and the
+for publication status and release history, and the
 [migration guide](https://dariuszpanas.github.io/iperf3-lib/guides/migration-0.3.html)
 for configuration, result, and serialization changes.
 

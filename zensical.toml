@@ -1,6 +1,6 @@
 [project]
 site_name = "iperf3-lib"
-site_description = "Typed Python access to libiperf, with results you can inspect and reuse."
+site_description = "Programmable network benchmarking and analysis powered by libiperf."
 site_author = "iperf3-lib contributors"
 site_url = "https://dariuszpanas.github.io/iperf3-lib/"
 repo_url = "https://github.com/dariuszpanas/iperf3-lib"
