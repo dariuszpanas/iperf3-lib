@@ -31,7 +31,7 @@ Documentation tracks the development branch. The following foundation is on
 | Metrics | Latest-run Prometheus gauges, omitted unavailable values, freshness fields, atomic replacement, and a local Grafana qualification fixture. | Repeat integration qualification for the final release candidate. |
 | Execution | Synchronous APIs and asynchronous convenience methods using executor threads. | Live events and isolated execution for stronger deadline, cancellation, or concurrency guarantees. |
 | Analysis | Measured throughput, interval stability, stream balance/scaling, directional comparisons, and retained transport/CPU evidence. | Repeat qualification for the final candidate and consume these functions in experiment reports. |
-| Plans | Finite sequential trials, retained baselines, median assessments, and versioned CI reports. | Selected for 0.3.0 and in progress: bounded explicit sweeps. |
+| Plans | Finite sequential trials, retained baselines, median assessments, and versioned CI reports. | Finite bounded sweeps with verified cell settings and versioned reports. |
 
 Result correctness is covered by captures from both reporting endpoints on
 the minimum and latest libiperf versions. Missing values remain distinct from
@@ -194,11 +194,15 @@ build on this shared execution and serialization layer.
 
 Tracking: [bounded parameter sweeps #33](https://github.com/dariuszpanas/iperf3-lib/issues/33).
 
-Selected for 0.3.0; implementation and qualification are in progress. Use
-finite matrices such as stream count, direction, and repetitions.
-Record order and any randomization seed, provide cooldowns, and enforce
-total duration and traffic limits. Preserve failed cells and partial
-completion instead of returning only the winning result.
+Implemented for the development release: [bounded parameter sweeps](guides/sweeps.md)
+validate every finite configuration before traffic, require an active-time
+admission budget, and retain declared or seeded cell order. They reuse the
+sequential trial engine and preserve every failure and unstarted record.
+Receiver summaries remain separate by method and direction. Actual axis and
+allocation evidence qualifies cell medians; explicit policies govern cross-cell
+comparison. Sweep-v1 reports retain all artifacts and verify frozen selection and
+arithmetic without choosing a winner. Budgets are estimates, not native cancellation
+or hard traffic limits.
 
 ### Adaptive UDP exploration
 

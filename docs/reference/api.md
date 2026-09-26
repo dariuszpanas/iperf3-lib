@@ -319,3 +319,40 @@ pointer. `UnsupportedReportVersionError` identifies unknown schema/algorithm
 versions. Report-v1 imports preserve archived analysis and validate frozen
 `median-summary-v1` arithmetic. See [repeated trials](../guides/trials.md) for
 baseline rules, finite budgets, report evolution, and CI status precedence.
+
+
+## Parameter sweeps
+
+Import from `iperf3_lib.sweeps`:
+
+```text
+SweepAxis(name, values: tuple)
+prepare_sweep(base_config, axes, *, policy, budget, rate_intent=None,
+              order="declared", seed=None) -> PreparedSweep
+run_sweep(prepared, *, executor=None, minimum_valid_trials=1,
+          comparison_policy=None) -> SweepResult
+summarize_sweep(prepared, execution, *, minimum_valid_trials=1,
+                comparison_policy=None) -> SweepResult
+```
+
+`PreparedSweep` retains base settings, axes, ordered `SweepCell` objects, rate
+intent and the shared `PreparedPlan`. `SweepResult` retains this preparation,
+`PlanResult`, per-cell summaries, minimum sample count and optional method/direction
+comparison groups. `SweepSample` retains bytes/time, measured rate, evidence path,
+`eligible_for_cell` and `SettingCheck` values. A setting check records expected and
+observed values, receipt paths, and matched/native_default/mismatch/unknown state.
+
+Import from `iperf3_lib.sweep_reports`:
+
+```text
+report_from_sweep(result) -> SweepReport
+sweep_report_to_dict(report) -> dict
+sweep_report_from_dict(mapping) -> SweepReport
+dumps_sweep_report(report, *, indent=None) -> str
+loads_sweep_report(text: str | bytes) -> SweepReport
+```
+
+The strict sweep-v1 envelope embeds common plan-result and compatibility payloads.
+It uses the shared `ReportValidationError` and `UnsupportedReportVersionError`.
+See [bounded sweeps](../guides/sweeps.md) for admission, ordering, qualification,
+method separation and the frozen report contract.

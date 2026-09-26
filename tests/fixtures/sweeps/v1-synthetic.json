@@ -1,0 +1,1050 @@
+{
+  "algorithm_revision": "receiver-cell-median-v1",
+  "extensions": {
+    "example.synthetic": {
+      "purpose": "codec regression"
+    }
+  },
+  "kind": "iperf3-lib.sweep",
+  "producer": {
+    "name": "example.fixture",
+    "version": "1"
+  },
+  "result": {
+    "cells": [
+      {
+        "cell_id": "cell-0001",
+        "directions": [
+          {
+            "direction": "client_to_server",
+            "exclusions": [],
+            "median_throughput_bps": 800.0,
+            "observation": "receiver",
+            "quality": "complete",
+            "samples": [
+              {
+                "bytes": 100,
+                "eligible_for_cell": true,
+                "evidence_path": "/flows/0/receiver",
+                "measured_seconds": 1,
+                "setting_checks": [
+                  {
+                    "evidence_paths": [
+                      "/raw/start/test_start/num_streams"
+                    ],
+                    "expected": 2,
+                    "name": "parallel",
+                    "observed": 2,
+                    "state": "matched"
+                  }
+                ],
+                "throughput_bps": 800.0,
+                "trial_id": "cell-0001:measured:0"
+              }
+            ]
+          }
+        ],
+        "execution_counts": {
+          "completed": 1,
+          "exception": 0,
+          "failed": 0,
+          "incomplete": 0,
+          "not_run": 0
+        },
+        "method": "forward"
+      },
+      {
+        "cell_id": "cell-0000",
+        "directions": [
+          {
+            "direction": "client_to_server",
+            "exclusions": [],
+            "median_throughput_bps": 800.0,
+            "observation": "receiver",
+            "quality": "complete",
+            "samples": [
+              {
+                "bytes": 100,
+                "eligible_for_cell": true,
+                "evidence_path": "/flows/0/receiver",
+                "measured_seconds": 1,
+                "setting_checks": [
+                  {
+                    "evidence_paths": [
+                      "/raw/start/test_start/num_streams"
+                    ],
+                    "expected": 1,
+                    "name": "parallel",
+                    "observed": 1,
+                    "state": "matched"
+                  }
+                ],
+                "throughput_bps": 800.0,
+                "trial_id": "cell-0000:measured:0"
+              }
+            ]
+          }
+        ],
+        "execution_counts": {
+          "completed": 1,
+          "exception": 0,
+          "failed": 0,
+          "incomplete": 0,
+          "not_run": 0
+        },
+        "method": "forward"
+      }
+    ],
+    "comparison_policy": {
+      "allowed_differences": {},
+      "endpoint_pair": [
+        "client",
+        "server"
+      ],
+      "group_id": "synthetic-sweep",
+      "varying_fields": []
+    },
+    "comparisons": [
+      {
+        "cell_ids": [
+          "cell-0001",
+          "cell-0000"
+        ],
+        "compatibility": {
+          "compatible": true,
+          "diagnostics": [],
+          "fingerprints": {
+            "cell-0000:measured:0": {
+              "blksize": 4096,
+              "duration": 1,
+              "method": "forward",
+              "native_system_info": "Linux synthetic sweep fixture",
+              "native_version": "iperf 3.21",
+              "omit": 0,
+              "parallel": 1,
+              "port": 5201,
+              "protocol": "tcp",
+              "rate": 4000000,
+              "rate_intent": {
+                "basis": "native_per_stream"
+              },
+              "server": "127.0.0.1",
+              "tos": 0
+            },
+            "cell-0001:measured:0": {
+              "blksize": 4096,
+              "duration": 1,
+              "method": "forward",
+              "native_system_info": "Linux synthetic sweep fixture",
+              "native_version": "iperf 3.21",
+              "omit": 0,
+              "parallel": 2,
+              "port": 5201,
+              "protocol": "tcp",
+              "rate": 4000000,
+              "rate_intent": {
+                "basis": "native_per_stream"
+              },
+              "server": "127.0.0.1",
+              "tos": 0
+            }
+          },
+          "policy": {
+            "allowed_differences": {},
+            "endpoint_pair": [
+              "client",
+              "server"
+            ],
+            "group_id": "synthetic-sweep",
+            "varying_fields": [
+              "parallel"
+            ]
+          },
+          "quality": "complete"
+        },
+        "direction": "client_to_server",
+        "method": "forward",
+        "quality": "complete",
+        "reasons": []
+      }
+    ],
+    "execution": {
+      "completed_at_seconds": 1000.0,
+      "elapsed_seconds": 0.0,
+      "execution_success": true,
+      "observed_pause_seconds": 0.0,
+      "plan": {
+        "budget": {
+          "max_active_seconds": 100,
+          "max_payload_bytes": 100000000,
+          "stop_after_elapsed_seconds": null
+        },
+        "estimate": {
+          "active_seconds": 2,
+          "estimated_payload_bits": 12000000,
+          "estimated_payload_bytes": 1500000,
+          "runs": [
+            {
+              "active_seconds": 1,
+              "estimated_payload_bits": 8000000,
+              "rate": {
+                "active_directions": [
+                  "client_to_server"
+                ],
+                "aggregate_bps_all_directions": 8000000,
+                "aggregate_bps_per_direction": 8000000,
+                "native_per_stream_bps": 4000000,
+                "source": "legacy",
+                "unused_bps_per_direction": 0
+              }
+            },
+            {
+              "active_seconds": 1,
+              "estimated_payload_bits": 4000000,
+              "rate": {
+                "active_directions": [
+                  "client_to_server"
+                ],
+                "aggregate_bps_all_directions": 4000000,
+                "aggregate_bps_per_direction": 4000000,
+                "native_per_stream_bps": 4000000,
+                "source": "legacy",
+                "unused_bps_per_direction": 0
+              }
+            }
+          ]
+        },
+        "order_seed": 4,
+        "planned_pause_seconds": 0,
+        "policy": {
+          "max_trials": 1000,
+          "pause_seconds": 0,
+          "repetitions": 1,
+          "stop_on_error": false,
+          "warmup_runs": 0
+        },
+        "trials": [
+          {
+            "cell_id": "cell-0001",
+            "config": {
+              "bidirectional": false,
+              "blksize": null,
+              "duration": 1,
+              "json_stream": false,
+              "mptcp": false,
+              "omit": 0,
+              "parallel": 2,
+              "port": 5201,
+              "protocol": "tcp",
+              "rate": 4000000,
+              "reverse": false,
+              "server": "127.0.0.1",
+              "tos": null
+            },
+            "phase": "measured",
+            "rate_intent": null,
+            "repetition": 0,
+            "resolved_config": {
+              "bidirectional": false,
+              "blksize": null,
+              "duration": 1,
+              "json_stream": false,
+              "mptcp": false,
+              "omit": 0,
+              "parallel": 2,
+              "port": 5201,
+              "protocol": "tcp",
+              "rate": 4000000,
+              "reverse": false,
+              "server": "127.0.0.1",
+              "tos": null
+            },
+            "trial_id": "cell-0001:measured:0"
+          },
+          {
+            "cell_id": "cell-0000",
+            "config": {
+              "bidirectional": false,
+              "blksize": null,
+              "duration": 1,
+              "json_stream": false,
+              "mptcp": false,
+              "omit": 0,
+              "parallel": 1,
+              "port": 5201,
+              "protocol": "tcp",
+              "rate": 4000000,
+              "reverse": false,
+              "server": "127.0.0.1",
+              "tos": null
+            },
+            "phase": "measured",
+            "rate_intent": null,
+            "repetition": 0,
+            "resolved_config": {
+              "bidirectional": false,
+              "blksize": null,
+              "duration": 1,
+              "json_stream": false,
+              "mptcp": false,
+              "omit": 0,
+              "parallel": 1,
+              "port": 5201,
+              "protocol": "tcp",
+              "rate": 4000000,
+              "reverse": false,
+              "server": "127.0.0.1",
+              "tos": null
+            },
+            "trial_id": "cell-0000:measured:0"
+          }
+        ]
+      },
+      "started_at_seconds": 1000.0,
+      "stop_reason": null,
+      "trials": [
+        {
+          "artifact": {
+            "extensions": {},
+            "kind": "iperf3-lib.result",
+            "producer": {
+              "name": "iperf3-lib",
+              "version": "fixture-development"
+            },
+            "result": {
+              "availability": {},
+              "bidirectional": false,
+              "completed_at_seconds": null,
+              "cpu": [],
+              "diagnostics": [],
+              "duration_seconds": 1,
+              "end": {
+                "sum_received": {
+                  "bits_per_second": 99999999,
+                  "bytes": 100,
+                  "direction": "client_to_server",
+                  "duration_seconds": 1,
+                  "end_seconds": null,
+                  "jitter_ms": null,
+                  "lost_packets": null,
+                  "lost_percent": null,
+                  "observation": "receiver",
+                  "omitted": null,
+                  "packets": null,
+                  "retransmits": null,
+                  "start_seconds": null,
+                  "tcp": null
+                },
+                "sum_sent": {
+                  "bits_per_second": 99999999,
+                  "bytes": 200,
+                  "direction": "client_to_server",
+                  "duration_seconds": 1,
+                  "end_seconds": null,
+                  "jitter_ms": null,
+                  "lost_packets": null,
+                  "lost_percent": null,
+                  "observation": "sender",
+                  "omitted": null,
+                  "packets": null,
+                  "retransmits": null,
+                  "start_seconds": null,
+                  "tcp": null
+                }
+              },
+              "error": null,
+              "execution": {
+                "configuration": {
+                  "effective": {
+                    "bidirectional": {
+                      "evidence_paths": [
+                        "/raw/start/test_start/bidir"
+                      ],
+                      "state": "verified",
+                      "value": false
+                    },
+                    "blksize": {
+                      "evidence_paths": [
+                        "/raw/start/test_start/blksize"
+                      ],
+                      "state": "verified",
+                      "value": 4096
+                    },
+                    "duration": {
+                      "evidence_paths": [
+                        "/raw/start/test_start/duration"
+                      ],
+                      "state": "verified",
+                      "value": 1
+                    },
+                    "json_stream": {
+                      "evidence_paths": [],
+                      "state": "unavailable",
+                      "value": null
+                    },
+                    "mptcp": {
+                      "evidence_paths": [],
+                      "state": "unavailable",
+                      "value": null
+                    },
+                    "omit": {
+                      "evidence_paths": [
+                        "/raw/start/test_start/omit"
+                      ],
+                      "state": "verified",
+                      "value": 0
+                    },
+                    "parallel": {
+                      "evidence_paths": [
+                        "/raw/start/test_start/num_streams"
+                      ],
+                      "state": "verified",
+                      "value": 2
+                    },
+                    "port": {
+                      "evidence_paths": [
+                        "/raw/start/connecting_to/port"
+                      ],
+                      "state": "verified",
+                      "value": 5201
+                    },
+                    "protocol": {
+                      "evidence_paths": [
+                        "/raw/start/test_start/protocol"
+                      ],
+                      "state": "verified",
+                      "value": "tcp"
+                    },
+                    "rate": {
+                      "evidence_paths": [
+                        "/raw/start/test_start/target_bitrate"
+                      ],
+                      "state": "verified",
+                      "value": 4000000
+                    },
+                    "reverse": {
+                      "evidence_paths": [
+                        "/raw/start/test_start/reverse"
+                      ],
+                      "state": "verified",
+                      "value": false
+                    },
+                    "server": {
+                      "evidence_paths": [
+                        "/raw/start/connecting_to/host"
+                      ],
+                      "state": "verified",
+                      "value": "127.0.0.1"
+                    },
+                    "tos": {
+                      "evidence_paths": [
+                        "/raw/start/test_start/tos"
+                      ],
+                      "state": "verified",
+                      "value": 0
+                    }
+                  },
+                  "requested": null
+                },
+                "method": "forward",
+                "native_system_info": "Linux synthetic sweep fixture",
+                "native_version": "iperf 3.21",
+                "platform": null,
+                "python_version": null,
+                "status": "completed",
+                "timing": {
+                  "completed_at_seconds": null,
+                  "elapsed_seconds": null,
+                  "estimated_completed_at_seconds": null,
+                  "native_started_at_seconds": null,
+                  "requested_duration_seconds": 1,
+                  "started_at_seconds": null
+                }
+              },
+              "extensions": {
+                "example.synthetic": true,
+                "iperf3_lib.rate_intent": {
+                  "caller_config": {
+                    "bidirectional": false,
+                    "blksize": null,
+                    "duration": 1,
+                    "json_stream": false,
+                    "mptcp": false,
+                    "omit": 0,
+                    "parallel": 2,
+                    "port": 5201,
+                    "protocol": "tcp",
+                    "rate": 4000000,
+                    "reverse": false,
+                    "server": "127.0.0.1",
+                    "tos": null
+                  },
+                  "intent": null,
+                  "resolution": {
+                    "active_directions": [
+                      "client_to_server"
+                    ],
+                    "aggregate_bps_all_directions": 8000000,
+                    "aggregate_bps_per_direction": 8000000,
+                    "native_per_stream_bps": 4000000,
+                    "source": "legacy",
+                    "unused_bps_per_direction": 0
+                  },
+                  "schema_version": 1
+                }
+              },
+              "flows": [
+                {
+                  "direction": "client_to_server",
+                  "receiver": {
+                    "bits_per_second": 99999999,
+                    "bytes": 100,
+                    "direction": "client_to_server",
+                    "duration_seconds": 1,
+                    "end_seconds": null,
+                    "jitter_ms": null,
+                    "lost_packets": null,
+                    "lost_percent": null,
+                    "observation": "receiver",
+                    "omitted": null,
+                    "packets": null,
+                    "retransmits": null,
+                    "start_seconds": null,
+                    "tcp": null
+                  },
+                  "sender": {
+                    "bits_per_second": 99999999,
+                    "bytes": 200,
+                    "direction": "client_to_server",
+                    "duration_seconds": 1,
+                    "end_seconds": null,
+                    "jitter_ms": null,
+                    "lost_packets": null,
+                    "lost_percent": null,
+                    "observation": "sender",
+                    "omitted": null,
+                    "packets": null,
+                    "retransmits": null,
+                    "start_seconds": null,
+                    "tcp": null
+                  }
+                }
+              ],
+              "intervals": [],
+              "ok": true,
+              "protocol": "tcp",
+              "raw": {
+                "end": {
+                  "sum_received": {
+                    "bits_per_second": 99999999,
+                    "bytes": 100,
+                    "seconds": 1
+                  },
+                  "sum_sent": {
+                    "bits_per_second": 99999999,
+                    "bytes": 200,
+                    "seconds": 1
+                  }
+                },
+                "start": {
+                  "connecting_to": {
+                    "host": "127.0.0.1",
+                    "port": 5201
+                  },
+                  "system_info": "Linux synthetic sweep fixture",
+                  "test_start": {
+                    "bidir": 0,
+                    "blksize": 4096,
+                    "duration": 1,
+                    "num_streams": 2,
+                    "omit": 0,
+                    "protocol": "TCP",
+                    "reverse": 0,
+                    "target_bitrate": 4000000,
+                    "tos": 0
+                  },
+                  "version": "iperf 3.21"
+                }
+              },
+              "reporting_role": "client",
+              "started_at_seconds": null,
+              "streams": []
+            },
+            "schema_version": 1
+          },
+          "completed_at_seconds": 1000.0,
+          "diagnostics": [],
+          "elapsed_seconds": 0.0,
+          "exception": null,
+          "reason": null,
+          "returned_result_evidence": null,
+          "spec": {
+            "cell_id": "cell-0001",
+            "config": {
+              "bidirectional": false,
+              "blksize": null,
+              "duration": 1,
+              "json_stream": false,
+              "mptcp": false,
+              "omit": 0,
+              "parallel": 2,
+              "port": 5201,
+              "protocol": "tcp",
+              "rate": 4000000,
+              "reverse": false,
+              "server": "127.0.0.1",
+              "tos": null
+            },
+            "phase": "measured",
+            "rate_intent": null,
+            "repetition": 0,
+            "resolved_config": {
+              "bidirectional": false,
+              "blksize": null,
+              "duration": 1,
+              "json_stream": false,
+              "mptcp": false,
+              "omit": 0,
+              "parallel": 2,
+              "port": 5201,
+              "protocol": "tcp",
+              "rate": 4000000,
+              "reverse": false,
+              "server": "127.0.0.1",
+              "tos": null
+            },
+            "trial_id": "cell-0001:measured:0"
+          },
+          "started_at_seconds": 1000.0,
+          "status": "completed"
+        },
+        {
+          "artifact": {
+            "extensions": {},
+            "kind": "iperf3-lib.result",
+            "producer": {
+              "name": "iperf3-lib",
+              "version": "fixture-development"
+            },
+            "result": {
+              "availability": {},
+              "bidirectional": false,
+              "completed_at_seconds": null,
+              "cpu": [],
+              "diagnostics": [],
+              "duration_seconds": 1,
+              "end": {
+                "sum_received": {
+                  "bits_per_second": 99999999,
+                  "bytes": 100,
+                  "direction": "client_to_server",
+                  "duration_seconds": 1,
+                  "end_seconds": null,
+                  "jitter_ms": null,
+                  "lost_packets": null,
+                  "lost_percent": null,
+                  "observation": "receiver",
+                  "omitted": null,
+                  "packets": null,
+                  "retransmits": null,
+                  "start_seconds": null,
+                  "tcp": null
+                },
+                "sum_sent": {
+                  "bits_per_second": 99999999,
+                  "bytes": 200,
+                  "direction": "client_to_server",
+                  "duration_seconds": 1,
+                  "end_seconds": null,
+                  "jitter_ms": null,
+                  "lost_packets": null,
+                  "lost_percent": null,
+                  "observation": "sender",
+                  "omitted": null,
+                  "packets": null,
+                  "retransmits": null,
+                  "start_seconds": null,
+                  "tcp": null
+                }
+              },
+              "error": null,
+              "execution": {
+                "configuration": {
+                  "effective": {
+                    "bidirectional": {
+                      "evidence_paths": [
+                        "/raw/start/test_start/bidir"
+                      ],
+                      "state": "verified",
+                      "value": false
+                    },
+                    "blksize": {
+                      "evidence_paths": [
+                        "/raw/start/test_start/blksize"
+                      ],
+                      "state": "verified",
+                      "value": 4096
+                    },
+                    "duration": {
+                      "evidence_paths": [
+                        "/raw/start/test_start/duration"
+                      ],
+                      "state": "verified",
+                      "value": 1
+                    },
+                    "json_stream": {
+                      "evidence_paths": [],
+                      "state": "unavailable",
+                      "value": null
+                    },
+                    "mptcp": {
+                      "evidence_paths": [],
+                      "state": "unavailable",
+                      "value": null
+                    },
+                    "omit": {
+                      "evidence_paths": [
+                        "/raw/start/test_start/omit"
+                      ],
+                      "state": "verified",
+                      "value": 0
+                    },
+                    "parallel": {
+                      "evidence_paths": [
+                        "/raw/start/test_start/num_streams"
+                      ],
+                      "state": "verified",
+                      "value": 1
+                    },
+                    "port": {
+                      "evidence_paths": [
+                        "/raw/start/connecting_to/port"
+                      ],
+                      "state": "verified",
+                      "value": 5201
+                    },
+                    "protocol": {
+                      "evidence_paths": [
+                        "/raw/start/test_start/protocol"
+                      ],
+                      "state": "verified",
+                      "value": "tcp"
+                    },
+                    "rate": {
+                      "evidence_paths": [
+                        "/raw/start/test_start/target_bitrate"
+                      ],
+                      "state": "verified",
+                      "value": 4000000
+                    },
+                    "reverse": {
+                      "evidence_paths": [
+                        "/raw/start/test_start/reverse"
+                      ],
+                      "state": "verified",
+                      "value": false
+                    },
+                    "server": {
+                      "evidence_paths": [
+                        "/raw/start/connecting_to/host"
+                      ],
+                      "state": "verified",
+                      "value": "127.0.0.1"
+                    },
+                    "tos": {
+                      "evidence_paths": [
+                        "/raw/start/test_start/tos"
+                      ],
+                      "state": "verified",
+                      "value": 0
+                    }
+                  },
+                  "requested": null
+                },
+                "method": "forward",
+                "native_system_info": "Linux synthetic sweep fixture",
+                "native_version": "iperf 3.21",
+                "platform": null,
+                "python_version": null,
+                "status": "completed",
+                "timing": {
+                  "completed_at_seconds": null,
+                  "elapsed_seconds": null,
+                  "estimated_completed_at_seconds": null,
+                  "native_started_at_seconds": null,
+                  "requested_duration_seconds": 1,
+                  "started_at_seconds": null
+                }
+              },
+              "extensions": {
+                "example.synthetic": true,
+                "iperf3_lib.rate_intent": {
+                  "caller_config": {
+                    "bidirectional": false,
+                    "blksize": null,
+                    "duration": 1,
+                    "json_stream": false,
+                    "mptcp": false,
+                    "omit": 0,
+                    "parallel": 1,
+                    "port": 5201,
+                    "protocol": "tcp",
+                    "rate": 4000000,
+                    "reverse": false,
+                    "server": "127.0.0.1",
+                    "tos": null
+                  },
+                  "intent": null,
+                  "resolution": {
+                    "active_directions": [
+                      "client_to_server"
+                    ],
+                    "aggregate_bps_all_directions": 4000000,
+                    "aggregate_bps_per_direction": 4000000,
+                    "native_per_stream_bps": 4000000,
+                    "source": "legacy",
+                    "unused_bps_per_direction": 0
+                  },
+                  "schema_version": 1
+                }
+              },
+              "flows": [
+                {
+                  "direction": "client_to_server",
+                  "receiver": {
+                    "bits_per_second": 99999999,
+                    "bytes": 100,
+                    "direction": "client_to_server",
+                    "duration_seconds": 1,
+                    "end_seconds": null,
+                    "jitter_ms": null,
+                    "lost_packets": null,
+                    "lost_percent": null,
+                    "observation": "receiver",
+                    "omitted": null,
+                    "packets": null,
+                    "retransmits": null,
+                    "start_seconds": null,
+                    "tcp": null
+                  },
+                  "sender": {
+                    "bits_per_second": 99999999,
+                    "bytes": 200,
+                    "direction": "client_to_server",
+                    "duration_seconds": 1,
+                    "end_seconds": null,
+                    "jitter_ms": null,
+                    "lost_packets": null,
+                    "lost_percent": null,
+                    "observation": "sender",
+                    "omitted": null,
+                    "packets": null,
+                    "retransmits": null,
+                    "start_seconds": null,
+                    "tcp": null
+                  }
+                }
+              ],
+              "intervals": [],
+              "ok": true,
+              "protocol": "tcp",
+              "raw": {
+                "end": {
+                  "sum_received": {
+                    "bits_per_second": 99999999,
+                    "bytes": 100,
+                    "seconds": 1
+                  },
+                  "sum_sent": {
+                    "bits_per_second": 99999999,
+                    "bytes": 200,
+                    "seconds": 1
+                  }
+                },
+                "start": {
+                  "connecting_to": {
+                    "host": "127.0.0.1",
+                    "port": 5201
+                  },
+                  "system_info": "Linux synthetic sweep fixture",
+                  "test_start": {
+                    "bidir": 0,
+                    "blksize": 4096,
+                    "duration": 1,
+                    "num_streams": 1,
+                    "omit": 0,
+                    "protocol": "TCP",
+                    "reverse": 0,
+                    "target_bitrate": 4000000,
+                    "tos": 0
+                  },
+                  "version": "iperf 3.21"
+                }
+              },
+              "reporting_role": "client",
+              "started_at_seconds": null,
+              "streams": []
+            },
+            "schema_version": 1
+          },
+          "completed_at_seconds": 1000.0,
+          "diagnostics": [],
+          "elapsed_seconds": 0.0,
+          "exception": null,
+          "reason": null,
+          "returned_result_evidence": null,
+          "spec": {
+            "cell_id": "cell-0000",
+            "config": {
+              "bidirectional": false,
+              "blksize": null,
+              "duration": 1,
+              "json_stream": false,
+              "mptcp": false,
+              "omit": 0,
+              "parallel": 1,
+              "port": 5201,
+              "protocol": "tcp",
+              "rate": 4000000,
+              "reverse": false,
+              "server": "127.0.0.1",
+              "tos": null
+            },
+            "phase": "measured",
+            "rate_intent": null,
+            "repetition": 0,
+            "resolved_config": {
+              "bidirectional": false,
+              "blksize": null,
+              "duration": 1,
+              "json_stream": false,
+              "mptcp": false,
+              "omit": 0,
+              "parallel": 1,
+              "port": 5201,
+              "protocol": "tcp",
+              "rate": 4000000,
+              "reverse": false,
+              "server": "127.0.0.1",
+              "tos": null
+            },
+            "trial_id": "cell-0000:measured:0"
+          },
+          "started_at_seconds": 1000.0,
+          "status": "completed"
+        }
+      ]
+    },
+    "minimum_valid_trials": 1,
+    "prepared": {
+      "axes": [
+        {
+          "name": "parallel",
+          "values": [
+            1,
+            2
+          ]
+        }
+      ],
+      "base_config": {
+        "bidirectional": false,
+        "blksize": null,
+        "duration": 1,
+        "json_stream": false,
+        "mptcp": false,
+        "omit": 0,
+        "parallel": 1,
+        "port": 5201,
+        "protocol": "tcp",
+        "rate": 4000000,
+        "reverse": false,
+        "server": "127.0.0.1",
+        "tos": null
+      },
+      "cells": [
+        {
+          "cell_id": "cell-0001",
+          "config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 2,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 4000000,
+            "reverse": false,
+            "server": "127.0.0.1",
+            "tos": null
+          },
+          "parameters": {
+            "parallel": 2
+          },
+          "resolved_config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 2,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 4000000,
+            "reverse": false,
+            "server": "127.0.0.1",
+            "tos": null
+          },
+          "trial_ids": [
+            "cell-0001:measured:0"
+          ]
+        },
+        {
+          "cell_id": "cell-0000",
+          "config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 1,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 4000000,
+            "reverse": false,
+            "server": "127.0.0.1",
+            "tos": null
+          },
+          "parameters": {
+            "parallel": 1
+          },
+          "resolved_config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 1,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 4000000,
+            "reverse": false,
+            "server": "127.0.0.1",
+            "tos": null
+          },
+          "trial_ids": [
+            "cell-0000:measured:0"
+          ]
+        }
+      ],
+      "order": "randomized",
+      "rate_intent": null,
+      "seed": 4
+    }
+  },
+  "schema_version": 1
+}
