@@ -19,6 +19,7 @@ nav = [
     { "Reading results" = "guides/results.md" },
     { "Portable result artifacts" = "guides/artifacts.md" },
     { "Analyzing measurements" = "guides/analysis.md" },
+    { "Repeated trials and assessments" = "guides/trials.md" },
     { "Prometheus output" = "guides/prometheus.md" },
     { "Local Grafana validation" = "guides/grafana.md" },
   ] },
