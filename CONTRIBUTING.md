@@ -5,8 +5,8 @@ Python 3.12-3.14 and libiperf 3.19.1/3.21 matrix.
 
 ## Development setup
 
-Install the [uv](https://docs.astral.sh/uv/) release pinned in
-[`.tool-versions`](.tool-versions), clone the repository, and run:
+Install a current stable release of [uv](https://docs.astral.sh/uv/), clone
+the repository, and run:
 
 ```bash
 make install
@@ -79,8 +79,9 @@ or the `.vault/` project knowledge base.
   at 09:17 America/Los_Angeles, as well as on pushes and pull requests.
 - Dependabot checks Python, GitHub Actions, and Docker dependencies every
   Monday. Version and security updates are grouped by ecosystem; the beta `ty`
-  checker remains isolated for deliberate review. The uv executable is pinned
-  once in `.tool-versions` and upgraded as a coordinated toolchain change.
+  checker remains isolated for deliberate review. CI, releases, and Docker
+  builds use the current stable uv release so contributors need not match an
+  exact local tool version.
 
 ## Releases
 

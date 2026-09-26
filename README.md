@@ -6,8 +6,13 @@
 
 `iperf3-lib` is a typed Python wrapper around the native iperf3 `libiperf`
 library. It uses CFFI's ABI mode and provides synchronous and asynchronous
-client APIs, a minimal server wrapper, Pydantic configuration, and typed result
-models.
+client APIs, a minimal server wrapper, validated dataclass configuration, and
+typed result models.
+
+The normalized result model preserves the original native JSON while exposing
+flows, endpoint observations, interval measurements, and execution metadata.
+Completed results can be rendered as Prometheus metrics or atomically written
+for node_exporter's textfile collector; scraping never starts a benchmark.
 
 ## Support
 
@@ -91,6 +96,52 @@ The asynchronous API has the same configuration and result behavior:
 result = await Client(config).arun()
 ```
 
+## Results and Prometheus metrics
+
+`Result` keeps the complete native JSON in `raw` and provides normalized
+`flows`, `intervals`, protocol, duration, and timestamp fields. Each flow
+identifies its direction independently from whether the native measurement was
+reported by the sender or receiver. Missing measurements stay `None`.
+Configuration strings for protocols are normalized to `Protocol`; numeric
+configuration fields require integers (not booleans or numeric strings), and
+boolean options require actual booleans. Hostnames remain strings, and standard
+library IPv4/IPv6 address objects are accepted.
+
+Render a completed run for an existing Prometheus metrics endpoint:
+
+```python
+from iperf3_lib.exporters.prometheus import render_text
+
+metrics = render_text(result, labels={"target": "lab-server-b", "profile": "tcp-4-streams"})
+```
+
+All measurements are latest-run gauges using base units such as bytes per
+second, seconds, and loss ratios. Supplied labels should remain bounded and
+stable; avoid run IDs, timestamps, and error messages. Failed runs expose their
+status and completion time, omit measurements from earlier runs, and can retain
+the last-success timestamp supplied by the consuming application:
+
+```python
+metrics = render_text(
+    result,
+    labels={"target": "lab-server-b"},
+    last_success_timestamp_seconds=previous_success_timestamp,
+)
+```
+
+For host-associated tests, write a textfile collector metric file with an
+atomic same-directory replacement:
+
+```python
+from iperf3_lib.exporters.prometheus import write_textfile
+
+write_textfile("/var/lib/node_exporter/textfile_collector/iperf.prom", result)
+```
+
+Schedule benchmark runs separately from Prometheus scrapes so scrape frequency
+does not control generated traffic. The library does not start a metrics
+server.
+
 ## Server example
 
 ```python
@@ -105,8 +156,8 @@ the cooperative shutdown limitation above before embedding it in a service.
 
 ## Contributing
 
-Install the [uv](https://docs.astral.sh/uv/) release pinned in
-[`.tool-versions`](.tool-versions), then synchronize the committed lockfile:
+Install a current stable [uv](https://docs.astral.sh/uv/) release, then
+synchronize the committed lockfile:
 
 ```bash
 make install
@@ -151,5 +202,6 @@ full development and review checklist.
 ### 0.1.0
 
 - Initial CFFI ABI wrapper for libiperf clients and servers.
-- Typed Pydantic configuration/results and asynchronous convenience methods.
+- Typed dataclass configuration/results and asynchronous convenience methods.
+- Normalized flow and interval results with Prometheus textfile output.
 - Docker compatibility testing and PyPI release automation.

@@ -1,8 +1,6 @@
 ARG PYTHON_BASE=python:3.12-slim
-ARG UV_VERSION=pin-required
 
-# UV_VERSION is supplied from .tool-versions by Make and CI.
-FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
+FROM ghcr.io/astral-sh/uv:latest AS uv
 FROM ${PYTHON_BASE}
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]

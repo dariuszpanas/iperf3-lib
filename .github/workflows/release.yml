@@ -26,7 +26,6 @@ jobs:
     outputs:
       version: ${{ steps.release-version.outputs.version }}
       prerelease: ${{ steps.release-version.outputs.prerelease }}
-      uv_version: ${{ steps.setup-uv.outputs.uv-version }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -35,7 +34,6 @@ jobs:
         id: setup-uv
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
-          version-file: ".tool-versions"
           python-version: "3.12"
           enable-cache: true
           cache-dependency-glob: uv.lock
@@ -81,7 +79,6 @@ jobs:
       - name: Install uv and Python
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
-          version: ${{ needs.build.outputs.uv_version }}
           python-version: ${{ matrix.python-version }}
 
       - name: Download distributions
