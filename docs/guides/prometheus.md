@@ -1,12 +1,9 @@
 # Prometheus snapshots
 
-!!! warning "Unreleased exporter"
-    The exporter is available on `main` after `0.2.0`. The current renderer
-    repeats metric metadata when multiple endpoint observations are present.
-    Prometheus requires one `HELP` and `TYPE` declaration per metric family;
-    consumer-parser validation and a correction are needed before release.
-    See the [roadmap](../roadmap.md) and the
-    [Prometheus text format](https://prometheus.io/docs/instrumenting/exposition_formats/).
+!!! note "Unreleased exporter"
+    The exporter is available on `main` after `0.2.0`. Use the
+    [source installation instructions](../getting-started.md) to try it before
+    the next release.
 
 The exporter turns a completed `Result` into a latest-run snapshot. Your
 application owns scheduling and storage; this package provides no HTTP server
@@ -25,11 +22,17 @@ text = render_text(
 
 Keep label values stable and bounded. A target and named test profile are
 useful; run IDs, timestamps, and free-text error messages create unbounded
-series. The renderer adds `direction` and `observer` to measurement samples;
-leave those labels to the renderer.
+series. The renderer adds `direction` and `observer` to measurement samples.
+Caller labels with either name, or any name beginning with `__`, are rejected
+with `ValueError`.
 
-Label values must be strings. Invalid label names and non-finite sample
-values raise an error. Backslashes, quotes, and newlines in values are escaped.
+Label values must be strings. Invalid label names, non-finite sample values,
+and duplicate metric-name/label combinations raise an error. Backslashes,
+quotes, and newlines in values are escaped.
+
+The renderer groups each metric family's samples together after one `HELP`
+and one `TYPE` declaration, as required by the
+[Prometheus text format](https://prometheus.io/docs/instrumenting/exposition_formats/).
 
 ## Understand the metrics
 
@@ -80,10 +83,19 @@ write_textfile(
 )
 ```
 
-The writer creates the parent directory if necessary, writes a temporary file
-in the destination directory, flushes it, and replaces the destination
-atomically. Give your application permission to write that directory and
-configure node_exporter to collect it.
+The writer validates the rendered output before touching the filesystem,
+creates the parent directory if necessary, writes a temporary file in that
+directory, flushes it, and replaces the destination atomically. Give your
+application permission to write that directory and configure node_exporter to
+collect it.
+
+On POSIX, the temporary file has owner-only permissions. Those permissions
+carry through the replacement; the previous destination's permissions are not
+preserved. The collector must be able to read each replacement file, in
+addition to the writer being able to write the directory. The
+[local Grafana example](grafana.md) runs the writer and node_exporter with the
+same user ID. Other deployments must arrange compatible accounts and access;
+this API does not expose a file-mode option.
 
 The intended sequence is:
 
@@ -95,4 +107,11 @@ Completion times appear as gauge values, not explicit sample timestamps.
 The file remains until replaced or removed, so use freshness metrics to detect
 an application that has stopped producing new results. The library does not
 delete stale files automatically.
+
+## Explore the complete pipeline
+
+The [local Grafana guide](grafana.md) provides a Docker Desktop Kubernetes
+example with a native iperf server, explicitly requested client runs, node_exporter,
+Prometheus, and a provisioned dashboard. Use it to inspect completed-run
+measurements and freshness across the complete collection path.
 

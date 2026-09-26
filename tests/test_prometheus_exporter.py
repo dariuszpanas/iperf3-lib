@@ -1,6 +1,7 @@
 """Tests for Prometheus text rendering and atomic textfile output."""
 
 import re
+from pathlib import Path
 
 import pytest
 
@@ -97,3 +98,123 @@ def test_write_textfile_atomically_replaces_destination(tmp_path):
     content = destination.read_text(encoding="utf-8")
     assert 'iperf3_last_run_success{target="host-a"} 1' in content
     assert sorted(path.name for path in destination.parent.iterdir()) == ["iperf.prom"]
+
+
+def test_groups_samples_with_one_metadata_pair_per_metric_family():
+    """Group all endpoint samples after one HELP/TYPE pair per metric name."""
+    result = Result(
+        ok=True,
+        flows=[
+            FlowStats(
+                direction=direction,
+                sender=SumStats(8_000_000, retransmits=3, lost_percent=1, jitter_ms=4),
+                receiver=SumStats(4_000_000, retransmits=0, lost_percent=2, jitter_ms=5),
+            )
+            for direction in ("client_to_server", "server_to_client")
+        ],
+    )
+
+    text = render_text(result, {"target": "host-a", "profile": "bidir"})
+    assert text == render_text(result, {"profile": "bidir", "target": "host-a"})
+    lines = text.splitlines()
+    for metric in (
+        "iperf3_last_run_throughput_bytes_per_second",
+        "iperf3_last_run_retransmissions",
+        "iperf3_last_run_packet_loss_ratio",
+        "iperf3_last_run_jitter_seconds",
+    ):
+        help_indices = [i for i, line in enumerate(lines) if line.startswith(f"# HELP {metric} ")]
+        type_indices = [i for i, line in enumerate(lines) if line == f"# TYPE {metric} gauge"]
+        sample_indices = [i for i, line in enumerate(lines) if line.startswith(f"{metric}{{")]
+        assert len(help_indices) == 1
+        assert type_indices == [help_indices[0] + 1]
+        assert sample_indices == list(range(type_indices[0] + 1, type_indices[0] + 5))
+
+
+@pytest.mark.parametrize("name", ["direction", "observer", "__name__", "__custom", "bad-label", 1])
+def test_rejects_reserved_and_invalid_caller_label_names(name):
+    """Reject caller labels that conflict with built-in or Prometheus labels."""
+    with pytest.raises(ValueError, match="invalid Prometheus label name"):
+        render_text(Result(ok=True), {name: "value"})
+
+
+@pytest.mark.parametrize("value", [1, None, False])
+def test_rejects_non_string_label_values(value):
+    """Reject label values that cannot be escaped as strings."""
+    with pytest.raises(TypeError, match="must have a string value"):
+        render_text(Result(ok=True), {"target": value})
+
+
+def test_rejects_duplicate_sample_identity():
+    """Reject duplicate direction/observer samples instead of ambiguous output."""
+    result = Result(
+        ok=True,
+        flows=[
+            FlowStats(direction="client_to_server", sender=SumStats(rate))
+            for rate in (8_000_000, 4_000_000)
+        ],
+    )
+
+    with pytest.raises(ValueError, match="duplicate Prometheus sample"):
+        render_text(result, {"target": "host-a"})
+
+
+def test_omits_unavailable_measurements_without_hiding_measured_zero():
+    """Keep absent endpoints and optional values distinct from zero samples."""
+    result = Result(
+        ok=True,
+        flows=[FlowStats(direction="client_to_server", receiver=SumStats(0, retransmits=0))],
+    )
+
+    text = render_text(result)
+
+    assert 'observer="sender"' not in text
+    assert (
+        'iperf3_last_run_throughput_bytes_per_second{direction="client_to_server",observer="receiver"} 0'
+        in text
+    )
+    assert (
+        'iperf3_last_run_retransmissions{direction="client_to_server",observer="receiver"} 0'
+        in text
+    )
+    assert "packet_loss_ratio" not in text
+    assert "jitter_seconds" not in text
+
+
+def test_write_textfile_preserves_destination_and_cleans_up_after_replace_failure(
+    tmp_path, monkeypatch
+):
+    """Remove an unfinished replacement and preserve the previous snapshot."""
+    destination = tmp_path / "iperf.prom"
+    destination.write_text("previous snapshot\n", encoding="utf-8")
+    temporary_paths = []
+
+    def fail_replace(source, target):
+        """Inspect the completed temporary file before simulating an OS failure."""
+        temporary = Path(source)
+        temporary_paths.append(temporary)
+        assert temporary.parent == destination.parent
+        assert "iperf3_last_run_success 1" in temporary.read_text(encoding="utf-8")
+        assert target == destination
+        raise OSError("replacement denied")
+
+    monkeypatch.setattr("iperf3_lib.exporters.prometheus.os.replace", fail_replace)
+
+    with pytest.raises(OSError, match="replacement denied"):
+        write_textfile(destination, Result(ok=True))
+
+    assert destination.read_text(encoding="utf-8") == "previous snapshot\n"
+    assert len(temporary_paths) == 1
+    assert not temporary_paths[0].exists()
+    assert list(tmp_path.iterdir()) == [destination]
+
+
+def test_write_textfile_invalid_sample_has_no_filesystem_side_effects(tmp_path):
+    """Reject invalid samples before creating directories or temporary files."""
+    destination = tmp_path / "metrics" / "iperf.prom"
+    result = Result(ok=True, end=EndStats(sum_sent=SumStats(float("inf"))))
+
+    with pytest.raises(ValueError, match="must be finite"):
+        write_textfile(destination, result)
+
+    assert list(tmp_path.iterdir()) == []

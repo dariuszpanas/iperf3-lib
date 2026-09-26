@@ -121,9 +121,10 @@ configuration fields require integers (not booleans or numeric strings), and
 boolean options require actual booleans. Hostnames remain strings, and standard
 library IPv4/IPv6 address objects are accepted.
 
-The exporter is unreleased. Exposition conformance and an end-to-end Grafana
-integration are tracked in the
-[roadmap](https://dariuszpanas.github.io/iperf3-lib/roadmap.html).
+The exporter is unreleased. A
+[local Grafana integration](https://dariuszpanas.github.io/iperf3-lib/guides/grafana.html)
+provides a reproducible native benchmark, textfile collector, Prometheus,
+and dashboard validation path.
 Render a completed run for an existing Prometheus metrics endpoint:
 
 ```python
@@ -216,6 +217,8 @@ Build the documentation with `make docs`, or preview it with `make docs-serve`.
   validation; add normalized flow/interval results and Prometheus textfile output.
 - Adopt YAGA repository and commit policies, current stable uv, and refreshed tooling.
 - Add a Zensical documentation site and issue-based roadmap.
+- Correct Prometheus metric-family output and native bidirectional parsing;
+  add a Docker Desktop Kubernetes/Grafana qualification example.
 
 See the [full changelog](https://dariuszpanas.github.io/iperf3-lib/changelog.html)
 for migration notes and release history.

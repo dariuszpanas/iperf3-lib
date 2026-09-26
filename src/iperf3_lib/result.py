@@ -147,14 +147,20 @@ def result_from_iperf_json(raw: dict[str, Any]) -> Result:
     if end_stats.sum_sent is None and end_stats.sum_received is None:
         end_stats = None
 
-    bidirectional = test_start.get("bidirectional", False)
-    reverse = test_start.get("reverse", False)
-    if not isinstance(bidirectional, (bool, int)) or not isinstance(reverse, (bool, int)):
-        raise ValueError("iperf JSON direction flags must be booleans or integers")
-    if bidirectional not in (False, True, 0, 1) or reverse not in (False, True, 0, 1):
-        raise ValueError("iperf JSON direction flags must be zero or one")
-    bidirectional = bool(bidirectional)
-    reverse = bool(reverse)
+    def _direction_flag(name: str) -> bool:
+        value = test_start.get(name, False)
+        if not isinstance(value, (bool, int)):
+            raise ValueError(f"iperf JSON {name} flag must be a boolean or integer")
+        if value not in (False, True, 0, 1):
+            raise ValueError(f"iperf JSON {name} flag must be zero or one")
+        return bool(value)
+
+    # Native libiperf uses "bidir"; retain the earlier normalized spelling.
+    bidirectional = _direction_flag("bidir" if "bidir" in test_start else "bidirectional")
+    if "bidir" in test_start and "bidirectional" in test_start:
+        if bidirectional != _direction_flag("bidirectional"):
+            raise ValueError("iperf JSON bidir and bidirectional flags conflict")
+    reverse = _direction_flag("reverse")
     directions = (
         ["client_to_server"] if not bidirectional else ["client_to_server", "server_to_client"]
     )

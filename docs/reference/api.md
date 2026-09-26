@@ -87,6 +87,11 @@ does not run a benchmark and does not independently verify execution success;
 its normal return currently has `ok=True`. Preserve run status separately
 when importing saved native data, especially native error payloads.
 
+Direction parsing recognizes native `start.test_start.bidir` and the earlier
+`bidirectional` spelling. Both must agree when present together. Direction
+flags accept booleans or the integers zero and one; malformed or conflicting
+flags raise `ValueError`.
+
 ## Exporters
 
 Import both functions from `iperf3_lib.exporters.prometheus`:
@@ -98,7 +103,9 @@ write_textfile(path, result, labels=None, *, last_success_timestamp_seconds=None
 
 `labels` is an optional mapping of strings to strings. `path` accepts a
 string or path-like object. See [Prometheus snapshots](../guides/prometheus.md)
-for metric units, freshness, and the current prerelease compatibility gap.
+for metric units, freshness, label validation, and collector integration.
+The [results guide](../guides/results.md) records the remaining normalization
+and missing-data limitations.
 
 ## Exceptions and capabilities
 

@@ -21,7 +21,7 @@ Documentation tracks the development branch. The following foundation is on
 | Configuration | Dataclasses with explicit type/value validation and a direct CFFI execution path. | Intent-based rates, profiles, verified effective configuration, and a structured capability report. |
 | Results | Directional flow summaries, aggregate and per-stream interval rates, timestamps, retained native JSON, and a diagnostics container. | Correct edge-case direction/missing-data handling; add a durable schema, richer stream/interval metadata, and populated diagnostics. |
 | Serialization | `Result.to_dict()` returns dataclass fields as a dictionary. | A versioned artifact contract and documented compatibility/reading behavior. |
-| Metrics | Latest-run Prometheus gauges, freshness fields, and atomic textfile replacement. | Exposition conformance and failure-path qualification before release. |
+| Metrics | Latest-run Prometheus gauges, freshness fields, atomic replacement, and a local Grafana qualification fixture. | Resolve the remaining result missing-data contract and repeat integration qualification for the release candidate. |
 | Execution | Synchronous APIs and asynchronous convenience methods using executor threads. | Live events and isolated execution for stronger deadline, cancellation, or concurrency guarantees. |
 | Analysis and plans | Applications can compose individual runs. | Built-in statistics, repeated trials, assessments, baselines, and bounded sweeps. |
 
@@ -84,6 +84,8 @@ atomic replacement error paths.
 Exercise the full integration with a real native benchmark, node_exporter's
 textfile collector, Prometheus ingestion, and a local Grafana datasource and
 rendered dashboard. Keep the setup and metric/freshness evidence reproducible.
+The [local Grafana guide](guides/grafana.md) provides the repository's executable
+qualification path, including native values and success-to-failure transitions.
 The local qualification uses Docker Desktop's `docker-desktop` Kubernetes
 context in the dedicated `iperf3-lib-observability` namespace.
 

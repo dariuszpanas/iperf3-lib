@@ -13,7 +13,7 @@ from ..result import FlowStats, Result
 
 _METRIC_NAME = re.compile(r"[a-zA-Z_:][a-zA-Z0-9_:]*\Z")
 _LABEL_NAME = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*\Z")
-_RESERVED_LABELS = {"__name__"}
+_RESERVED_LABELS = {"direction", "observer"}
 
 
 def _escape_label(value: str) -> str:
@@ -38,12 +38,18 @@ def render_text(
     """Render latest-run gauges as Prometheus text exposition format."""
     normalized_labels = dict(labels or {})
     for name, value in normalized_labels.items():
-        if not _LABEL_NAME.fullmatch(name) or name in _RESERVED_LABELS:
+        if (
+            not isinstance(name, str)
+            or not _LABEL_NAME.fullmatch(name)
+            or name.startswith("__")
+            or name in _RESERVED_LABELS
+        ):
             raise ValueError(f"invalid Prometheus label name: {name!r}")
         if not isinstance(value, str):
             raise TypeError(f"Prometheus label {name!r} must have a string value")
 
-    lines: list[str] = []
+    families: dict[str, tuple[str, list[str]]] = {}
+    sample_identities: set[tuple[str, tuple[tuple[str, str], ...]]] = set()
 
     def emit(name: str, help_text: str, value: float | int | None, **extra: str) -> None:
         if not _METRIC_NAME.fullmatch(name):
@@ -52,19 +58,18 @@ def render_text(
         if formatted is None:
             return
         all_labels = normalized_labels | extra
+        sorted_labels = tuple(sorted(all_labels.items()))
         label_text = ""
         if all_labels:
-            pairs = ",".join(
-                f'{key}="{_escape_label(val)}"' for key, val in sorted(all_labels.items())
-            )
+            pairs = ",".join(f'{key}="{_escape_label(val)}"' for key, val in sorted_labels)
             label_text = f"{{{pairs}}}"
-        lines.extend(
-            [
-                f"# HELP {name} {help_text}",
-                f"# TYPE {name} gauge",
-                f"{name}{label_text} {formatted}",
-            ]
-        )
+        identity = (name, sorted_labels)
+        if identity in sample_identities:
+            raise ValueError(f"duplicate Prometheus sample: {name}{label_text}")
+        sample_identities.add(identity)
+        if name not in families:
+            families[name] = (help_text, [])
+        families[name][1].append(f"{name}{label_text} {formatted}")
 
     emit(
         "iperf3_last_run_success",
@@ -137,6 +142,9 @@ def render_text(
                         direction=flow.direction,
                         observer=observer,
                     )
+    lines: list[str] = []
+    for name, (help_text, samples) in families.items():
+        lines.extend([f"# HELP {name} {help_text}", f"# TYPE {name} gauge", *samples])
     return "\n".join(lines) + "\n"
 
 
@@ -148,13 +156,13 @@ def write_textfile(
     last_success_timestamp_seconds: float | None = None,
 ) -> None:
     """Atomically replace a node_exporter textfile collector metrics file."""
-    destination = Path(path)
-    destination.parent.mkdir(parents=True, exist_ok=True)
     content = render_text(
         result,
         labels,
         last_success_timestamp_seconds=last_success_timestamp_seconds,
     )
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
     temporary_name: str | None = None
     try:
         with tempfile.NamedTemporaryFile(
