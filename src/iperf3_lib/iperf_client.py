@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from collections.abc import Callable
 from functools import partial
 
 from .config import ClientConfig, Protocol
 from .exceptions import IperfError, IperfLibraryError, UnsupportedFeatureError
 from .ffi.api import ffi, lib
-from .result import EndStats, Result, SumStats
+from .result import Result, result_from_iperf_json
 
 TCP_PROTOCOL_ID = 1
 UDP_PROTOCOL_ID = 2
@@ -89,6 +90,7 @@ class Client:
 
     def run(self) -> Result:
         """Run the iperf3 test synchronously and return the result."""
+        run_started_at = time.time()
         if self.cfg.mptcp:
             raise UnsupportedFeatureError(
                 "MPTCP is unavailable through the direct libiperf ABI backend; "
@@ -173,29 +175,22 @@ class Client:
 
             if json_text is not None:
                 raw = json.loads(json_text)
-                end = raw.get("end", {})
-
-                # minimal typed mapping into Result
-                def _sum(d) -> SumStats | None:
-                    if not d:
-                        return None
-                    return SumStats.model_validate(
-                        {
-                            "bits_per_second": d.get("bits_per_second", 0.0),
-                            "retransmits": d.get("retransmits"),
-                            "lost_percent": d.get("lost_percent"),
-                            "jitter_ms": d.get("jitter_ms"),
-                        }
-                    )
-
-                end_model = EndStats(
-                    sum_sent=_sum(end.get("sum_sent")),
-                    sum_received=_sum(end.get("sum_received")),
-                )
-                return Result(ok=True, raw=raw, end=end_model)
-            return Result(ok=False, error="No JSON returned by libiperf")
+                result = result_from_iperf_json(raw)
+                result.completed_at_seconds = time.time()
+                return result
+            return Result(
+                ok=False,
+                error="No JSON returned by libiperf",
+                started_at_seconds=run_started_at,
+                completed_at_seconds=time.time(),
+            )
         except IperfError as e:
-            return Result(ok=False, error=str(e))
+            return Result(
+                ok=False,
+                error=str(e),
+                started_at_seconds=run_started_at,
+                completed_at_seconds=time.time(),
+            )
         finally:
             lib.iperf_free_test(t)
 

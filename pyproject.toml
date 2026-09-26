@@ -40,7 +40,6 @@ classifiers = [
 ]
 dependencies = [
     "cffi>=2.0,<3",
-    "pydantic>=2.12,<3",
 ]
 
 [project.urls]

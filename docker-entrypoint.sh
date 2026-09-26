@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# A bind-mounted checkout can differ from the files baked into the image. Keep
-# /opt/venv aligned with its committed lockfile before running the command.
+# Keep the image's development environment aligned with its baked-in lockfile.
 if [[ -f /app/pyproject.toml && -f /app/uv.lock ]]; then
     uv sync --frozen --dev
 else
