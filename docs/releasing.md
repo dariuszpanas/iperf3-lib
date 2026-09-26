@@ -4,7 +4,7 @@ Release scope and migration decisions are tracked in the [roadmap](roadmap.md).
 A merged PR prepares code; publishing a package requires an explicit release
 decision.
 
-For 0.3.0, the planned experiment scope is finite sequential trials and
+For 0.3.0, the selected experiment scope is finite sequential trials and
 explicit sweeps. Adaptive UDP, live events, and isolated workers have a
 [documented follow-on disposition](design/advanced-execution.md); their issues
 remain open. The small native event probe does not qualify stress delivery,
@@ -18,7 +18,7 @@ The default manual mode of the
 is **qualify**. It builds and tests a candidate and retains evidence without
 uploading to a package registry or creating a GitHub Release.
 
-After the workflow change is on `main`, run:
+For the revision selected through the workflow ref, run:
 
 ```bash
 gh workflow run release.yml --ref main -f target=qualify
@@ -57,15 +57,45 @@ format's smoke has a 120-second process deadline in the qualification
 container. This test harness does not change the library's documented
 cancellation or concurrency behavior.
 
+## Inspect installed receipt v2
+
+The 0.3.0 qualification contract requires **12 successful receipt-v2 files**:
+one installed wheel and one installed sdist for each Python 3.12–3.14 and
+libiperf 3.19.1/3.21 combination. Each receipt must retain:
+
+| Evidence | Required checks |
+| --- | --- |
+| Distribution identity | Source revision, package version, distribution filename and SHA-256, Python/native version, and installed import location outside the checkout. |
+| Native profiles | Forward, reverse and bidirectional TCP, UDP and SCTP; observed requested/effective settings and canonical artifact roundtrips. |
+| Rate intent and analysis | Aggregate allocation with a remainder, measured bytes/time results, summary/interval quality and stream provenance, and available TCP/CPU evidence with explicit missing values. |
+| Capabilities and saved results | Offline capability/codec checks with native loading forbidden, a separate native probe, supplied execution evidence, saved-native timing estimates, measured zero, missing data and failure preservation. |
+| Repeated assessment | One warm-up and two measured native runs, retained baseline evidence, the complete selected population and median arithmetic, and JSON/text/JUnit/CI agreement. |
+| Finite sweep | Two native stream-count cells with the same aggregate target, verified allocation, eligible receiver measurements, comparison evidence and a sweep-report roundtrip. |
+
+`scripts/smoke_release.py` validates receipt contents with
+`validate_smoke_receipt()`. This checks retained semantics without requiring the
+verifier's Python, package version, platform or native library to match the
+recorded environment. Independently bind every receipt to the retained release
+manifest, expected matrix cell, exact source revision, and wheel/sdist hash.
+Internal consistency alone does not establish that external identity.
+
+Historical receipt-v1 files remain evidence for their original revisions. They
+do not satisfy the expanded 0.3.0 contract. A successful earlier rehearsal also
+does not qualify a later source revision. Keep the final candidate's manifest,
+all 12 receipts and aggregate workflow result together before publication.
+
 ## Prepare the release candidate
 
 1. Fetch `origin`, compare the candidate with current `origin/main`, and
    resolve the accepted release criteria. Record dispositions for proposals
    deferred to a later version.
-2. Update `project.version` in `pyproject.toml`, refresh `uv.lock`, and move
-   the selected entries from `Unreleased` into a dated
-   [changelog](changelog.md) section. Update the README, installation examples,
-   migration instructions, and documentation banner together.
+2. Update `project.version` in `pyproject.toml` and the local project identity
+   in `uv.lock`. Keep historical artifact producer identities unchanged. Record
+   selected changes under a versioned **unreleased candidate** heading in the
+   [changelog](changelog.md); a metadata version does not establish publication.
+   Update the README, installation examples, migration instructions, and banner
+   together. Use version-conditional README wording that remains accurate when
+   the same qualified artifact bytes are published.
 3. Run local quality/unit gates before the Docker/native matrix. Merge the
    candidate through the normal required checks, then run a build-only hosted
    rehearsal for the resulting exact commit. Inspect the retained distributions,
@@ -76,7 +106,11 @@ cancellation or concurrency behavior.
 5. For measurement/exporter changes, also require the real
    [Prometheus/Grafana qualification](guides/grafana.md). An installed import
    or a string comparison of metrics is insufficient.
-6. Verify the registry's trusted-publisher configuration and intended publishing
+6. After qualification, obtain the explicit publication decision. Only an
+   actual publication establishes a release date and permits changing the
+   changelog's candidate status. Do not rebuild qualified distribution bytes
+   merely to remove a temporary publication-status sentence from their README.
+7. Verify the registry's trusted-publisher configuration and intended publishing
    environment restrictions before selecting a publication target. The workflow
    does not create or administratively configure those settings for a rehearsal.
 

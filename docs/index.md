@@ -4,8 +4,9 @@ description: Run libiperf from Python, inspect measurements, and build network b
 
 # Network benchmarks, from Python
 
-`iperf3-lib` connects Python applications to native **libiperf** through CFFI.
-Configure a client, run a benchmark, and keep its measurements in your application.
+`iperf3-lib` is a programmable network benchmarking and analysis library powered
+by native **libiperf** through CFFI. Configure traffic, preserve the measurements,
+compare results, and run finite sequential experiments from Python.
 
 [Get started](getting-started.md){ .md-button .md-button--primary }
 [Read the API](reference/api.md){ .md-button }
@@ -30,19 +31,33 @@ Configure a client, run a benchmark, and keep its measurements in your applicati
 
     [Results guide](guides/results.md)
 
+- **Keep portable evidence**
+
+    Save native and normalized measurements with requested settings, verified
+    observations, producer identity, and timing provenance.
+
+    [Result artifacts](guides/artifacts.md)
+
+- **Analyze measurements**
+
+    Calculate throughput stability, stream balance and scaling, and directional
+    comparisons with explicit missing-data and diagnostic limits.
+
+    [Analysis guide](guides/analysis.md)
+
+- **Run repeatable experiments**
+
+    Retain warm-ups, repetitions and failures; assess compatible baselines or
+    explore finite parameter matrices with explicit order and admission budgets.
+
+    [Trials and assessments](guides/trials.md) · [Parameter sweeps](guides/sweeps.md)
+
 - **Export completed runs**
 
-    Explore the unreleased Prometheus renderer, atomic textfile writer, and
-    local Grafana integration.
+    Use Prometheus gauges, atomic textfiles, and a reproducible local Grafana
+    integration. Benchmark scheduling remains under your application's control.
 
     [Prometheus guide](guides/prometheus.md)
-
-- **Shape the next version**
-
-    Follow the issue backlog for result contracts, analysis, benchmark plans,
-    live events, and process isolation.
-
-    [Roadmap and issues](roadmap.md)
 
 </div>
 
@@ -71,7 +86,11 @@ state: serialize runs within a process. The async helpers use executor threads;
 cancelling an await does not stop its native operation. See
 [compatibility and limitations](reference/compatibility.md).
 
-These pages track `main`. Published **0.2.0** still uses Pydantic models. The
-dataclass migration, normalized results, and exporters are **unreleased**; install
-from source to explore those APIs. The [changelog](changelog.md) separates released
-behavior from current development.
+These pages follow `main`. The APIs introduced in **0.3** require that version
+or a reviewed source revision; before publication, install from source.
+Published **0.2.0** uses Pydantic models. The [changelog](changelog.md) records
+publication status and the [migration guide](guides/migration-0.3.md) explains
+compatibility changes.
+
+The [roadmap](roadmap.md) records the selected 0.3.0 scope and the concrete
+follow-up work for adaptive UDP, live events, and isolated execution.

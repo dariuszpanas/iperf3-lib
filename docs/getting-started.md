@@ -3,12 +3,13 @@
 `iperf3-lib` runs network throughput tests through the native `libiperf` shared
 library and returns Python objects for your application to inspect.
 
-!!! note "Documentation for the next release"
-    This site tracks `main`. Dataclass configuration, normalized flows and
-    intervals, and Prometheus output are unreleased additions after `0.2.0`.
-    Install from source to use those APIs. The
+!!! note "Match the documentation to your version"
+    This site follows `main`. Dataclasses, portable artifacts, analysis, trial
+    plans, sweeps, and Prometheus output are introduced in 0.3; published 0.2.0 uses
+    Pydantic models. Before 0.3 is published, install a reviewed source revision
+    to use these APIs. Check the [changelog](changelog.md) and
     [published releases](https://github.com/dariuszpanas/iperf3-lib/releases)
-    describe the versions available on PyPI.
+    for publication status.
 
 Upgrading an existing 0.2.0 application? Read the
 [dataclass migration guide](guides/migration-0.3.md) for API substitutions,

@@ -4,15 +4,19 @@ These pages describe `main`. Released versions remain available through
 [GitHub releases](https://github.com/dariuszpanas/iperf3-lib/releases) and
 [PyPI](https://pypi.org/project/iperf3-lib/).
 
-## Unreleased
+## 0.3.0 — Unreleased candidate
 
-- Add finite parameter sweeps with preflight budgets, recorded cell order,
+The metadata identifies the intended 0.3.0 candidate. It has not been published;
+final qualification and an explicit publication decision remain required.
+
+### Finite experiments and assessments
+
+- Add [finite parameter sweeps](guides/sweeps.md) with preflight budgets, recorded cell order,
   per-cell warm-ups and measured trials, shared sequential execution, and full
   failure retention. Verify declared axes and native rate allocations before
   qualifying receiver medians or explicit method/direction comparisons.
 - Add strict sweep-v1 reports preserving every artifact, setting check and
   exclusion; validate frozen selection and arithmetic without rerunning analysis.
-
 - Add finite sequential trial plans with detached native settings, explicit
   admission budgets, warm-up runs, between-run pauses, retained failures and
   unstarted records, and no hidden retries.
@@ -21,6 +25,8 @@ These pages describe `main`. Released versions remain available through
   Separate performance acceptance from execution success and provide pure CI
   classification plus strict report-v1 JSON, text and JUnit output.
 
+### Configuration intent and capability evidence
+
 - Add explicit per-stream/aggregate-per-direction rate intent, exact SI unit
   parsing, native allocation provenance, and sequential admission estimates.
   Preserve the original request in an artifact extension and record the resolved
@@ -28,12 +34,18 @@ These pages describe `main`. Released versions remain available through
 - Add capability reports separating wrapper coverage, ABI declarations, native
   symbols, tested environments, and supplied execution evidence. Offline import
   and reports do not load libiperf; legacy capability flags remain lazy.
+
+### Measurement analysis
+
 - Add duration-weighted interval stability, measured bytes/time throughput,
   stream balance/scaling, explicit comparison policies and directional asymmetry.
 - Preserve qualified TCP seconds/bytes and endpoint process CPU evidence with
   exact provenance; extend the unreleased artifact-v1 development schema.
 - Keep omissions, coverage gaps, unqualified producers and insufficient data
   explicit. Analysis uses the standard library and does not execute benchmarks.
+
+### Canonical results and artifacts
+
 - Replace Pydantic runtime models with standard-library dataclasses and explicit
   `ClientConfig` validation. Runtime dependencies now consist of CFFI.
 - Add normalized directional flow and interval models alongside the original
@@ -47,6 +59,9 @@ These pages describe `main`. Released versions remain available through
 - Qualify both reporting endpoints across TCP, UDP, and SCTP directions and
   warm-up intervals. Keep mixed UDP stream summaries unattributed and mark
   unsupported SCTP retransmission values unavailable on qualified native versions.
+
+### Operational metrics and result correctness
+
 - Add a dependency-free Prometheus renderer and atomic textfile writer.
 - Emit each Prometheus metric family's metadata once, group its samples, and
   reject reserved caller labels and duplicate samples. Preserve existing files
@@ -59,10 +74,25 @@ These pages describe `main`. Released versions remain available through
   mappings. Saved native errors and incomplete output no longer appear successful.
 - Add a [Docker Desktop Kubernetes/Grafana example](guides/grafana.md) with
   native JSON-to-metric comparison and success/failure freshness checks.
+
+### Development and release qualification
+
+- Build once and retain a wheel/sdist pair with revision, version and hash
+  evidence; qualify installed distributions across the native matrix before
+  any separately authorized publication. Manual qualification is build-only.
+- Stage local Docker validation through one locked, verified context shared
+  across worktrees, preserving selected dirty bytes and avoiding host mounts.
 - Refresh development dependencies and use current stable uv in CI and Docker.
 - Adopt YAGA commit, workflow, repository, and source/test-change policies here.
 - Add a Zensical site, GitHub Pages deployment, documentation checks, and
   an issue-based roadmap.
+
+### Deferred beyond 0.3.0
+
+Adaptive UDP load selection, typed live events, and isolated execution remain
+open follow-ups. Their [design and observation evidence](design/advanced-execution.md)
+does not establish adaptive capacity discovery, supported event delivery, hard
+deadlines, cancellation of native calls, or concurrent native plans.
 
 ### Migration from 0.2.0
 
