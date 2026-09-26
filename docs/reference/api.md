@@ -266,3 +266,56 @@ Import these from `iperf3_lib.result`:
 All measurement fields default to `None`. Each object has `evidence_paths`, a
 mapping from present measurement names to raw or namespaced receipt pointers.
 Qualification, units and attribution limits are documented in the analysis guide.
+## Repeated trials and assessments
+
+Import from `iperf3_lib.trials`:
+
+```text
+TrialPolicy(repetitions=3, warmup_runs=0, pause_seconds=0, max_trials=1000, stop_on_error=False)
+PlanBudget(max_active_seconds, max_payload_bytes, stop_after_elapsed_seconds=None)
+TrialSpec(trial_id, cell_id, phase, repetition, config, rate_intent=None)
+prepare_trials(config, *, budget, policy=TrialPolicy(), rate_intent=None, cell_id="default")
+prepare_plan(trials, *, policy, budget, order_seed=None) -> PreparedPlan
+run_plan(plan, *, executor=None) -> PlanResult
+```
+
+`TrialSpec.resolved_config` exposes a detached native configuration. `PreparedPlan`
+retains declared order, policies, rate estimates and planned pauses. `TrialRecord`
+retains completed/failed/incomplete artifacts, exceptions, unstarted reasons and
+wrapper-observed timing. `PlanResult.execution_success` requires all planned runs
+to complete. Budgets are admission estimates; elapsed stops cannot cancel a call.
+
+Import from `iperf3_lib.assessments`:
+
+```text
+AssessmentPolicy(direction="client_to_server", observation="receiver",
+    minimum_valid_trials=3, minimum_valid_baselines=1,
+    minimum_throughput_bps=None, absolute_tolerance_bps=0, relative_tolerance=0)
+assess_plan(execution, *, policy, comparison, baselines=None) -> AssessmentReport
+ci_exit_code(report) -> int
+```
+
+`comparison` is the public analysis `ComparisonPolicy`. Assessment uses median
+summary bytes/time throughput, preserving compatibility evidence, excluded trials
+and retained baselines. Performance outcome is independent of execution success.
+
+Import from `iperf3_lib.reports`:
+
+```text
+report_to_dict(report) -> dict
+report_from_dict(mapping) -> AssessmentReport
+dumps_report(report, *, indent=None) -> str
+loads_report(text: str | bytes) -> AssessmentReport
+plan_result_to_dict(execution) -> dict
+plan_result_from_dict(mapping) -> PlanResult
+compatibility_to_dict(comparison, *, artifacts) -> dict
+compatibility_from_dict(mapping, *, artifacts) -> CompatibilityAnalysis
+render_text(report) -> str
+render_junit(report, *, inconclusive="failure") -> str
+```
+
+`ReportValidationError` identifies invalid canonical report fields with a JSON
+pointer. `UnsupportedReportVersionError` identifies unknown schema/algorithm
+versions. Report-v1 imports preserve archived analysis and validate frozen
+`median-summary-v1` arithmetic. See [repeated trials](../guides/trials.md) for
+baseline rules, finite budgets, report evolution, and CI status precedence.

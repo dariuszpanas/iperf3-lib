@@ -27,11 +27,11 @@ Documentation tracks the development branch. The following foundation is on
 | --- | --- | --- |
 | Configuration | Validated dataclasses, explicit rate intent and admission estimates, configuration provenance, and layered capability reports. | Qualify additional native options; retain application-owned profiles and defer asymmetric simultaneous budgets. |
 | Results | Directional and per-stream summaries, interval scope/bytes/duration/warm-up metadata, explicit missing values, and execution provenance. | Preserve this evidence contract as analysis and experiments expand. |
-| Serialization | Strict version-1 artifacts, portable loading, legacy snapshot conversion, and documented evolution rules. | Report contracts for multi-run experiments. |
+| Serialization | Strict version-1 result artifacts and assessment reports, portable loading, retained trial/baseline evidence, and documented evolution rules. | Additional experiment report envelopes. |
 | Metrics | Latest-run Prometheus gauges, omitted unavailable values, freshness fields, atomic replacement, and a local Grafana qualification fixture. | Repeat integration qualification for the final release candidate. |
 | Execution | Synchronous APIs and asynchronous convenience methods using executor threads. | Live events and isolated execution for stronger deadline, cancellation, or concurrency guarantees. |
 | Analysis | Measured throughput, interval stability, stream balance/scaling, directional comparisons, and retained transport/CPU evidence. | Repeat qualification for the final candidate and consume these functions in experiment reports. |
-| Plans | Applications can compose individual runs. | Selected for 0.3.0 and in progress: finite sequential trials, assessments, baselines, and bounded explicit sweeps. |
+| Plans | Finite sequential trials, retained baselines, median assessments, and versioned CI reports. | Selected for 0.3.0 and in progress: bounded explicit sweeps. |
 
 Result correctness is covered by captures from both reporting endpoints on
 the minimum and latest libiperf versions. Missing values remain distinct from
@@ -168,20 +168,25 @@ not establish the physical bottleneck.
 
 Tracking: [trial plans and assessment reports #32](https://github.com/dariuszpanas/iperf3-lib/issues/32).
 
-Selected for 0.3.0; implementation and qualification are in progress. A plan
-records repetitions, warm-up policy, pauses/cooldowns, budgets, and acceptance
-criteria. Keep every trial, including failures; retries must never conceal
-unreliable execution.
+Implemented [trial plans](guides/trials.md) record repetitions, separate warm-up
+runs, pauses, and finite admission budgets. Every trial remains visible, including
+failures, incomplete output, wrapper exceptions, and unstarted work. Execution
+is sequential with no hidden retries; admission estimates cannot bound or
+cancel an already running native call.
 
-Execution success and performance acceptance are separate outcomes.
-Insufficient evidence should be inconclusive. Baseline comparisons check
-protocol, direction/methodology, stream count, duration, and relevant
-configuration unless a deliberate difference is recorded.
 
-Reports should retain the individual artifacts and assessment method,
-with versioned machine-readable output and evaluated CI formats such as
-JUnit XML. Define how execution failure, performance rejection, and
-inconclusive evidence map to CI outcomes.
+Execution success and performance acceptance are separate outcomes. The
+assessment uses median summary bytes/time throughput, explicit minimum valid
+counts, and absolute or relative baseline thresholds. Insufficient or incompatible
+evidence is inconclusive. Baseline comparison checks actual verified settings;
+a deliberate difference requires a retained reason.
+
+Report v1 retains the plan, each artifact or exception, baseline artifacts,
+comparison fingerprints, exclusions, criteria, and the fixed assessment algorithm.
+Strict JSON import validates v1 evidence without invoking newer analysis rules.
+Text, JUnit, and a pure CI classifier preserve execution failure, performance
+rejection, and inconclusive outcomes. Full cell reports for bounded experiments
+build on this shared execution and serialization layer.
 
 ## 7. Bounded experiments
 

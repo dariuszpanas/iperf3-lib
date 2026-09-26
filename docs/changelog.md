@@ -6,6 +6,14 @@ These pages describe `main`. Released versions remain available through
 
 ## Unreleased
 
+- Add finite sequential trial plans with detached native settings, explicit
+  admission budgets, warm-up runs, between-run pauses, retained failures and
+  unstarted records, and no hidden retries.
+- Add median bytes/time assessments with minimum sample counts, retained
+  baselines, explicit compatibility policies and absolute/relative tolerance.
+  Separate performance acceptance from execution success and provide pure CI
+  classification plus strict report-v1 JSON, text and JUnit output.
+
 - Add explicit per-stream/aggregate-per-direction rate intent, exact SI unit
   parsing, native allocation provenance, and sequential admission estimates.
   Preserve the original request in an artifact extension and record the resolved
