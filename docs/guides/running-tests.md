@@ -1,6 +1,6 @@
 # Running clients and servers
 
-These examples target the development version described in
+These examples use the APIs available in 0.3.0. Follow
 [Getting started](../getting-started.md).
 
 ## Choose a protocol and direction

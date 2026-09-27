@@ -1,8 +1,7 @@
 # Rate intent, budgets, and capabilities
 
-!!! note "Unreleased API"
-    These APIs are being prepared for 0.3.0. Use a source installation until
-    that release is published.
+These APIs are available in 0.3.0. See [installation](../getting-started.md)
+for package setup.
 
 ## Choose what the rate means
 

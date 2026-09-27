@@ -1,8 +1,7 @@
 # Working with results
 
-!!! note "Unreleased result model"
-    The normalized dataclass result model is available on `main` after `0.2.0`.
-    See the [artifact guide](artifacts.md) for the versioned storage contract.
+The normalized dataclass result model was introduced in 0.3.0.
+See the [artifact guide](artifacts.md) for the versioned storage contract.
 
 `Result` contains parsed native JSON in `raw`, end-of-test summaries,
 normalized flows and intervals, and timing metadata. Normalization currently

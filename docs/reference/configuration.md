@@ -7,8 +7,8 @@ The [native option inventory](native-options.md) maps every supported-version
 CLI flag to a Python facility or an explicit application concern; the
 [control recipes](../guides/native-controls.md) show practical combinations.
 
-`ClientConfig` is a mutable standard-library dataclass on the development
-branch. Its constructor validates types, bounds, and option combinations.
+Since 0.3.0, `ClientConfig` is a mutable standard-library dataclass.
+Its constructor validates types, bounds, and option combinations.
 Pydantic APIs such as `model_validate()` and `model_dump()` are not provided.
 
 ```python

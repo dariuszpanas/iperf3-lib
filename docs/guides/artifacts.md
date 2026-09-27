@@ -1,11 +1,9 @@
 # Portable result artifacts
 
-!!! note "Unreleased artifact API"
-    This contract is being prepared for 0.3.0. Install from source until that
-    version is published. Artifact schema versions are independent of package
-    versions. Schema v1 has never been publicly released and remains amendable
-    before 0.3.0. Published schema contracts will require explicit versioning for
-    incompatible changes; unreleased development snapshots have no such guarantee.
+Artifact schema v1 was first published with iperf3-lib 0.3.0. Schema versions
+are independent of package versions. Incompatible changes to canonical fields,
+units or interpretation require a new schema version. Historical unreleased
+development snapshots are separate from this published contract.
 
 Use a versioned artifact when saving a benchmark for later analysis or sharing
 it with another application. `Result.to_dict()` remains an unversioned
@@ -148,10 +146,9 @@ Unknown diagnostic codes are retained as advisory information. Decoding and
 encoding preserve producer metadata, raw data, and extensions semantically;
 JSON whitespace and number spelling are not preserved byte for byte.
 
-Once released, changing canonical fields, units, or interpretation requires a
+Changing canonical fields, units, or interpretation requires a
 new schema version under this strict policy. Released schema readers remain
-supported; migrations are explicit and preserve evidence. The unreleased
-development contract may still change before 0.3.0.
+supported; migrations are explicit and preserve evidence.
 
 ## Migrating unversioned snapshots
 
@@ -168,9 +165,9 @@ in 0.2.0 and arbitrary third-party dictionaries are not silently treated as
 this development snapshot format.
 
 
-## TCP/CPU fields in the development v1 schema
+## TCP/CPU fields in schema v1
 
-The unreleased v1 contract includes optional TCP evidence on interval and stream
+The published v1 contract includes optional TCP evidence on interval and stream
 sender statistics, and an endpoint CPU collection on `Result`. The
 [analysis guide](analysis.md#tcp-and-endpoint-cpu-evidence) specifies units,
 qualification and attribution. Strict readers validate protocol/scope/endpoint

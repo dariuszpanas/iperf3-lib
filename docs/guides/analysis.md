@@ -1,6 +1,6 @@
 # Analyzing measurements
 
-The development `iperf3_lib.analysis` module provides standard-library calculations
+The `iperf3_lib.analysis` module provides standard-library calculations
 over canonical results. It does not run a test, load libiperf, export metrics, or
 reparse native JSON. Comparison checks resolve declared evidence pointers to
 confirm receipts exist; they do not infer values from native fields.

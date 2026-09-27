@@ -4,10 +4,16 @@ These pages describe `main`. Released versions remain available through
 [GitHub releases](https://github.com/dariuszpanas/iperf3-lib/releases) and
 [PyPI](https://pypi.org/project/iperf3-lib/).
 
-## 0.3.0 — Unreleased candidate
+## Unreleased
 
-The metadata identifies the intended 0.3.0 candidate. It has not been published;
-final qualification and an explicit publication decision remain required.
+- Simplify the public documentation and navigation; keep maintainer procedures
+  and detailed design notes in the repository.
+- Allow the Kubernetes/Grafana example to use the chosen kubeconfig context.
+
+## 0.3.0 — 2026-09-27
+
+Published on [PyPI](https://pypi.org/project/iperf3-lib/0.3.0/) and as
+[GitHub release v0.3.0](https://github.com/dariuszpanas/iperf3-lib/releases/tag/v0.3.0).
 
 ### Expanded native controls and worker execution
 
@@ -58,7 +64,7 @@ final qualification and an explicit publication decision remain required.
 - Add duration-weighted interval stability, measured bytes/time throughput,
   stream balance/scaling, explicit comparison policies and directional asymmetry.
 - Preserve qualified TCP seconds/bytes and endpoint process CPU evidence with
-  exact provenance; extend the unreleased artifact-v1 development schema.
+  exact provenance in the artifact-v1 format published with 0.3.0.
 - Keep omissions, coverage gaps, unqualified producers and insufficient data
   explicit. Analysis uses the standard library and does not execute benchmarks.
 

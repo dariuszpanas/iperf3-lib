@@ -1,9 +1,8 @@
 # Migrating from 0.2.0 to dataclasses
 
-!!! note "Preparing for 0.3.0"
-    These changes are on the development branch and remain unreleased.
-    Published 0.2.0 uses Pydantic. See [installation](../getting-started.md)
-    to try a reviewed source revision before upgrading an application.
+!!! note "Upgrading to 0.3.0"
+    These changes were released in 0.3.0. Version 0.2.0 uses Pydantic.
+    See [installation](../getting-started.md) to upgrade the package.
 
 The configuration and result models now use standard-library dataclasses.
 `Client`, `ClientConfig`, `Protocol`, `Result`, and `Server` retain their
@@ -17,7 +16,7 @@ benchmark execution.
 
 ## Replace model operations deliberately
 
-| 0.2.0 operation | Development replacement |
+| 0.2.0 operation | 0.3.0 replacement |
 | --- | --- |
 | `ClientConfig.model_validate(mapping)` | `ClientConfig(**mapping)` after application input parsing. |
 | `ClientConfig.model_validate_json(text)` | `ClientConfig(**json.loads(text))` for a configuration JSON object. |
