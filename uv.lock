@@ -545,7 +545,7 @@ dev = [
     { name = "pytest-cov", specifier = ">=7.1,<8" },
     { name = "readme-renderer", extras = ["md"], specifier = ">=44" },
     { name = "ruff", specifier = ">=0.15.22,<0.17" },
-    { name = "ty", specifier = "==0.0.83" },
+    { name = "ty", specifier = ">=0.0.83" },
     { name = "yaga-cli", specifier = ">=0.2,<0.3" },
     { name = "zensical", specifier = ">=0.0.20" },
 ]
