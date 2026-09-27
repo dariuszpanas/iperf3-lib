@@ -11,9 +11,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from iperf3_lib.config import ClientConfig
+from iperf3_lib.config import ClientConfig, config_from_dict
 from iperf3_lib.intent import RateIntent, resolve_rate
-from iperf3_lib.result import result_from_iperf_json
+from iperf3_lib.result import VerifiedSetting, result_from_iperf_json
 from scripts import smoke_release as smoke
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -62,6 +62,8 @@ def native_result(version="3.21", profile="tcp-forward", config=None, intent=Non
     result.execution.configuration.requested = smoke.config_dict(
         replace(config, rate=resolution.native_per_stream_bps)
     )
+    for name in result.execution.configuration.requested:
+        result.execution.configuration.effective.setdefault(name, VerifiedSetting())
     result.execution.python_version = "synthetic wrapper fixture"
     result.execution.platform = "synthetic installed environment"
     result.extensions["iperf3_lib.rate_intent"] = {
@@ -400,7 +402,7 @@ def test_valid_but_different_profile_cannot_relabel_bounded_smoke(installed_rece
     """A different valid configuration still fails this fixed qualification profile."""
     receipt, _, _ = installed_receipt
     case = receipt["cases"][0]
-    config = ClientConfig(**case["rate_intent"]["caller_config"])
+    config = config_from_dict(case["rate_intent"]["caller_config"])
     setattr(config, field, value)
     intent = RateIntent(aggregate_bps_per_direction=1_000_001)
     result, _ = native_result(config=config, intent=intent)

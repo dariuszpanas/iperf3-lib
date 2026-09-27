@@ -16,6 +16,7 @@ from importlib.metadata import version
 from typing import Any, Never
 
 from ._evidence import has_observed_evidence
+from .config import LEGACY_CONFIG_FIELDS, ClientConfig, config_from_dict
 from .result import (
     ConfigurationSnapshot,
     Diagnostic,
@@ -69,27 +70,11 @@ class ResultArtifact:
 
 
 _DIRECTIONS = ("client_to_server", "server_to_client", "unknown")
-_CONFIG_NAMES = frozenset(
-    {
-        "server",
-        "port",
-        "protocol",
-        "duration",
-        "parallel",
-        "omit",
-        "reverse",
-        "bidirectional",
-        "mptcp",
-        "blksize",
-        "rate",
-        "tos",
-        "json_stream",
-    }
-)
+_CONFIG_NAMES = frozenset(item.name for item in fields(ClientConfig))
 _NAMESPACE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9][A-Za-z0-9_-]*)+")
 _CONFIG_BOUNDS = {
     "port": (1, 65535),
-    "duration": (1, 86400),
+    "duration": (0, 86400),
     "parallel": (1, 128),
     "omit": (0, 600),
     "blksize": (1, 1024 * 1024),
@@ -442,7 +427,7 @@ def _validate_configuration(result: Result, execution: ExecutionMetadata) -> Non
     path = "/result/execution/configuration"
     if config.requested is not None:
         unknown = config.requested.keys() - _CONFIG_NAMES
-        missing = _CONFIG_NAMES - config.requested.keys()
+        missing = LEGACY_CONFIG_FIELDS - config.requested.keys()
         if unknown or missing:
             key = sorted(unknown or missing)[0]
             _fail(
@@ -451,7 +436,9 @@ def _validate_configuration(result: Result, execution: ExecutionMetadata) -> Non
             )
         for key, value in config.requested.items():
             setting_path = _child(f"{path}/requested", key)
-            if value is None and key in {"blksize", "rate", "tos"}:
+            if key not in LEGACY_CONFIG_FIELDS:
+                continue
+            if value is None and key in {"blksize", "rate", "tos", "duration"}:
                 continue
             if key == "server":
                 _convert("string", value, setting_path)
@@ -471,6 +458,10 @@ def _validate_configuration(result: Result, execution: ExecutionMetadata) -> Non
             block_count = _convert("count", block_size, f"{path}/requested/blksize")
             if not 16 <= block_count <= 65507:
                 _fail(f"{path}/requested/blksize", "UDP block size must be between 16 and 65507")
+        try:
+            config_from_dict(config.requested)
+        except (ValueError, TypeError) as exc:
+            _fail(f"{path}/requested", str(exc))
     for key, setting in config.effective.items():
         setting_path = _child(f"{path}/effective", key)
         if key not in _CONFIG_NAMES:
@@ -488,7 +479,9 @@ def _validate_configuration(result: Result, execution: ExecutionMetadata) -> Non
             _fail(f"{setting_path}/value", "verified settings must contain an observed value")
         if setting.state == "verified":
             spec = (
-                "string"
+                "json"
+                if key not in LEGACY_CONFIG_FIELDS
+                else "string"
                 if key == "server"
                 else _enum("tcp", "udp", "sctp")
                 if key == "protocol"
@@ -496,7 +489,10 @@ def _validate_configuration(result: Result, execution: ExecutionMetadata) -> Non
                 if key in {"reverse", "bidirectional", "mptcp", "json_stream"}
                 else "count"
             )
-            _convert(spec, setting.value, f"{setting_path}/value")
+            if spec == "json":
+                _extended_setting(key, setting.value, f"{setting_path}/value")
+            else:
+                _convert(spec, setting.value, f"{setting_path}/value")
             if not _has_observed_evidence(result, setting.evidence_paths):
                 _fail(
                     f"{setting_path}/evidence_paths",
@@ -505,13 +501,52 @@ def _validate_configuration(result: Result, execution: ExecutionMetadata) -> Non
         if (
             setting.state == "verified"
             and config.requested is not None
-            and config.requested[key] is not None
-            and setting.value != config.requested[key]
+            and config.requested.get(key) is not None
+            and setting.value != config.requested.get(key)
             and not _related_diagnostic(
                 result, setting_path.removeprefix("/result"), setting.evidence_paths
             )
         ):
             _fail(setting_path, "effective/requested disagreement requires a diagnostic")
+
+
+def _extended_setting(name: str, value: JSONValue, path: str) -> None:
+    """Validate observed setting types without imposing request-only bounds."""
+    if name in {
+        "no_delay",
+        "zerocopy",
+        "skip_rx_copy",
+        "udp_counters_64bit",
+        "dont_fragment",
+        "repeating_payload",
+        "get_server_output",
+        "gsro",
+        "use_pkcs1_padding",
+    }:
+        _convert("boolean", value, path)
+    elif name in {
+        "bind_address",
+        "bind_device",
+        "congestion_control",
+        "payload_file",
+        "title",
+        "extra_data",
+        "username",
+        "rsa_public_key_path",
+    }:
+        _convert("string", value, path)
+    elif name == "address_family":
+        _convert(_enum("auto", "ipv4", "ipv6"), value, path)
+    elif name == "interval_seconds":
+        _convert("number", value, path)
+    elif name == "sctp_bind_addresses":
+        _convert(_array("string"), value, path)
+    elif name == "control_keepalive":
+        items = _convert(_array("integer"), value, path)
+        if len(items) != 3:
+            _fail(path, "expected three keepalive values")
+    else:
+        _convert("integer", value, path)
 
 
 def _validate_result(result: Result) -> None:

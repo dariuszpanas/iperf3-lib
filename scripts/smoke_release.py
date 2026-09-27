@@ -127,7 +127,7 @@ def config_dict(config: ClientConfig) -> dict:
     data = asdict(config)
     data["server"] = str(config.server)
     data["protocol"] = config.protocol.value
-    return data
+    return json_value(data)
 
 
 def json_value(value):
@@ -1012,7 +1012,7 @@ def validate_smoke_receipt(receipt: dict) -> None:
     Historical receipt v1 remains retained evidence, not this expanded contract.
     """
     from iperf3_lib.artifacts import artifact_from_dict
-    from iperf3_lib.config import ClientConfig, Protocol
+    from iperf3_lib.config import ClientConfig, Protocol, config_from_dict
     from iperf3_lib.intent import RateIntent
 
     if (
@@ -1058,7 +1058,7 @@ def validate_smoke_receipt(receipt: dict) -> None:
         ):
             raise ValueError("retained profile result or native version differs from artifact")
         extension: Any = result.extensions["iperf3_lib.rate_intent"]
-        config = ClientConfig(**extension["caller_config"])
+        config = config_from_dict(extension["caller_config"])
         intent = RateIntent(**extension["intent"]) if extension["intent"] is not None else None
         protocol, parallel, reverse, bidirectional = profiles[case["profile"]]
         expected_config = ClientConfig(

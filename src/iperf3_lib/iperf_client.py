@@ -10,7 +10,8 @@ from collections.abc import Callable
 from dataclasses import asdict, replace
 from functools import partial
 
-from .config import ClientConfig, Protocol
+from .config import ClientConfig, Protocol, config_to_dict, requires_worker
+from .events import NativeEvent
 from .exceptions import IperfError, IperfLibraryError, UnsupportedFeatureError
 from .ffi.api import ffi, lib
 from .intent import RateIntent, resolve_rate
@@ -86,23 +87,39 @@ def _install_json_callback(t) -> tuple[list[str], object | None]:
 class Client:
     """Client for running iperf3 tests using the provided configuration."""
 
-    def __init__(self, cfg: ClientConfig, *, rate_intent: RateIntent | None = None):
+    def __init__(
+        self,
+        cfg: ClientConfig,
+        *,
+        rate_intent: RateIntent | None = None,
+        password: str | None = None,
+    ):
         """Initialize the client with a configuration object."""
         self.cfg = cfg
         self.rate_intent = rate_intent
+        if password is not None and (not isinstance(password, str) or "\x00" in password):
+            raise TypeError("password must be a NUL-free string or None")
+        self._password = password
 
-    def run(self) -> Result:
+    def run(
+        self,
+        *,
+        timeout: float | None = None,
+        on_event: Callable[[NativeEvent], None] | None = None,
+    ) -> Result:
         """Run the iperf3 test synchronously and return the result."""
         cfg = replace(self.cfg)
-        caller_config = asdict(cfg)
-        caller_config["server"] = str(cfg.server)
-        caller_config["protocol"] = cfg.protocol.value
+        if self._password is not None and cfg.username is None:
+            raise ValueError("password requires username and rsa_public_key_path")
+        caller_config = config_to_dict(cfg)
+        if on_event is not None:
+            if not callable(on_event):
+                raise TypeError("on_event must be callable")
+            cfg = replace(cfg, json_stream=True)
         admitted_intent = replace(self.rate_intent) if self.rate_intent is not None else None
         resolved = resolve_rate(cfg, admitted_intent)
         cfg = replace(cfg, rate=resolved.native_per_stream_bps)
-        requested = asdict(cfg)
-        requested["server"] = str(cfg.server)
-        requested["protocol"] = cfg.protocol.value
+        requested = config_to_dict(cfg)
         run_started_at = time.time()
         run_started_monotonic = time.monotonic()
 
@@ -119,6 +136,38 @@ class Client:
             metadata.timing.elapsed_seconds = elapsed
             metadata.timing.requested_duration_seconds = cfg.duration
             metadata.configuration.requested = requested
+            if (
+                cfg.username is not None
+                and not result.ok
+                and metadata.native_version in {"3.19.1", "iperf 3.19.1"}
+            ):
+                result.diagnostics.append(
+                    Diagnostic(
+                        "libiperf 3.19.1 with OpenSSL 3 can reject valid authentication credentials due to a native encryption bug; authentication is qualified with libiperf 3.21.",
+                        "warning",
+                        code="execution.native_authentication_compatibility",
+                    )
+                )
+            receipts = result.extensions.get("iperf3_lib.native_configuration", {})
+            if isinstance(receipts, dict):
+                for name, receipt in receipts.items():
+                    if (
+                        name in requested
+                        and isinstance(receipt, dict)
+                        and receipt.get("value") is not None
+                    ):
+                        existing = metadata.configuration.effective.get(name)
+                        conflict = any(
+                            diagnostic.code == "configuration.conflict"
+                            and diagnostic.path == f"/execution/configuration/effective/{name}"
+                            for diagnostic in result.diagnostics
+                        )
+                        if existing is None or (existing.state == "unavailable" and not conflict):
+                            metadata.configuration.effective[name] = VerifiedSetting(
+                                receipt["value"],
+                                "verified",
+                                [f"/extensions/iperf3_lib.native_configuration/{name}/value"],
+                            )
             result.extensions["iperf3_lib.rate_intent"] = {
                 "schema_version": 1,
                 "caller_config": caller_config,
@@ -151,15 +200,24 @@ class Client:
                     )
             return result
 
-        if cfg.mptcp:
-            raise UnsupportedFeatureError(
-                "MPTCP is unavailable through the direct libiperf ABI backend; "
-                "libiperf does not publish an MPTCP setter"
-            )
-        if cfg.json_stream:
-            raise UnsupportedFeatureError(
-                "Streaming JSON is unavailable through the direct libiperf ABI backend; "
-                "Client.run() requires one complete JSON result"
+        if requires_worker(cfg) or timeout is not None:
+            import os
+
+            from ._execution import run_worker
+
+            password = self._password
+            if cfg.username is not None and password is None:
+                password = os.environ.get("IPERF3_PASSWORD")
+            if cfg.username is not None and password is None:
+                raise ValueError("authenticated clients require password= or IPERF3_PASSWORD")
+            return finish(
+                run_worker(
+                    "client",
+                    requested,
+                    password=password,
+                    timeout=timeout,
+                    on_event=on_event,
+                )
             )
 
         t = lib.iperf_new_test()
@@ -170,6 +228,7 @@ class Client:
             lib.iperf_set_test_role(t, b"c")
             _set_str(lib.iperf_set_test_server_hostname, t, str(cfg.server))
             lib.iperf_set_test_server_port(t, int(cfg.port))
+            assert cfg.duration is not None
             lib.iperf_set_test_duration(t, int(cfg.duration))
 
             protocol_id = PROTOCOL_IDS[cfg.protocol]
@@ -260,9 +319,16 @@ class Client:
         finally:
             lib.iperf_free_test(t)
 
-    async def arun(self) -> Result:
+    async def arun(
+        self,
+        *,
+        timeout: float | None = None,
+        on_event: Callable[[NativeEvent], None] | None = None,
+    ) -> Result:
         """Run the iperf3 test asynchronously and return the result."""
         loop = asyncio.get_running_loop()
         # use functools.partial to provide a zero-arg callable so static analyzers
         # don't complain about unfilled *args parameter on run_in_executor
-        return await loop.run_in_executor(None, partial(self.run))
+        return await loop.run_in_executor(
+            None, partial(self.run, timeout=timeout, on_event=on_event)
+        )

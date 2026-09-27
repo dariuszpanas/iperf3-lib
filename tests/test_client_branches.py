@@ -7,7 +7,6 @@ from types import SimpleNamespace
 import pytest
 
 from iperf3_lib.config import Protocol
-from iperf3_lib.exceptions import UnsupportedFeatureError
 from iperf3_lib.result import Result
 
 
@@ -201,17 +200,33 @@ def test_client_bidirectional(monkeypatch):
 
 
 def test_client_mptcp(monkeypatch):
-    """Test that MPTCP is rejected by the direct ABI backend."""
+    """MPTCP is configured in an isolated native worker."""
+    import iperf3_lib._execution as execution
+
+    calls = []
+    monkeypatch.setattr(
+        execution,
+        "run_worker",
+        lambda role, options, **kwargs: calls.append(options) or Result(ok=True),
+    )
     r = RecorderLib()
-    with pytest.raises(UnsupportedFeatureError, match="direct libiperf ABI"):
-        _setup_and_run(monkeypatch, r, {"mptcp": True})
+    result, _ = _setup_and_run(monkeypatch, r, {"mptcp": True})
+    assert result.ok and calls[0]["mptcp"] is True
 
 
 def test_client_json_stream(monkeypatch):
-    """Test that streaming JSON is rejected by the direct ABI backend."""
+    """Streaming produces a completed result through the isolated worker."""
+    import iperf3_lib._execution as execution
+
+    calls = []
+    monkeypatch.setattr(
+        execution,
+        "run_worker",
+        lambda role, options, **kwargs: calls.append(options) or Result(ok=True),
+    )
     r = RecorderLib()
-    with pytest.raises(UnsupportedFeatureError, match="direct libiperf ABI"):
-        _setup_and_run(monkeypatch, r, {"json_stream": True})
+    result, _ = _setup_and_run(monkeypatch, r, {"json_stream": True})
+    assert result.ok and calls[0]["json_stream"] is True
 
 
 def test_client_setters(monkeypatch):
@@ -404,7 +419,7 @@ def test_client_revalidates_mutated_config_before_native_allocation(monkeypatch)
     from iperf3_lib.config import ClientConfig
 
     config = ClientConfig(server="127.0.0.1")
-    config.duration = 0
+    config.duration = -1
 
     class UnallocatedLib(RecorderLib):
         """Fail if native allocation occurs before configuration validation."""

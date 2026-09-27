@@ -184,6 +184,149 @@ _COMPARISON_FIELDS = frozenset(
     }
 )
 
+# Frozen additions to report-v1 compatibility. Do not derive these defaults
+# from the current ClientConfig: archived comparisons must not acquire new
+# requirements when a future release adds settings or changes defaults.
+_EXPANDED_DEFAULTS_V1: dict[str, object] = {
+    "mptcp": False,
+    "json_stream": False,
+    "bind_address": None,
+    "bind_device": None,
+    "client_port": None,
+    "address_family": "auto",
+    "socket_buffer_bytes": None,
+    "congestion_control": None,
+    "no_delay": False,
+    "mss": None,
+    "connect_timeout_ms": None,
+    "bytes_to_send": None,
+    "blocks_to_send": None,
+    "interval_seconds": None,
+    "pacing_timer_us": None,
+    "fq_rate_bps": None,
+    "burst_packets": None,
+    "zerocopy": False,
+    "skip_rx_copy": False,
+    "udp_counters_64bit": False,
+    "dont_fragment": False,
+    "flow_label": None,
+    "sctp_streams": None,
+    "sctp_bind_addresses": [],
+    "payload_file": None,
+    "repeating_payload": False,
+    "affinity": None,
+    "server_affinity": None,
+    "get_server_output": False,
+    "title": None,
+    "extra_data": None,
+    "receive_timeout_ms": None,
+    "send_timeout_ms": None,
+    "control_keepalive": None,
+    "gsro": False,
+    "username": None,
+    "rsa_public_key_path": None,
+    "use_pkcs1_padding": False,
+}
+
+
+def _expanded_comparison_fields_v1(
+    results: Sequence[Result], policy: ComparisonPolicy
+) -> frozenset[str]:
+    """Freeze requested or policy-selected advanced fields for every trial."""
+    names = (set(policy.varying_fields) | policy.allowed_differences.keys()) & (
+        _EXPANDED_DEFAULTS_V1.keys()
+    )
+    for result in results:
+        requested = result.execution.configuration.requested if result.execution else None
+        if requested is None:
+            continue
+        for name, default in _EXPANDED_DEFAULTS_V1.items():
+            if name in requested:
+                value = requested[name]
+                if type(value) is not type(default) or value != default:
+                    names.add(name)
+    return frozenset(names)
+
+
+def _expanded_effective_v1(result: Result, name: str) -> object:
+    """Read a typed advanced observation for both analysis and frozen v1 reports.
+
+    Requested values select comparison dimensions; they never establish actual
+    native settings. Missing observations remain unknown even if both requests
+    are identical. Bounds here describe native observations, including explicit
+    zero/default sentinels, rather than constructor admission rules.
+    """
+    setting = result.execution.configuration.effective.get(name) if result.execution else None
+    if setting is None:
+        return None
+    if setting.state not in {"verified", "unavailable", "unsupported"}:
+        raise ValueError("unknown effective-setting state")
+    if setting.state != "verified" or not has_observed_evidence(result, setting.evidence_paths):
+        return None
+    value = setting.value
+    if value is None:
+        return None
+    if type(_EXPANDED_DEFAULTS_V1[name]) is bool:
+        if type(value) is not bool:
+            raise ValueError(f"effective {name} must be a boolean")
+    elif name in {
+        "bind_address",
+        "bind_device",
+        "congestion_control",
+        "payload_file",
+        "title",
+        "extra_data",
+        "username",
+        "rsa_public_key_path",
+    }:
+        if not isinstance(value, str) or not value.strip() or "\0" in value:
+            raise ValueError(f"effective {name} must be a nonempty NUL-free string")
+    elif name == "address_family":
+        if value not in ("auto", "ipv4", "ipv6"):
+            raise ValueError("effective address_family must be auto, ipv4, or ipv6")
+    elif name == "interval_seconds":
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not (value == 0 or 0.1 <= value <= 60)
+        ):
+            raise ValueError("effective interval_seconds must be zero or between 0.1 and 60")
+    elif name == "sctp_bind_addresses":
+        if not isinstance(value, list) or not all(
+            isinstance(item, str) and item.strip() and "\0" not in item for item in value
+        ):
+            raise ValueError("effective sctp_bind_addresses must be an array of address strings")
+        value = list(value)
+    elif name == "control_keepalive":
+        if (
+            not isinstance(value, list)
+            or len(value) != 3
+            or not all(type(item) is int and 0 <= item <= 2**31 - 1 for item in value)
+        ):
+            raise ValueError("effective control_keepalive must contain three nonnegative integers")
+        value = list(value)
+    else:
+        minimum, maximum = {
+            "client_port": (0, 65535),
+            "socket_buffer_bytes": (0, 2**31 - 1),
+            "mss": (0, 65535),
+            "connect_timeout_ms": (-1, 2**31 - 1),
+            "bytes_to_send": (0, 2**64 - 1),
+            "blocks_to_send": (0, 2**64 - 1),
+            "pacing_timer_us": (0, 2**31 - 1),
+            "fq_rate_bps": (0, 2**64 - 1),
+            "burst_packets": (0, 1000),
+            "flow_label": (0, 0xFFFFF),
+            "sctp_streams": (0, 65535),
+            "affinity": (-1, 1024),
+            "server_affinity": (-1, 1024),
+            "receive_timeout_ms": (0, 86400000),
+            "send_timeout_ms": (0, 86400000),
+        }[name]
+        if type(value) is not int or not minimum <= value <= maximum:
+            raise ValueError(f"effective {name} must be an integer between {minimum} and {maximum}")
+    return value
+
 
 @dataclass(frozen=True)
 class ComparisonPolicy:
@@ -210,10 +353,9 @@ class ComparisonPolicy:
             raise ValueError("varying_fields must be a tuple of distinct field names")
         if type(self.allowed_differences) is not dict:
             raise ValueError("allowed_differences must be a mapping of field names to reasons")
-        if (
-            set(self.varying_fields) - _COMPARISON_FIELDS
-            or self.allowed_differences.keys() - _COMPARISON_FIELDS
-        ):
+        if set(self.varying_fields) - (
+            _COMPARISON_FIELDS | _EXPANDED_DEFAULTS_V1.keys()
+        ) or self.allowed_differences.keys() - (_COMPARISON_FIELDS | _EXPANDED_DEFAULTS_V1.keys()):
             raise ValueError("unknown comparison field")
         if not all(
             isinstance(reason, str) and reason.strip()
@@ -983,7 +1125,7 @@ def stream_balance(
     )
 
 
-def _fingerprint(result: Result) -> dict[str, object]:
+def _fingerprint(result: Result, expanded: frozenset[str] = frozenset()) -> dict[str, object]:
     metadata = result.execution
     if result.protocol not in ("tcp", "udp", "sctp", None):
         raise ValueError("unknown protocol")
@@ -1003,6 +1145,8 @@ def _fingerprint(result: Result) -> dict[str, object]:
     }
     for name in ("server", "port", "duration", "omit", "parallel", "rate", "blksize", "tos"):
         fingerprint[name] = _effective(result, name)
+    for name in sorted(expanded):
+        fingerprint[name] = _expanded_effective_v1(result, name)
     return fingerprint
 
 
@@ -1058,12 +1202,16 @@ def check_compatibility(
     differ only when each verified rate matches the declared allocation. Scaling adds ``parallel`` to its varying fields; sequential asymmetry
     adds ``method``. Caller group and endpoint labels never establish compatibility
     on their own. Execution success and throughput quality are separate checks.
+    Nondefault advanced requests and policy-named advanced fields are compared
+    for every trial using observed native settings. Missing receipts are never
+    replaced with a requested value or an assumed protocol default.
     """
     if not isinstance(policy, ComparisonPolicy):
         raise ValueError("policy must be a ComparisonPolicy")
     policy.__post_init__()
     _trial_ids(trials)
-    fingerprints = {trial.trial_id: _fingerprint(trial.result) for trial in trials}
+    expanded = _expanded_comparison_fields_v1([trial.result for trial in trials], policy)
+    fingerprints = {trial.trial_id: _fingerprint(trial.result, expanded) for trial in trials}
     diagnostics: list[AnalysisDiagnostic] = []
     incompatible = not trials
     varying = set(policy.varying_fields)
@@ -1102,15 +1250,18 @@ def check_compatibility(
             varying.add("rate")
     if not trials:
         diagnostics.append(_diagnostic("comparison.empty", "No trial evidence was supplied."))
-    for name in sorted(_COMPARISON_FIELDS):
+    for name in sorted(_COMPARISON_FIELDS | expanded):
         values = [fingerprint[name] for fingerprint in fingerprints.values()]
-        missing = any(value is None or value == "unknown" for value in values)
+        missing = any(
+            value is None or (name not in expanded and value == "unknown") for value in values
+        )
         differs = bool(values) and any(value != values[0] for value in values[1:])
         if missing or (differs and name not in varying):
             path = (
                 f"/execution/configuration/effective/{name}"
                 if name
                 in {"server", "port", "duration", "omit", "parallel", "rate", "blksize", "tos"}
+                | expanded
                 else "/extensions/iperf3_lib.rate_intent"
                 if name == "rate_intent"
                 else "/protocol"

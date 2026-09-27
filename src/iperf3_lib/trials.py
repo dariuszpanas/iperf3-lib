@@ -10,7 +10,6 @@ from typing import Literal
 
 from .artifacts import ResultArtifact, artifact_from_result
 from .config import ClientConfig
-from .exceptions import UnsupportedFeatureError
 from .intent import PlanEstimate, RateIntent, estimate_plan, resolve_rate
 from .result import JSONValue, Result
 
@@ -161,8 +160,8 @@ def _copy_spec(spec: TrialSpec) -> TrialSpec:
     if not isinstance(spec.config, ClientConfig):
         raise ValueError("trial config must be a ClientConfig")
     config = replace(spec.config)
-    if config.mptcp or config.json_stream:
-        raise UnsupportedFeatureError("trial plans cannot use unsupported mptcp or json_stream")
+    if config.duration == 0:
+        raise ValueError("finite trial plans cannot use an unlimited duration")
     if spec.rate_intent is not None and not isinstance(spec.rate_intent, RateIntent):
         raise ValueError("trial rate_intent must be a RateIntent or None")
     intent = replace(spec.rate_intent) if spec.rate_intent is not None else None

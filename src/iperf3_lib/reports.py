@@ -17,6 +17,8 @@ from .analysis import (
     CompatibilityAnalysis,
     EvidenceRef,
     ThroughputAnalysis,
+    _expanded_comparison_fields_v1,
+    _expanded_effective_v1,
 )
 from .artifacts import ResultArtifact, artifact_from_dict, artifact_to_dict, dumps_artifact
 from .assessments import (
@@ -29,7 +31,7 @@ from .assessments import (
     _decision_v1,
     ci_exit_code,
 )
-from .config import ClientConfig, Protocol
+from .config import LEGACY_CONFIG_FIELDS, ClientConfig, Protocol
 from .intent import PlanEstimate, RateIntent, ResolvedRate, RunEstimate
 from .result import JSONValue
 from .trials import (
@@ -194,6 +196,14 @@ def _model(model, value, path, *, encoding=False):
             data["server"] = str(data["server"])
     else:
         data = _object(value, path)
+        if model is ClientConfig and LEGACY_CONFIG_FIELDS <= set(data):
+            # Earlier development artifacts retain their original field set.
+            # New options are additive with the documented dataclass defaults.
+            data = dict(data)
+            for field in fields:
+                if field.name not in data:
+                    default = field.default
+                    data[field.name] = list(default) if isinstance(default, tuple) else default
         expected = {field.name for field in fields} | extras
         if set(data) != expected:
             _fail(
@@ -214,6 +224,13 @@ def _model(model, value, path, *, encoding=False):
         for field in fields
     }
     if encoding:
+        if model is ClientConfig:
+            for field in fields:
+                if (
+                    field.name not in LEGACY_CONFIG_FIELDS
+                    and getattr(value, field.name) == field.default
+                ):
+                    values.pop(field.name)
         if model is TrialSpec:
             values["resolved_config"] = _convert(
                 ClientConfig, value.resolved_config, _child(path, "resolved_config"), encoding=True
@@ -437,7 +454,7 @@ def _validate_measurement_v1(measurement, artifact, policy, path):
         _fail(path, "summary measurement evidence pointers disagree with v1 selection")
 
 
-def _fingerprint_v1(result):
+def _fingerprint_v1(result, expanded=frozenset()):
     """Freeze the report-v1 projection of already canonical provenance and receipts."""
     metadata = result.execution
     if metadata is not None:
@@ -511,14 +528,19 @@ def _fingerprint_v1(result):
                     "/assessment/compatibility",
                     f"verified {name} must be an integer between {minimum} and {maximum}",
                 )
+    for name in sorted(expanded):
+        fingerprint[name] = _expanded_effective_v1(result, name)
     return fingerprint
 
 
 def _validate_compatibility_v1(compatibility, selected):
     """Validate frozen v1 compatibility conclusions without invoking current analysis."""
     try:
+        expanded = _expanded_comparison_fields_v1(
+            [artifact.result for artifact in selected.values()], compatibility.policy
+        )
         fingerprints = {
-            identifier: _fingerprint_v1(artifact.result)
+            identifier: _fingerprint_v1(artifact.result, expanded)
             for identifier, artifact in selected.items()
         }
     except (ValueError, TypeError) as exc:
@@ -551,7 +573,9 @@ def _validate_compatibility_v1(compatibility, selected):
     fields = next(iter(fingerprints.values()), {})
     for name in fields:
         values = [item[name] for item in fingerprints.values()]
-        missing = any(value is None or value == "unknown" for value in values)
+        missing = any(
+            value is None or (name not in expanded and value == "unknown") for value in values
+        )
         differs = any(value != values[0] for value in values[1:])
         if missing:
             compatible = False

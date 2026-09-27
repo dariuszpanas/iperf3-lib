@@ -11,7 +11,7 @@ from typing import Any, Literal, Never
 
 from .analysis import ComparisonPolicy
 from .artifacts import ArtifactProducer
-from .config import ClientConfig
+from .config import LEGACY_CONFIG_FIELDS, ClientConfig, config_from_dict, config_to_dict
 from .intent import RateIntent
 from .reports import (
     ReportValidationError,
@@ -113,12 +113,16 @@ def _json_copy(value):
 
 
 def _config_from_dict(data, path):
-    data = _object(data, path, {item.name for item in fields(ClientConfig)})
+    data = _object(data, path)
+    if not LEGACY_CONFIG_FIELDS <= data.keys() or data.keys() - {
+        item.name for item in fields(ClientConfig)
+    }:
+        _fail(path, "configuration contains missing or unknown fields")
     _string(data["server"], f"{path}/server")
     if type(data["protocol"]) is not str:
         _fail(f"{path}/protocol", "expected a protocol string")
     try:
-        return ClientConfig(**data)
+        return config_from_dict(data)
     except (ValueError, TypeError) as exc:
         _fail(path, str(exc))
 
@@ -149,9 +153,16 @@ def _policy_from_dict(data):
 
 def _prepared_metadata(prepared):
     return {
-        "base_config": asdict(prepared.base_config),
+        "base_config": config_to_dict(prepared.base_config, compact=True),
         "axes": [asdict(axis) for axis in prepared.axes],
-        "cells": [asdict(cell) for cell in prepared.cells],
+        "cells": [
+            {
+                **asdict(cell),
+                "config": config_to_dict(cell.config, compact=True),
+                "resolved_config": config_to_dict(cell.resolved_config, compact=True),
+            }
+            for cell in prepared.cells
+        ],
         "rate_intent": asdict(prepared.rate_intent) if prepared.rate_intent is not None else None,
         "order": prepared.order,
         "seed": prepared.seed,

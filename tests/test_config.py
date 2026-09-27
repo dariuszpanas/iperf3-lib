@@ -27,7 +27,7 @@ def test_config_validation():
     [
         {"port": 0},
         {"port": 65536},
-        {"duration": 0},
+        {"duration": -1},
         {"duration": 86401},
         {"parallel": 0},
         {"parallel": 129},
@@ -48,7 +48,7 @@ def test_config_rejects_invalid_limits_and_combinations(kwargs):
 
 
 def test_compatibility_fields_remain_configurable():
-    """Retain legacy fields even though the direct backend rejects them at run time."""
+    """Retain the public flags now implemented by isolated native execution."""
     cfg = ClientConfig(server="127.0.0.1", mptcp=True, json_stream=True)
 
     assert cfg.mptcp is True
