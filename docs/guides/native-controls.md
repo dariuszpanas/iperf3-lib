@@ -5,11 +5,6 @@ execution arguments for worker lifetime and event delivery. The
 [complete native option inventory](../reference/native-options.md) accounts for
 both supported libiperf versions, including aliases and CLI-only facilities.
 
-These additions are being developed under
-[#53](https://github.com/dariuszpanas/iperf3-lib/issues/53). Install a reviewed
-source revision that contains them. Qualification of the earlier release
-candidate does not establish coverage for newly added controls.
-
 The repository includes a runnable
 [native-controls example](https://github.com/dariuszpanas/iperf3-lib/blob/main/examples/native_controls.py)
 with explicit destination, local binding, aggregate rate, optional event notices,

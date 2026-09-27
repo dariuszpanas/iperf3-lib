@@ -11,9 +11,11 @@ use_directory_urls = false
 extra_css = ["stylesheets/extra.css"]
 nav = [
   { "Home" = "index.md" },
-  { "Start here" = [
+  { "Get started" = [
     { "Installation and first run" = "getting-started.md" },
     { "Migrating from 0.2.0" = "guides/migration-0.3.md" },
+  ] },
+  { "Guides" = [
     { "Running clients and servers" = "guides/running-tests.md" },
     { "Native controls and execution" = "guides/native-controls.md" },
     { "Rate intent and capabilities" = "guides/configuration-intent.md" },
@@ -23,7 +25,7 @@ nav = [
     { "Repeated trials and assessments" = "guides/trials.md" },
     { "Bounded parameter sweeps" = "guides/sweeps.md" },
     { "Prometheus output" = "guides/prometheus.md" },
-    { "Local Grafana validation" = "guides/grafana.md" },
+    { "Grafana integration" = "guides/grafana.md" },
   ] },
   { "Reference" = [
     { "Configuration" = "reference/configuration.md" },
@@ -31,13 +33,8 @@ nav = [
     { "Python API" = "reference/api.md" },
     { "Compatibility and limitations" = "reference/compatibility.md" },
   ] },
-  { "Project" = [
-    { "Roadmap and issues" = "roadmap.md" },
-    { "Advanced execution design" = "design/advanced-execution.md" },
-    { "Native event observations" = "design/native-event-observations.md" },
+  { "About" = [
     { "Contributing" = "contributing.md" },
-    { "Documentation maintenance" = "documentation.md" },
-    { "Releasing" = "releasing.md" },
     { "Security" = "security.md" },
     { "Changelog" = "changelog.md" },
   ] },

@@ -1,18 +1,163 @@
 """Check that the live-stack verifier compares native measurements and rejects bad evidence."""
 
 import copy
+import io
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
 
+from examples.observability import verify
 from examples.observability.verify import (
+    NAMESPACE,
     PROFILES,
     check_vector,
     expected_metrics,
     grafana_vector,
+    read_receipt,
+    resolve_context,
     series_key,
 )
+
+
+def test_explicit_context_does_not_read_or_change_kubeconfig(monkeypatch) -> None:
+    """An explicit target bypasses current-context lookup without changing kubeconfig."""
+
+    def unexpected(*args, **kwargs):
+        raise AssertionError("explicit context must not invoke kubectl config")
+
+    monkeypatch.setattr(verify.subprocess, "run", unexpected)
+    assert resolve_context("work-cluster") == "work-cluster"
+
+
+@pytest.mark.parametrize("value", ["", " ", "\n"])
+def test_empty_explicit_context_is_rejected(value: str) -> None:
+    """Empty overrides cannot silently fall back to a different cluster."""
+    with pytest.raises(ValueError, match="no Kubernetes context"):
+        resolve_context(value)
+
+
+@pytest.mark.parametrize("selected", ["kind-observability\n", "colima\r\n", ""])
+def test_current_context_lookup_is_bounded_and_requires_a_selection(monkeypatch, selected) -> None:
+    """Resolve local kubeconfig once and reject an unset current context."""
+
+    def run(command, **kwargs):
+        assert command == ["kubectl", "config", "current-context"]
+        assert kwargs == {"check": True, "capture_output": True, "text": True, "timeout": 10}
+        return subprocess.CompletedProcess(command, 0, stdout=selected)
+
+    monkeypatch.setattr(verify.subprocess, "run", run)
+    if selected:
+        assert resolve_context(None) == selected.strip()
+    else:
+        with pytest.raises(ValueError, match="no Kubernetes context"):
+            resolve_context(None)
+
+
+def test_failed_current_context_lookup_does_not_fall_back(monkeypatch) -> None:
+    """A kubeconfig error prevents receipt reads against an implicit target."""
+
+    def run(command, **kwargs):
+        raise subprocess.CalledProcessError(1, command)
+
+    monkeypatch.setattr(verify.subprocess, "run", run)
+    with pytest.raises(subprocess.CalledProcessError):
+        resolve_context(None)
+
+
+@pytest.mark.parametrize("context", ["kind-observability", "colima", "work-cluster"])
+def test_receipt_read_uses_selected_context_and_dedicated_namespace(monkeypatch, context) -> None:
+    """Each kubectl read names both the cluster context and the example namespace."""
+
+    def run(command, **kwargs):
+        assert command == [
+            "kubectl",
+            "--context",
+            context,
+            "-n",
+            NAMESPACE,
+            "exec",
+            "deployment/benchmark",
+            "-c",
+            "benchmark",
+            "--",
+            "cat",
+            "/metrics/evidence/failure-run.json",
+        ]
+        assert kwargs == {"check": True, "capture_output": True, "text": True, "timeout": 30}
+        return subprocess.CompletedProcess(command, 0, stdout='{"result": {"ok": false}}')
+
+    monkeypatch.setattr(verify.subprocess, "run", run)
+    assert read_receipt("failure", context=context) == {"result": {"ok": False}}
+
+
+@pytest.mark.parametrize("explicit", [False, True])
+def test_verifier_retains_one_context_for_all_reads_and_output(
+    monkeypatch, tmp_path, capsys, explicit
+) -> None:
+    """Changing ambient kubeconfig cannot redirect later receipt reads within a run."""
+    receipts = _receipts()
+    receipts["transition"]["result"]["ok"] = True
+    failure = copy.deepcopy(receipts["transition"])
+    failure["result"].update(ok=False, completed_at_seconds=120)
+    failure["last_success_timestamp_seconds"] = 110
+    current_receipts = receipts | {"transition": failure}
+    expected = expected_metrics(current_receipts)
+    vector = [
+        {"metric": dict(labels) | {"__name__": name}, "value": [125, value]}
+        for (name, labels), value in expected.items()
+    ]
+    lookup_count = 0
+    reads = []
+
+    def run(command, **kwargs):
+        nonlocal lookup_count
+        if command == ["kubectl", "config", "current-context"]:
+            lookup_count += 1
+            return subprocess.CompletedProcess(command, 0, stdout="work-cluster\n")
+        assert command[:5] == ["kubectl", "--context", "work-cluster", "-n", NAMESPACE]
+        scenario = Path(command[-1]).name.removesuffix("-run.json")
+        reads.append(scenario)
+        payload = failure if scenario == "failure" else receipts[scenario]
+        return subprocess.CompletedProcess(command, 0, stdout=json.dumps(payload))
+
+    def query(_url, expression):
+        if expression == verify.QUERY:
+            return vector
+        if expression.startswith("up{"):
+            return [{"value": [125, 1]}]
+        return [{"value": [125, 1]} for _ in PROFILES]
+
+    output = tmp_path / "receipt.json"
+    argv = ["verify.py", "--output", str(output)]
+    if explicit:
+        argv += ["--context", "work-cluster"]
+    monkeypatch.setattr("sys.argv", argv)
+    monkeypatch.setattr(verify.subprocess, "run", run)
+    monkeypatch.setattr(verify.time, "time", lambda: 125)
+    monkeypatch.setattr(verify, "query", query)
+    monkeypatch.setattr(verify, "query_grafana", lambda _url: vector)
+    monkeypatch.setattr(
+        verify, "urlopen", lambda *a, **kw: io.BytesIO(b"node_textfile_scrape_error 0\n")
+    )
+    monkeypatch.setattr(
+        verify,
+        "fetch_json",
+        lambda _url: {
+            "dashboard": {"uid": "iperf3-lib-observability"},
+            "meta": {"url": "/d/iperf3-lib-observability"},
+        },
+    )
+
+    assert verify.main() == 0
+    assert lookup_count == (0 if explicit else 1)
+    assert reads == [*PROFILES, "failure"]
+    assert json.loads(output.read_text())["kubernetes"] == {
+        "context": "work-cluster",
+        "namespace": NAMESPACE,
+    }
+    assert "context 'work-cluster'" in capsys.readouterr().out
 
 
 def _receipts() -> dict:
@@ -163,3 +308,16 @@ def test_dashboard_current_values_use_instant_queries() -> None:
         if panel["title"] == "UDP packet loss ratio":
             assert panel["fieldConfig"]["defaults"]["unit"] == "percentunit"
             assert panel["fieldConfig"]["defaults"]["max"] == 1
+
+
+def test_example_deployments_select_linux_nodes() -> None:
+    """Keep Linux-only images off Windows nodes in mixed Kubernetes clusters."""
+    root = Path(__file__).resolve().parents[1] / "examples/observability"
+    documents = (root / "stack.yaml").read_text(encoding="utf-8").split("\n---\n")
+    deployments = [doc for doc in documents if "\nkind: Deployment\n" in doc]
+    assert len(deployments) == 3
+    for deployment in deployments:
+        assert "\n      nodeSelector:\n        kubernetes.io/os: linux\n" in deployment
+    namespace = (root / "namespace.yaml").read_text(encoding="utf-8")
+    assert "pod-security.kubernetes.io/enforce: restricted\n" in namespace
+    assert "pod-security.kubernetes.io/enforce-version: latest\n" in namespace

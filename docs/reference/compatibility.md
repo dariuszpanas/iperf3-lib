@@ -60,29 +60,25 @@ An iperf3 command-line option is not automatically a Python API option. The
 native-version/platform constraints, and CLI presentation/process concerns.
 The [configuration reference](configuration.md) defines accepted fields.
 [Capability reports](../guides/configuration-intent.md) distinguish wrapper,
-native, and qualification evidence. The development additions in
-[#53](https://github.com/dariuszpanas/iperf3-lib/issues/53) require their own
-qualification; earlier release-candidate checks do not qualify later changes.
+native, and tested behavior.
 Native 3.21 adds GSRO and server maximum-duration controls absent from 3.19.1.
 
 ## Authentication compatibility
 
-Authentication has been qualified with libiperf 3.21 and OpenSSL 3.5.7. A
-bounded upstream CLI-to-CLI check authenticated and transferred 131,072 bytes.
-The same credentials, keys and OpenSSL version failed with libiperf 3.19.1:
-the client reported authentication failure and OpenSSL reported
-`output buffer too small`. This reproduced without the Python wrapper.
+Use libiperf 3.21 for authenticated benchmarks. The tested 3.19.1/OpenSSL 3.5.7
+combination rejects valid credentials with an authentication failure and
+`output buffer too small`. The failure also occurs with the upstream CLI.
 
 The [3.19.1 authentication implementation](https://github.com/esnet/iperf/blob/3.19.1/src/iperf_auth.c)
 passes a zero output length to OpenSSL's encryption call; the
 [3.21 implementation](https://github.com/esnet/iperf/blob/3.21/src/iperf_auth.c)
 initializes that length to the allocated buffer size. Treat authenticated
-operation with the tested 3.19.1/OpenSSL 3 build as a known native limitation,
-even when credentials are valid. Other native builds may differ.
+operation with that 3.19.1/OpenSSL build as a known native limitation.
+Other native builds may differ.
 
 The wrapper preserves native authentication access and a failed `Result`;
 it does not reject every 3.19.1 build or replace the native cryptographic
-implementation. For authenticated benchmarks, use the qualified 3.21 build.
+implementation.
 Client `use_pkcs1_padding=True` is rejected with 3.21 because that native flag
 is server-only; leave it at its default for a 3.21 client.
 

@@ -276,5 +276,4 @@ continue doing so. `Server(port=..., bind_host=...)` remains available; use
 validated explicitly instead of silently ignoring falsey invalid values.
 `serve_forever()` delivers sequential attempt results to `on_result`, with an
 optional whole-session timeout. See [running servers](running-tests.md#use-the-python-server-wrapper)
-for failure and stop behavior, and the [advanced design](../design/advanced-execution.md)
-for broader qualification criteria.
+for failure and stop behavior.

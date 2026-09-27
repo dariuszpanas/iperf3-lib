@@ -21,9 +21,9 @@ issues should also be reported to [ESnet](https://github.com/esnet/iperf/securit
 
 Benchmarks generate network traffic. Applications choose the target, duration,
 protocol, and stream count; the wrapper does not authorize targets or provide
-plan-wide traffic budgets. Native output can contain host addresses and test
+enforced network traffic limits. Native output can contain host addresses and test
 metadata. Review what you retain or publish in metrics and reports.
 
-Serialize native operations within one process. The async helpers do not add
-cancellation or concurrency isolation; these are explicit items in the
-[roadmap](roadmap.md).
+Serialize basic direct native calls within one process. Expanded controls and
+explicit timeouts use isolated workers; cancelling an async await alone does
+not stop its operation. See [execution limits](reference/compatibility.md#feature-boundaries).

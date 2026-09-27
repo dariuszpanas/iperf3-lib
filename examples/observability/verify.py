@@ -13,6 +13,7 @@ from urllib.request import Request, urlopen
 
 PROFILES = ("tcp-forward", "tcp-reverse", "tcp-bidirectional", "udp", "transition")
 QUERY = '{__name__=~"iperf3_.*"}'
+NAMESPACE = "iperf3-lib-observability"
 
 
 def fetch_json(url: str) -> dict:
@@ -168,15 +169,31 @@ def check_vector(expected: dict[tuple, float], vector: list[dict]) -> None:
             )
 
 
-def read_receipt(scenario: str) -> dict:
-    """Read evidence only from this example's dedicated Docker Desktop namespace."""
+def resolve_context(context: str | None) -> str:
+    """Select one kubeconfig context for every receipt read in this invocation."""
+    if context is None:
+        result = subprocess.run(
+            ["kubectl", "config", "current-context"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        context = result.stdout.strip()
+    if not context.strip():
+        raise ValueError("no Kubernetes context selected; pass --context NAME")
+    return context
+
+
+def read_receipt(scenario: str, *, context: str) -> dict:
+    """Read evidence from the selected context and this example's dedicated namespace."""
     result = subprocess.run(
         [
             "kubectl",
             "--context",
-            "docker-desktop",
+            context,
             "-n",
-            "iperf3-lib-observability",
+            NAMESPACE,
             "exec",
             "deployment/benchmark",
             "-c",
@@ -196,14 +213,17 @@ def read_receipt(scenario: str) -> dict:
 def main() -> int:
     """Check the native receipts, current API vectors, freshness, and dashboard provisioning."""
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--context", help="kubeconfig context (default: current context)")
     parser.add_argument("--prometheus-url", default="http://127.0.0.1:19090")
     parser.add_argument("--grafana-url", default="http://127.0.0.1:13000")
     parser.add_argument("--node-exporter-url", default="http://127.0.0.1:19100")
     parser.add_argument("--max-run-age", type=float, default=900)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
-    receipts = {profile: read_receipt(profile) for profile in PROFILES}
-    failure = read_receipt("failure")
+    context = resolve_context(args.context)
+    print(f"Reading benchmark evidence from context {context!r}, namespace {NAMESPACE!r}.")
+    receipts = {profile: read_receipt(profile, context=context) for profile in PROFILES}
+    failure = read_receipt("failure", context=context)
     successful_transition = receipts["transition"]
     if not successful_transition["result"]["ok"] or failure["result"]["ok"]:
         raise ValueError("transition must contain a real successful run followed by a failed run")
@@ -246,6 +266,7 @@ def main() -> int:
     if dashboard.get("dashboard", {}).get("uid") != "iperf3-lib-observability":
         raise ValueError("Grafana did not provision the expected dashboard")
     report = {
+        "kubernetes": {"context": context, "namespace": NAMESPACE},
         "verified_at_seconds": now,
         "sample_count": len(expected),
         "profiles": list(PROFILES),

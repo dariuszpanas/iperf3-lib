@@ -38,9 +38,8 @@ To select a persistent location for this repository and its worktrees:
 git config --local iperf3-lib.dockerStagingRoot /absolute/path/to/docker-validation
 ```
 
-For example, a Windows checkout at `D:\Repos\iperf3-lib` can use
-`D:/Repos/iperf3-lib/.vault/docker-validation`. The directory must be dedicated
-to this helper and initially empty. A location within a checkout must be ignored
+The directory must be dedicated to this helper and initially empty.
+A location within a checkout must be ignored
 by Git. `--staging-root` overrides `IPERF3_DOCKER_STAGING_ROOT`, which overrides
 the shared repository setting and then the user-cache default.
 
@@ -67,7 +66,7 @@ uv run --frozen python scripts/docker_validate.py build --dockerfile examples/ob
 
 These commands build and run without host bind mounts. For manual `docker cp`
 validation, first copy inputs and collect outputs under the same chosen staging
-root so Docker Desktop sees stable host paths. Hosted Linux workflows continue
+root so the container runtime sees stable host paths. Hosted Linux workflows continue
 using their checked-out build contexts. YAGA uses named Docker workspace volumes
 and streamed copies; its configuration needs no change.
 
@@ -161,8 +160,8 @@ or open one using the bug, feature, or task form. Use `bug`, `enhancement`, or
 `documentation` for the work type and one `area:*` label for the affected
 component. `planning` means a design or scope decision is still needed.
 Keep acceptance criteria in the issue and link dependencies explicitly.
-The [roadmap](https://dariuszpanas.github.io/iperf3-lib/roadmap.html) links the
-pre-release review backlog; an open proposal is not a release commitment.
+Keep planning and acceptance evidence in GitHub issues; public guides should
+explain how to use the library.
 
 Keep changes focused and explain:
 
@@ -190,7 +189,7 @@ make docs-serve
 fragments, and rendered README links. It does not check remote URLs. CI builds
 documentation on every PR; `.github/workflows/docs.yml` deploys it to GitHub
 Pages after a push to `main`. The detailed
-[documentation maintenance guide](https://dariuszpanas.github.io/iperf3-lib/documentation.html)
+[documentation maintenance guide](development/documentation.md)
 covers Pages setup, preview, and publication checks.
 
 ## Maintenance automation
@@ -198,19 +197,11 @@ covers Pages setup, preview, and publication checks.
 - The complete native compatibility matrix runs on the first day of each month
   at 09:17 America/Los_Angeles, as well as on pushes and pull requests.
 - Dependabot checks Python, GitHub Actions, and Docker dependencies every
-  Monday. Version and security updates are grouped by ecosystem; the beta `ty`
-  checker remains isolated for deliberate review. CI, releases, and Docker
+  Monday. Version and security updates are grouped by ecosystem. CI, releases, and Docker
   builds use the current stable uv release so contributors need not match an
   exact local tool version.
 
 ## Releases
 
-Maintainers should update `project.version` in `pyproject.toml`, refresh
-`uv.lock`, and verify the intended tag before pushing it:
-
-```bash
-uv run --no-project python scripts/validate_release.py --tag v0.2.0
-```
-
-Production publication is tag-driven. Manual workflow dispatch publishes only
-to TestPyPI and requires a version that exactly matches project metadata.
+Follow the [maintainer release procedure](development/releasing.md) for candidate
+preparation, build-only qualification, and publication.
