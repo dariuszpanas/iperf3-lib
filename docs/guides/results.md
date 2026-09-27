@@ -4,10 +4,23 @@
     The normalized dataclass result model is available on `main` after `0.2.0`.
     See the [artifact guide](artifacts.md) for the versioned storage contract.
 
-`Result` contains the original native JSON in `raw`, end-of-test summaries,
+`Result` contains parsed native JSON in `raw`, end-of-test summaries,
 normalized flows and intervals, and timing metadata. Normalization currently
 covers a subset of native output; preserve `raw` when you need measurements
 outside that subset.
+
+Ordinary JSON capture preserves the parsed native document. Streaming capture
+requests full final JSON on libiperf 3.21. On 3.19.1, the worker reconstructs
+`raw` from native event envelopes and records
+`result.extensions["iperf3_lib.native_json"]` with
+`representation="reconstructed_events"` and the original `events` list.
+The diagnostic `execution.reconstructed_json` identifies this case. Fields not
+emitted in the event stream cannot be claimed as original document content;
+inspect the capture evidence before depending on top-level native metadata.
+
+Live delivery can drop events from its bounded queues without changing the
+separately retained capture. Those delivery bounds are not a bound on retained
+interval/result memory. See [event handling](native-controls.md#observe-events-and-bound-a-run).
 
 ## Keep direction and observation separate
 
@@ -131,8 +144,12 @@ with some valid measurements remains usable, with diagnostics for gaps.
 Invalid object shapes, malformed flags, nonnumeric measurements, and
 non-finite values raise `ValueError`; they do not become zero measurements.
 `execution.configuration` separates the admitted request snapshot from native
-settings verified through returned JSON. Unavailable verification stays explicit;
-setting a native option alone is not proof of its effective value. Structured
-diagnostics have stable codes and evidence paths. Richer TCP/CPU analysis remains
-future work.
+settings verified through returned JSON or retained native getter receipts.
+A getter confirms the stored native setting; it does not prove the kernel's
+applied buffer size, actual pacing rate or device behavior. Unavailable
+verification stays explicit; setting a native option alone is not proof of its
+effective value. Structured diagnostics have stable codes and evidence paths.
+See [TCP/CPU analysis](analysis.md#tcp-and-endpoint-cpu-evidence) and the
+[advanced comparison rules](analysis.md#advanced-configuration-in-comparisons)
+before comparing results with additional controls.
 

@@ -59,16 +59,18 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-`arun()` moves the blocking native call to an executor thread. Cancelling the
-awaiting task, including through an asyncio timeout, does not terminate the
-native run. A task's cancellation is therefore not evidence that the native
-library is idle.
+`arun()` moves the operation to an executor thread. Cancelling the awaiting
+task, including through an asyncio timeout, does not terminate that operation.
+Pass `await Client(config).arun(timeout=10)` to select an isolated worker with
+its own execution deadline. A task's cancellation alone is not evidence that
+the native library is idle.
 
-Serialize native operations within a process. libiperf's global error state
-and blocking operations are not treated as reentrant. Multiple `Client`
-objects or separate executor threads do not provide isolation. Applications
-needing concurrent runs must use separate processes; the library does not yet
-provide a managed process execution API.
+Serialize basic direct native operations within a process. libiperf's global
+error state and blocking operations are not treated as reentrant. Multiple
+`Client` objects or separate executor threads do not provide isolation.
+Expanded controls, MPTCP, streaming, explicit execution timeouts and event
+callbacks select the Python/CFFI worker. See [native execution](native-controls.md#observe-events-and-bound-a-run)
+for the path-selection and delivery contract; no `iperf3` subprocess is used.
 
 ## Handle failures
 
@@ -82,29 +84,67 @@ are raised instead:
 | `UnsupportedFeatureError` | The wrapper or loaded native library cannot apply a requested feature. |
 | `IperfLibraryError` | Loading, allocation, or native setup verification failed. |
 | JSON decoding errors or parser `ValueError` | The returned native JSON could not be decoded or normalized. |
+| `TimeoutError` | The worker execution deadline expired; its process was terminated and reaped. |
+| Callback exception | Delivery stopped; the exception propagates after the active run and worker shutdown. |
 
 Do not use `result.ok` as a performance acceptance decision: a completed test
-can have low throughput or substantial loss. Thresholds and repeated-run
-acceptance remain application decisions.
+can have low throughput or substantial loss. Choose application thresholds with
+`AssessmentPolicy`, then use `assess_plan` for
+[repeated trials and baseline assessment](trials.md).
 
 ## Use the Python server wrapper
 
 Run the server in a separate process from your client:
 
 ```python
-from iperf3_lib import Server
+from iperf3_lib import Server, ServerConfig
 
-server = Server(port=5201, bind_host="127.0.0.1")
-server.run_once()
+server = Server(config=ServerConfig(
+    port=5201,
+    bind_address="127.0.0.1",
+    address_family="ipv4",
+    idle_timeout_seconds=10,
+))
+result = server.run_once(timeout=15)
+print(result.ok, result.reporting_role, result.error)
 ```
 
-`run_once()` blocks for one test and returns `None`. `aserve_once()` runs the
-same operation in an executor thread and also returns `None`; it has the same
-cancellation limitation as `Client.arun()`.
+`bind_address` selects an address assigned to the local server. For a remote
+network, substitute that interface's assigned IP. `bind_device` selects a device
+name separately. The concise `Server(port=5201, bind_host="127.0.0.1")` form
+remains available, with `bind_host` serving as an address alias. Do not combine
+legacy constructor arguments with `config`. The
+[configuration reference](../reference/configuration.md#server-configuration)
+lists native bitrate/duration policies, authentication and all other controls.
 
-For sequential clients, `serve_forever()` reuses one native test object across
-iterations. `stop()` sets a cooperative flag checked between iterations. It
-does not interrupt a server blocked waiting for a client or handling a test.
-The flag is not reset by subsequent calls: create a new `Server` if you need a
-fresh serving loop after stopping one.
+`run_once()` returns a normalized server `Result`; `aserve_once()` returns the
+same result through an executor thread. Server operations always use an isolated
+Python worker. Native failures are retained in results; setup errors raise.
+An idle exit with no JSON produces an incomplete result.
+
+For a bounded sequential session:
+
+```python
+def record_result(result):
+    print(result.ok, result.reporting_role, result.error)
+
+
+server.serve_forever(on_result=record_result, max_runs=3, timeout=60)
+```
+
+Each iteration creates and configures a fresh native test, then frees it before
+`on_result` receives the attempt. The same worker process serves the sequential
+session; there is no native-test reset/reuse. `on_result` receives failures too.
+Without that callback, a native failed result raises `IperfError` from
+`serve_forever()`. `max_runs` limits the attempt count. `timeout` covers
+startup and the **whole serving session**, not 60 seconds per client. A failed
+or incomplete attempt ends the session. Event callbacks can also be supplied
+with `on_event`, which enables streaming automatically; callback errors propagate
+after worker shutdown.
+
+`stop()` prevents the next iteration but does not interrupt a blocked listener
+or active test. Use an explicit timeout for a bounded session. The stop flag
+is not reset: a later `serve_forever()` returns without starting a worker,
+although one-shot calls remain available. Concurrent use of one `Server`
+instance raises `RuntimeError`.
 

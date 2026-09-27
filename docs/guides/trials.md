@@ -49,8 +49,14 @@ calls, including after a pause. It cannot interrupt a blocking native call;
 actual elapsed time can exceed the limit. The recorded monotonic elapsed time,
 observed pauses, and endpoint byte measurements are separate evidence.
 
+The expanded client controls preserve count-based runs with unknown time and
+payload estimates. Such trials require uncapped estimate budgets; an unlimited
+`duration=0` is rejected by finite plans. New transport settings remain part of
+the retained request and must be considered when comparing measurements.
+
 The existing [non-reentrant execution contract](running-tests.md) applies.
-The runner adds no process isolation, concurrent execution, or cancellation.
+The runner adds no concurrent execution or cancellation API; individual client
+configurations select the direct or isolated-worker path described there.
 `stop_on_error=True` stops after failed, incomplete, or exceptional execution;
 remaining trials are retained as `not_run`. Process-control exceptions such
 as `KeyboardInterrupt` propagate.
@@ -103,6 +109,13 @@ inconclusive. An intentional difference needs a recorded
 `ComparisonPolicy.allowed_differences` reason; that reason does not make unknown
 evidence known. Keep comparison policies narrow for regression assessments.
 
+[Advanced settings](analysis.md#advanced-configuration-in-comparisons) also
+participate when any retained request uses a nondefault value or the policy
+names the field. All compared candidates and baselines need verified native
+observations for that setting, including peers using defaults. Matching
+requests or a reasoned allowance cannot replace missing receipts; the
+assessment remains inconclusive when compatibility cannot be established.
+
 ## Compare with retained baselines
 
 Pass `baselines=[artifact, ...]` to `assess_plan`. Each baseline is a
@@ -143,9 +156,11 @@ nonfinite numbers, and inconsistent derived values are rejected.
 
 Schema 1 binds assessment arithmetic to `algorithm_revision="median-summary-v1"`.
 Loading validates that frozen selection, arithmetic, thresholds, and internal
-references agree with retained evidence. It verifies recorded comparison fingerprints against canonical settings and
-receipt presence, and checks the recorded difference policy with frozen v1
-compatibility rules. It never invokes the newest analysis implementation.
+references agree with retained evidence. It verifies recorded comparison
+fingerprints against canonical settings and receipt presence, and checks the
+recorded difference policy with frozen v1 compatibility rules, including any
+activated advanced settings. Existing default-only fingerprints remain valid.
+It never invokes the newest analysis implementation.
 It neither loads libiperf nor reruns an experiment. An archived report is evidence
 of the recorded decision, not a fresh compatibility check or an authenticity
 signature. Reassess retained artifacts explicitly when adopting new analysis rules.

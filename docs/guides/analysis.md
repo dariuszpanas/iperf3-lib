@@ -153,6 +153,33 @@ per-stream rates may differ only if every verified rate equals
 experiments retain different intent fingerprints. Compatibility alone does not
 establish execution success or adequate throughput measurements.
 
+### Advanced configuration in comparisons
+
+An advanced `ClientConfig` field becomes part of every trial's comparison
+fingerprint when any retained request gives it a nondefault value, or when
+`ComparisonPolicy.varying_fields` or `allowed_differences` explicitly names it.
+This includes `mptcp` and `json_stream`. Every compared trial then needs verified
+native observations for that field, including trials that requested its default.
+The request selects what to compare; the returned native value or matching
+getter receipt supplies the observation.
+
+For example, comparing a `no_delay=True` trial with a default-configured trial
+requires retained evidence of both native no-delay values. An absent receipt
+for the default-configured peer cannot be replaced with an assumed `False`.
+Equal requests also cannot fill missing observations. A known difference must
+be a declared varying field or have a reason in `allowed_differences`; neither
+policy permits unknown values.
+
+Options accepted by the native parser may lack a returned value or exposed
+getter. Those runs remain available for inspection, but comparisons requiring
+that observation are incompatible. Request validity, execution success and
+comparison eligibility are separate conclusions. These rules apply equally to
+retained baselines and advanced settings fixed across sweep cells.
+
+Default-only comparisons retain their existing fingerprints. Archived v1
+reports validate the recorded advanced fields with frozen compatibility rules;
+reading an old report does not add fields from a newer `ClientConfig`.
+
 ## Directional asymmetry
 
 `simultaneous_asymmetry(result, observation="receiver")` requires both directions

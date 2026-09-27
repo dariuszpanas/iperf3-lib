@@ -85,6 +85,11 @@ entry of `None` uses the existing config rate or protocol default. It includes
 direction. Total estimated bytes round upward from total intended payload bits.
 An empty plan has zero estimated cost.
 
+Count-terminated and unlimited-duration configurations have unknown active-time
+and payload estimates. A finite cap rejects the unknown quantity. Finite trial
+plans reject unlimited duration; count-based trials need explicit uncapped
+estimate budgets. Sweeps continue to require a finite active-time budget.
+
 Budgets are admission checks on these estimates. Exceeding either raises
 `ValueError`; an unlimited/unknown rate cannot satisfy a finite payload budget.
 The estimator does not execute a plan, validate host capabilities, or interrupt
@@ -149,9 +154,10 @@ test, alter settings, or generate traffic.
 
 Legacy `HAS_*` flags remain available and resolve when accessed. Native-symbol
 flags still collapse lookup/load failures to false; use the report when those
-distinctions matter. `HAS_MPTCP` and `HAS_JSON_STREAM` remain false even if a
-related native symbol exists. SCTP still depends on the native build and kernel.
-Blocking calls remain non-reentrant; async cancellation does not stop traffic.
+distinctions matter. Parser-backed worker controls are distinct from dedicated
+setter probes. SCTP and MPTCP still depend on the native build and kernel. Basic
+direct calls remain non-reentrant; cancelling an await alone does not stop
+traffic. An explicit execution timeout selects the isolated worker.
 
 ## Profiles and native option decisions
 
@@ -165,18 +171,20 @@ profiles; suitable values depend on the environment. Asymmetric simultaneous
 direction budgets are deferred because the current native configuration has
 one shared per-stream rate.
 
-The following native options were evaluated against public headers and producer
-source for 3.19.1 and 3.21. They remain unimplemented in `ClientConfig` until the
-listed behavior is qualified on both native versions:
+The [native option inventory](../reference/native-options.md) now accounts for
+every tagged parser option in 3.19.1 and 3.21. Expanded controls are exposed
+through typed configuration and an isolated Python/CFFI worker; the worker uses
+the public native parser where no dedicated setter exists. There is no raw CLI
+argument passthrough or `iperf3` executable requirement.
 
-| Option | Decision and evidence still needed |
+| Option | Interpretation and evidence boundary |
 | --- | --- |
-| Pacing timer | Setter/getter exist. Qualify accepted microsecond ranges and native setting; do not promise packet-spacing precision. |
-| Socket buffers | Setter/getter store a requested size. Qualify TCP `sock_bufsize`, `sndbuf_actual`, and `rcvbuf_actual`, kernel caps/doubling, and native errors. |
-| Congestion control | Getter returns requested algorithm. Qualify actual TCP algorithm selection and unavailable-algorithm errors. |
-| Server output | Getter confirms the request. Qualify returned JSON/text and completed/error behavior; output format depends on server configuration. |
-| Socket pacing (`fq-rate`) | No public accessor pair was found; private struct mutation is outside the direct ABI contract. |
-| MPTCP / live JSON | Continue explicit rejection pending a supported setter or qualified event/process lifecycle design. |
+| Pacing timer | A stored microsecond interval is not a packet-spacing guarantee. |
+| Socket buffers | Native getter receipts preserve requests; kernel send/receive sizes can differ. |
+| Congestion control | Algorithm request and actual kernel behavior remain separate evidence. |
+| Server output | The remote server determines whether its output is JSON or text. |
+| Socket pacing (`fq-rate`) | Typed worker configuration uses the public parser; availability and effective pacing depend on the platform. |
+| MPTCP / live JSON | Worker-backed controls preserve native build/kernel limits and bounded event-delivery semantics. |
 
 See the versioned public headers for
 [3.19.1](https://github.com/esnet/iperf/blob/3.19.1/src/iperf_api.h) and

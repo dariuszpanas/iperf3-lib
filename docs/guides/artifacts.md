@@ -115,8 +115,20 @@ or unidentified SCTP producers, measurement support stays unknown and the
 normalized field remains null until that producer is qualified.
 
 Diagnostics carry stable `code`, `severity`, optional canonical `path`, and
-native/canonical `evidence_paths`. The full original native document stays in
-`raw`, including partial and failed-run evidence.
+native/canonical `evidence_paths`. Captured native data stays in `raw`, including
+partial and failed-run evidence. Ordinary JSON capture preserves the parsed
+native document. Native 3.21 streaming requests full final JSON; 3.19.1 instead
+records an explicit reconstruction from event envelopes. In that case,
+`extensions["iperf3_lib.native_json"]` retains
+`{"representation": "reconstructed_events", "events": [...]}`, and the
+`execution.reconstructed_json` diagnostic points to
+`/extensions/iperf3_lib.native_json/events`. This extension is absent when a full
+native document was captured. Artifact roundtrips preserve the representation
+and envelopes without promoting reconstruction to a full original document.
+
+Bounded live-callback delivery does not limit the size of retained native
+intervals or artifact evidence. Failed and partial streaming captures keep their
+actual evidence rather than manufacturing unreported native metadata.
 
 ## Validation and evolution
 

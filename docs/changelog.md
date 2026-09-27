@@ -9,6 +9,28 @@ These pages describe `main`. Released versions remain available through
 The metadata identifies the intended 0.3.0 candidate. It has not been published;
 final qualification and an explicit publication decision remain required.
 
+### Expanded native controls and worker execution
+
+- Add typed client controls and `ServerConfig` for local address/device binding,
+  address family, source ports, transport tuning, count termination, pacing,
+  payloads, connection policies, authentication and server policies. The
+  [option reference](reference/native-options.md) maps all flags from the two
+  supported native versions, including application-owned CLI concerns.
+- Execute expanded controls, MPTCP and streaming through an isolated Python/CFFI
+  worker using libiperf's public parser. Basic client configurations retain the
+  direct native path; no `iperf3` executable is required by the worker.
+- Add explicit execution timeouts and typed parent-side events with bounded
+  delivery, drop accounting and independent final-result retention.
+- Return normalized server results and expose sequential result callbacks;
+  preserve the concise address/port constructor and cooperative stop behavior.
+- Preserve expanded request metadata and native getter receipts while keeping
+  passwords outside configuration/artifact metadata. Existing artifacts with
+  the original configuration fields remain readable.
+
+These changes are tracked in [#53](https://github.com/dariuszpanas/iperf3-lib/issues/53).
+Their final qualification must use the combined revision; the earlier retained
+0.3.0 candidate evidence does not qualify later source changes.
+
 ### Finite experiments and assessments
 
 - Add [finite parameter sweeps](guides/sweeps.md) with preflight budgets, recorded cell order,

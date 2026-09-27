@@ -1,20 +1,24 @@
 # Advanced execution: design and release disposition
 
-Status: **follow-on candidates after 0.3.0; no public API is implemented by
-this design**. Reviewed on 2026-09-26. The [roadmap](../roadmap.md) and
+Status: **design criteria, with a first worker/event implementation added under
+[#53](https://github.com/dariuszpanas/iperf3-lib/issues/53)**. Reviewed on 2026-09-26.
+The [native-control guide](../guides/native-controls.md) documents that narrower
+public contract. This design's broader acceptance criteria are not established
+by implementation or by the historical native-event probe alone. The [roadmap](../roadmap.md) and
 [release-scope issue #26](https://github.com/dariuszpanas/iperf3-lib/issues/26)
 track the overall release decision.
 
-The planned 0.3.0 experiment layer uses finite, sequential trials and explicit
-parameter sweeps over the direct CFFI backend. The proposals below need
-additional implementation and qualification before they can extend that
-execution contract. Their issues remain open.
+The experiment layer uses finite, sequential trials and explicit parameter
+sweeps. Basic clients retain the direct CFFI path; expanded controls and explicit
+worker requests use isolated Python/CFFI execution. The proposals below retain
+their broader qualification requirements. Their issues remain open until the
+individual criteria have evidence.
 
-| Proposal | Decision | Evidence needed before enabling it |
+| Proposal | Decision | Evidence needed for complete qualification |
 | --- | --- | --- |
 | [Adaptive UDP #34](https://github.com/dariuszpanas/iperf3-lib/issues/34) | Follow bounded explicit sweeps with a separate, evidence-driven planner. | Deterministic decision tests, bounded native mechanics, and a controlled impaired-link experiment. |
 | [Live events #35](https://github.com/dariuszpanas/iperf3-lib/issues/35) | Keep a separate event API and retain the complete-result contract. | Minimum/latest event assembly, bounded delivery, failure/overflow/abandonment tests, and lifecycle qualification. |
-| [Process isolation #36](https://github.com/dariuszpanas/iperf3-lib/issues/36) | Explore one Python/CFFI worker per trial before worker reuse or concurrency. | Deadline/cancellation/crash qualification, transport bounds, and measured cleanup across the supported matrix. |
+| [Process isolation #36](https://github.com/dariuszpanas/iperf3-lib/issues/36) | A first worker supports #53; qualify broader worker reuse/concurrency separately. | Deadline/cancellation/crash qualification, transport bounds, and measured cleanup across the supported matrix. |
 
 Native event shapes have been observed in a small loopback experiment. The
 [observation report](native-event-observations.md) records exactly what was
@@ -23,11 +27,11 @@ impairment, stress, and cancellation have **not** been qualified by that probe.
 
 ## Existing guarantees remain in force
 
-`Client.run()` returns a complete result. `json_stream=True` remains rejected.
-Async convenience methods offload blocking calls to executor threads;
-cancelling an await does not stop native traffic. Concurrent native operations
-within one process remain unsupported. A plan's admission estimates do not
-provide a hard deadline for a blocking native operation.
+`Client.run()` returns a complete result, including when a worker delivers live
+events. Async convenience methods use executor threads; cancelling an await
+alone does not stop the operation. Concurrent direct native calls in one process
+remain unsupported. A plan's admission estimates do not provide a hard deadline;
+an explicit worker timeout has a separate process-termination contract.
 
 Every accepted configuration field must be applied exactly once or rejected.
 Normal native lifecycles must free every non-null test exactly once, including
@@ -232,13 +236,14 @@ not use the iperf3 CLI to execute application benchmarks.
 
 Linux support remains explicit. Windows is a development host, and the
 availability of multiprocessing does not establish native platform support.
-No isolated-worker implementation or cancellation result is claimed here.
+The worker implementation is documented separately; the observations in this
+design do not establish its cancellation, stress or orphan-cleanup qualification.
 
 ## Release follow-through
 
 Keep #34–36 open until their implementation and qualification criteria are
 met. This document records a design disposition, not completion of those
-criteria. The 0.3.0 candidate must continue rejecting unsupported streaming
-and preserve current lifecycle and concurrency limits while finite trial and
-sweep work is qualified. Revisit each advanced proposal in a focused follow-up
-with its own acceptance evidence and release decision.
+criteria. The native-controls implementation must preserve complete results and
+explicit lifecycle/concurrency limits while its combined source is qualified.
+Revisit each broader proposal with its own acceptance evidence and release
+decision; adaptive UDP selection remains separate from explicit sweeps.

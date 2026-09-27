@@ -22,7 +22,7 @@ compare results, and run finite sequential experiments from Python.
     Install the shared library, configure a TCP or UDP client, and learn the
     synchronous and asynchronous APIs.
 
-    [Installation and first run](getting-started.md)
+    [Installation and first run](getting-started.md) · [Native controls](guides/native-controls.md)
 
 - **Understand the measurements**
 
@@ -81,10 +81,16 @@ not bundle libiperf or operate a benchmark scheduler or metrics service.
 
 ## Know the execution boundary
 
-Linux is the tested platform. Native calls block and share process-global error
-state: serialize runs within a process. The async helpers use executor threads;
-cancelling an await does not stop its native operation. See
+Linux is the tested platform. Basic direct native calls share process-global
+state and must be serialized. Expanded controls, event delivery and explicit
+execution timeouts use isolated Python/CFFI workers. Async helpers use executor
+threads; cancelling an await alone does not stop the operation. See
 [compatibility and limitations](reference/compatibility.md).
+
+Use the [native option inventory](reference/native-options.md) to find binding,
+protocol, transport, server-policy and output controls. Option availability also
+depends on the native build, kernel and peer; a configuration request is not
+proof of effective network behavior.
 
 These pages follow `main`. The APIs introduced in **0.3** require that version
 or a reviewed source revision; before publication, install from source.
@@ -92,5 +98,5 @@ Published **0.2.0** uses Pydantic models. The [changelog](changelog.md) records
 publication status and the [migration guide](guides/migration-0.3.md) explains
 compatibility changes.
 
-The [roadmap](roadmap.md) records the selected 0.3.0 scope and the concrete
-follow-up work for adaptive UDP, live events, and isolated execution.
+The [roadmap](roadmap.md) records the selected scope, expanded native-control
+work, and the remaining advanced execution and adaptive UDP qualification.

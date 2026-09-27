@@ -67,6 +67,20 @@ In a separate terminal, start an iperf3 server on the machine you want to test:
 iperf3 -s
 ```
 
+You can also run a Python server in a separate terminal:
+
+```python
+from iperf3_lib import Server
+
+result = Server(port=5201, bind_host="127.0.0.1").run_once(timeout=30)
+print(result.ok, result.error)
+```
+
+This example listens on loopback. For another interface, use its assigned local
+IP address as `bind_host`. A device name belongs in the separate `ServerConfig`
+device option. See [running a Python server](guides/running-tests.md#use-the-python-server-wrapper)
+and [address/device binding](guides/native-controls.md#select-local-addresses-and-devices).
+
 The following client uses `127.0.0.1`, so it measures a loopback path. Replace
 that address with your server's hostname or address to measure a network path.
 
@@ -99,6 +113,11 @@ unavailable. For directional analysis or missing-data decisions, use
 - [Migrate a 0.2.0 application to dataclasses](guides/migration-0.3.md).
 - [Run TCP, UDP, reverse, or bidirectional tests](guides/running-tests.md).
 - [Choose configuration values and understand validation](reference/configuration.md).
+- [Find a native CLI option's Python equivalent](reference/native-options.md)
+  and [use binding, transport, timeout and event controls](guides/native-controls.md).
+- [Declare aggregate rate intent and inspect capabilities](guides/configuration-intent.md).
 - [Read flows, observations, intervals, and native JSON](guides/results.md).
+- [Save portable artifacts](guides/artifacts.md) and [analyze measurements](guides/analysis.md).
+- [Repeat and assess trials](guides/trials.md) or [run finite parameter sweeps](guides/sweeps.md).
 - [Explore Prometheus snapshots and textfile output](guides/prometheus.md).
 
