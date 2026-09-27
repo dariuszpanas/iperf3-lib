@@ -1,8 +1,8 @@
 # Python API reference
 
-This reference describes the development API. See
-[installation and release status](../getting-started.md) before using an
-example with the published package.
+These APIs are available in 0.3.0. The site follows `main`; use documentation
+matching your installed version. See [installation](../getting-started.md)
+for package setup.
 
 ## Clients and servers
 

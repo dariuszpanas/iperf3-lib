@@ -1,7 +1,7 @@
 # Repeated trials and assessments
 
-These APIs are available on the development branch after 0.2.0. Follow the
-[source installation instructions](../getting-started.md) until the next release.
+These APIs are available in 0.3.0. See [installation](../getting-started.md)
+for package setup.
 
 A trial plan runs a finite, declared sequence. It keeps warm-up, failed,
 incomplete, and unstarted runs so the report describes the entire experiment.
@@ -154,7 +154,9 @@ artifacts, baseline artifacts, analysis evidence, policies, exclusions, and CI
 classification. Unknown canonical fields, versions, duplicate JSON keys,
 nonfinite numbers, and inconsistent derived values are rejected.
 
-Schema 1 binds assessment arithmetic to `algorithm_revision="median-summary-v1"`.
+Schema 1 was first published in 0.3.0 and binds assessment arithmetic to
+`algorithm_revision="median-summary-v1"`. Changes to its interpretation require
+a new schema version.
 Loading validates that frozen selection, arithmetic, thresholds, and internal
 references agree with retained evidence. It verifies recorded comparison
 fingerprints against canonical settings and receipt presence, and checks the

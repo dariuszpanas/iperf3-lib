@@ -1,7 +1,7 @@
 # Bounded parameter sweeps
 
-These APIs are available on the development branch after 0.2.0. Follow the
-[source installation instructions](../getting-started.md) until the next release.
+These APIs are available in 0.3.0. See [installation](../getting-started.md)
+for package setup.
 
 A sweep runs a finite Cartesian product through the [sequential trial runner](trials.md).
 It records every cell, warm-up, measured run, failure and unstarted trial. Cell
@@ -161,5 +161,5 @@ Import validates frozen v1 selection and arithmetic against retained artifacts.
 It rejects unknown keys, duplicate JSON keys, nonfinite numbers, changed samples,
 missing eligible zero samples, contradictory qualifications and unsupported
 versions. It neither runs native code nor invokes current analysis or parsing.
-The v1 format is an unreleased development contract until 0.3.0; after release,
-changes to its interpretation require a new version.
+The v1 format was first published in 0.3.0. Changes to its interpretation
+require a new schema version.

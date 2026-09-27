@@ -1,9 +1,7 @@
 # Prometheus snapshots
 
-!!! note "Unreleased exporter"
-    The exporter is available on `main` after `0.2.0`. Use the
-    [source installation instructions](../getting-started.md) to try it before
-    the next release.
+The exporter is available in 0.3.0. See
+[installation](../getting-started.md) for package setup.
 
 The exporter turns a completed `Result` into a latest-run snapshot. Your
 application owns scheduling and storage; this package provides no HTTP server

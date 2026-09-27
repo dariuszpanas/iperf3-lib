@@ -5,9 +5,9 @@ library and returns Python objects for your application to inspect.
 
 !!! note "Match the documentation to your version"
     This site follows `main`. Dataclasses, portable artifacts, analysis, trial
-    plans, sweeps, and Prometheus output are introduced in 0.3; published 0.2.0 uses
-    Pydantic models. Before 0.3 is published, install a reviewed source revision
-    to use these APIs. Check the [changelog](changelog.md) and
+    plans, sweeps, and Prometheus output are available in 0.3.0; 0.2.0 uses
+    Pydantic models. Use documentation matching your installed version.
+    Check the [changelog](changelog.md) and
     [published releases](https://github.com/dariuszpanas/iperf3-lib/releases)
     for publication status.
 
@@ -27,7 +27,7 @@ uv add iperf3-lib
 python -m pip install iperf3-lib
 ```
 
-To try the APIs documented on this site from the current source:
+For an optional installation from the current source:
 
 ```bash
 python -m pip install "iperf3-lib @ git+https://github.com/dariuszpanas/iperf3-lib.git@main"
