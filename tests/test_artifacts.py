@@ -4,7 +4,7 @@ import copy
 import json
 import subprocess
 import sys
-from dataclasses import asdict, fields
+from dataclasses import fields
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -23,7 +23,7 @@ from iperf3_lib.artifacts import (
     dumps_artifact,
     loads_artifact,
 )
-from iperf3_lib.config import ClientConfig
+from iperf3_lib.config import ClientConfig, config_to_dict
 from iperf3_lib.result import (
     ConfigurationSnapshot,
     Diagnostic,
@@ -45,7 +45,7 @@ NATIVE_FIXTURES = Path(__file__).parent / "fixtures" / "native"
 
 
 def _artifact():
-    requested = asdict(ClientConfig("127.0.0.1", duration=1))
+    requested = config_to_dict(ClientConfig("127.0.0.1", duration=1))
     requested["protocol"] = "tcp"
     sender = SumStats(
         bits_per_second=0,

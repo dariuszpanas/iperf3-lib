@@ -111,56 +111,123 @@ _FEATURES: tuple[
         "json_callback",
         "supported",
         ("iperf_set_test_json_callback",),
-        ("Internal capture callback; no public live-event API.",),
+        ("Copied NativeEvent callbacks are available through Client and Server on_event.",),
     ),
     (
         "bind_address",
         "supported",
         ("iperf_set_test_bind_address", "iperf_get_test_bind_address"),
-        ("Exposed by Server.bind_host; client binding is not implemented.",),
+        (
+            "ClientConfig.bind_address and ServerConfig.bind_address; legacy Server.bind_host alias.",
+        ),
     ),
-    ("mptcp", "unsupported", (), ("No stable public native setter; Client rejects mptcp=True.",)),
+    (
+        "mptcp",
+        "supported",
+        ("iperf_parse_arguments",),
+        ("Configured in an isolated Python worker; requires an MPTCP-enabled build and kernel.",),
+    ),
     (
         "json_stream",
-        "unsupported",
+        "supported",
         ("iperf_set_test_json_stream", "iperf_set_test_json_stream_full_output"),
         (
-            "Client rejects streaming until event lifetime, delivery and backpressure are qualified.",
+            "Bounded NativeEvent delivery; 3.21 retains full JSON, earlier versions label reconstruction from events.",
         ),
     ),
     (
         "pacing_timer",
-        "unimplemented",
+        "supported",
         ("iperf_set_test_pacing_timer", "iperf_get_test_pacing_timer"),
-        (
-            "Public header pair evaluated; native behavior and timing effects are not wrapper-qualified.",
-        ),
+        ("Getter verifies the configured microsecond timer, not scheduler timing accuracy.",),
     ),
     (
         "socket_buffer",
-        "unimplemented",
+        "supported",
         ("iperf_set_test_socket_bufsize", "iperf_get_test_socket_bufsize"),
         ("Stored requested size differs from kernel-observed send/receive buffer sizes.",),
     ),
     (
         "congestion_control",
-        "unimplemented",
+        "supported",
         ("iperf_set_test_congestion_control", "iperf_get_test_congestion_control"),
         ("TCP/Linux algorithms depend on the kernel; a getter returns stored request only.",),
     ),
     (
         "server_output",
-        "unimplemented",
+        "supported",
         ("iperf_set_test_get_server_output", "iperf_get_test_get_server_output"),
         (
-            "Server controls output format; completed-run output requires separate native qualification.",
+            "ClientConfig.get_server_output retains native server output; Server returns its own Result.",
         ),
     ),
     (
         "socket_pacing",
-        "unimplemented",
-        (),
-        ("No public fq-rate accessor pair found in the qualified native headers.",),
+        "supported",
+        ("iperf_parse_arguments",),
+        (
+            "ClientConfig.fq_rate_bps uses isolated native parsing; no public getter or kernel effect guarantee.",
+        ),
+    ),
+    (
+        "device_binding",
+        "supported",
+        ("iperf_set_test_bind_dev", "iperf_get_test_bind_dev"),
+        ("Client and server; native build, OS and interface permissions apply.",),
+    ),
+    (
+        "source_port",
+        "supported",
+        ("iperf_set_test_bind_port", "iperf_get_test_bind_port"),
+        ("ClientConfig.client_port selects the native data connection source port.",),
+    ),
+    (
+        "address_family",
+        "supported",
+        ("iperf_parse_arguments",),
+        ("Explicit ipv4/ipv6 selection occurs inside an isolated native worker.",),
+    ),
+    (
+        "transfer_counts",
+        "supported",
+        ("iperf_set_test_bytes", "iperf_set_test_blocks"),
+        (
+            "Use duration=None and exactly one count; elapsed time cannot be estimated from a count.",
+        ),
+    ),
+    (
+        "tcp_tuning",
+        "supported",
+        ("iperf_set_test_no_delay", "iperf_set_test_mss"),
+        ("Protocol constraints and native/kernel limits apply.",),
+    ),
+    (
+        "authentication",
+        "supported",
+        ("iperf_set_test_client_rsa_pubkey", "iperf_set_test_server_rsa_privkey"),
+        (
+            "Requires OpenSSL-enabled libiperf and RSA keys; passwords never enter saved configuration.",
+        ),
+    ),
+    (
+        "server_policies",
+        "supported",
+        ("iperf_parse_arguments",),
+        ("ServerConfig policies use isolated parsing; max duration requires libiperf 3.21.",),
+    ),
+    (
+        "gsro",
+        "supported",
+        ("iperf_parse_arguments",),
+        ("UDP-only, libiperf 3.21 and native build/kernel support required.",),
+    ),
+    (
+        "isolated_execution",
+        "supported",
+        ("iperf_parse_arguments",),
+        (
+            "Expanded controls and explicit timeout use a disposable Python process, without an iperf3 executable.",
+        ),
     ),
     (
         "concurrent_execution",
@@ -172,7 +239,9 @@ _FEATURES: tuple[
         "hard_cancellation",
         "unsupported",
         (),
-        ("No isolated worker lifecycle; async cancellation does not stop native calls.",),
+        (
+            "Async cancellation does not stop native calls; explicit timeout bounds worker execution separately.",
+        ),
     ),
 )
 _DECLARED = frozenset(re.findall(r"\b(\w+)\s*\(", CDEF))
@@ -286,13 +355,13 @@ _LEGACY = {
     "HAS_JSON_CALLBACK": ("iperf_set_test_json_callback",),
     "HAS_PROTOCOL_SELECTION": ("set_protocol", "iperf_get_test_protocol_id"),
     "HAS_BIND_ADDRESS": ("iperf_set_test_bind_address",),
+    "HAS_MPTCP": ("iperf_parse_arguments",),
+    "HAS_JSON_STREAM": ("iperf_parse_arguments", "iperf_set_test_json_stream"),
 }
 
 
 def __getattr__(name: str) -> bool:
     """Resolve legacy flags only when accessed, leaving module import native-free."""
-    if name in ("HAS_MPTCP", "HAS_JSON_STREAM"):
-        return False
     if name in _LEGACY:
         return all(has_symbol(symbol) for symbol in _LEGACY[name])
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

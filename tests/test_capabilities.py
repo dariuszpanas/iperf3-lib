@@ -63,7 +63,7 @@ def test_import_and_offline_report_do_not_load_native(monkeypatch):
         symbol.state == "unknown" for feature in report.features for symbol in feature.symbols
     )
     assert caps.HAS_MPTCP is False and caps.HAS_JSON_STREAM is False
-    assert native.lookups == []
+    assert native.lookups  # Legacy flags explicitly probe symbols, unlike the offline report.
 
 
 @pytest.mark.parametrize(
@@ -105,11 +105,11 @@ def test_capabilities_separate_present_absent_undeclared_and_wrapper_support(mon
     assert report.library.state == "available" and report.library.version == "3.21"
     features = {feature.name: feature for feature in report.features}
     assert features["bidirectional"].symbols[0].state == "absent"
-    assert features["json_stream"].wrapper == "unsupported"
+    assert features["json_stream"].wrapper == "supported"
     assert features["json_stream"].symbols[0].state == "present"
-    assert features["pacing_timer"].wrapper == "unimplemented"
-    assert features["pacing_timer"].symbols[0].declared is False
-    assert features["pacing_timer"].symbols[0].state == "unknown"
+    assert features["pacing_timer"].wrapper == "supported"
+    assert features["pacing_timer"].symbols[0].declared is True
+    assert features["pacing_timer"].symbols[0].state == "present"
     assert features["hard_cancellation"].wrapper == "unsupported"
     assert caps.HAS_PROTOCOL_SELECTION is False
     with pytest.raises(AttributeError):

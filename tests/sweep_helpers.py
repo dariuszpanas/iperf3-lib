@@ -3,7 +3,7 @@
 from dataclasses import asdict
 from types import SimpleNamespace
 
-from iperf3_lib.config import ClientConfig
+from iperf3_lib.config import ClientConfig, config_to_dict
 from iperf3_lib.intent import resolve_rate
 from iperf3_lib.result import result_from_iperf_json
 from iperf3_lib.sweeps import SweepAxis, prepare_sweep, run_sweep
@@ -70,7 +70,7 @@ def measured(spec, *, count=100, seconds=1, failed=False, incomplete=False):
     result.extensions["example.synthetic"] = True
     result.extensions["iperf3_lib.rate_intent"] = {
         "schema_version": 1,
-        "caller_config": {**asdict(spec.config), "protocol": spec.config.protocol.value},
+        "caller_config": config_to_dict(spec.config, compact=True),
         "intent": asdict(spec.rate_intent) if spec.rate_intent else None,
         "resolution": resolve_rate(spec.config, spec.rate_intent).to_dict(),
     }

@@ -1,104 +1,190 @@
-"""Server wrapper and helpers for running iperf3 server tests."""
+"""Server wrappers backed by an isolated libiperf Python worker."""
 
 from __future__ import annotations
 
 import asyncio
+import math
 import threading
 from collections.abc import Callable
+from dataclasses import asdict, replace
+from enum import Enum
 from functools import partial
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from .exceptions import IperfError, IperfLibraryError
-from .ffi.api import ffi, lib
+from .exceptions import IperfError
+from .result import Result
+from .server_config import ServerConfig
 
-
-def _check(ret: int) -> None:
-    """Raise IperfError if the return code is negative."""
-    if ret < 0:
-        err = lib.iperf_strerror(lib.i_errno)
-        msg = ffi.string(err).decode() if err != ffi.NULL else "unknown libiperf error"
-        raise IperfError(msg)
+if TYPE_CHECKING:
+    from .events import NativeEvent
 
 
-def _set_str(setter: Callable[..., Any], t: Any, s: str) -> None:
-    """Call a CFFI string setter with a Python string argument."""
-    setter(t, ffi.new("char[]", s.encode()))
+class _Unset(Enum):
+    TOKEN = 0
+
+
+def _run_worker(options: dict[str, Any], **kwargs: Any) -> Result:
+    """Load the process transport only when a server operation is admitted."""
+    from ._execution import run_worker
+
+    return run_worker("server", options, **kwargs)
+
+
+def _validate_call(
+    on_event: Callable[[NativeEvent], None] | None,
+    on_result: Callable[[Result], None] | None,
+    timeout: float | None,
+) -> None:
+    for name, callback in (("on_event", on_event), ("on_result", on_result)):
+        if callback is not None and not callable(callback):
+            raise TypeError(f"{name} must be callable")
+    if timeout is not None:
+        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)):
+            raise TypeError("timeout must be a number")
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError("timeout must be positive and finite")
 
 
 class Server:
-    """Minimal server wrapper. By default, it runs a single test, then returns.
+    """Run a validated server in a separate Python process using libiperf.
 
-    For a persistent loop, call serve_forever().
+    ``Server(port, bind_host)`` remains available for existing callers.
+    New settings are supplied with ``Server(config=ServerConfig(...))``.
+    A server instance admits one operation at a time. Each operation snapshots
+    its configuration, so later mutations cannot change an active listener.
     """
 
-    def __init__(self, port: int = 5201, bind_host: str | None = None):
-        """Initialize the server with a port and optional bind host."""
-        if isinstance(port, bool) or not isinstance(port, int):
-            raise TypeError("port must be an integer")
-        if not 1 <= port <= 65535:
-            raise ValueError("port must be between 1 and 65535")
-        self.port = port
-        self.bind_host = bind_host
-        # event used to cooperatively stop the serve_forever loop
+    def __init__(
+        self,
+        port: int | _Unset = _Unset.TOKEN,
+        bind_host: str | None | _Unset = _Unset.TOKEN,
+        *,
+        config: ServerConfig | None = None,
+    ) -> None:
+        """Detach the supplied configuration and validate legacy arguments."""
+        if config is not None:
+            if not isinstance(config, ServerConfig):
+                raise TypeError("config must be a ServerConfig")
+            if port is not _Unset.TOKEN or bind_host is not _Unset.TOKEN:
+                raise ValueError("config cannot be combined with port or bind_host")
+            self.config = replace(config)
+        else:
+            self.config = ServerConfig(
+                port=5201 if port is _Unset.TOKEN else port,
+                bind_address=None if bind_host is _Unset.TOKEN else bind_host,
+            )
         self._stop_event = threading.Event()
+        self._run_lock = threading.Lock()
 
-    def _run_iteration(self, t: Any) -> None:
-        """Run a single server iteration against an existing iperf_test `t`.
+    @property
+    def port(self) -> int:
+        """Return the configured listener port (legacy alias)."""
+        return self.config.port
 
-        Extracted from the loop in `serve_forever` to make testing easier.
+    @port.setter
+    def port(self, value: int) -> None:
+        self.config = replace(self.config, port=value)
+
+    @property
+    def bind_host(self) -> str | None:
+        """Return the configured local address (legacy alias)."""
+        return self.config.bind_address
+
+    @bind_host.setter
+    def bind_host(self, value: str | None) -> None:
+        self.config = replace(self.config, bind_address=value)
+
+    def _snapshot(self, *, events: bool = False) -> dict[str, Any]:
+        if not isinstance(self.config, ServerConfig):
+            raise TypeError("config must be a ServerConfig")
+        return asdict(replace(self.config, json_stream=True) if events else replace(self.config))
+
+    def run_once(
+        self,
+        *,
+        on_event: Callable[[NativeEvent], None] | None = None,
+        timeout: float | None = None,
+    ) -> Result:
+        """Return one server result; an optional timeout bounds the worker.
+
+        Native test failures are retained as failed results. Worker setup
+        failures raise an exception, and an elapsed timeout raises TimeoutError.
         """
-        _check(lib.iperf_run_server(t))
-        lib.iperf_reset_test(t)
-
-    def run_once(self) -> None:
-        """Run the server for a single test and return."""
-        t = lib.iperf_new_test()
-        if t == ffi.NULL:
-            raise IperfLibraryError("iperf_new_test failed")
+        _validate_call(on_event, None, timeout)
+        if not self._run_lock.acquire(blocking=False):
+            raise RuntimeError("this Server already has an active operation")
         try:
-            _check(lib.iperf_defaults(t))
-            lib.iperf_set_test_role(t, b"s")
-            lib.iperf_set_test_server_port(t, int(self.port))
-            if self.bind_host:
-                _set_str(lib.iperf_set_test_bind_address, t, self.bind_host)
-            # single iteration
-            self._run_iteration(t)
+            return _run_worker(
+                self._snapshot(events=on_event is not None),
+                on_event=on_event,
+                max_runs=1,
+                timeout=timeout,
+            )
         finally:
-            lib.iperf_free_test(t)
+            self._run_lock.release()
 
-    def serve_forever(self) -> None:
-        """Run the server loop until `stop()` is called.
+    def serve_forever(
+        self,
+        *,
+        on_result: Callable[[Result], None] | None = None,
+        on_event: Callable[[NativeEvent], None] | None = None,
+        max_runs: int | None = None,
+        timeout: float | None = None,
+    ) -> None:
+        """Serve sequential tests, passing each completed attempt to on_result.
 
-        This method creates a single iperf_test and reuses it across iterations.
-        The loop checks a threading.Event to allow cooperative shutdown.
+        Each native test is freed before its result callback is delivered.
+        ``stop()`` is cooperative between tests; use ``timeout`` to bound a
+        blocked listener or an active test. A native idle timeout ends the loop.
+        Callback errors propagate after the worker is shut down.
+        Without an on_result handler, native failures raise IperfError.
         """
-        t = lib.iperf_new_test()
-        if t == ffi.NULL:
-            raise IperfLibraryError("iperf_new_test failed")
+        _validate_call(on_event, on_result, timeout)
+        if max_runs is not None:
+            if isinstance(max_runs, bool) or not isinstance(max_runs, int):
+                raise TypeError("max_runs must be an integer")
+            if max_runs < 1:
+                raise ValueError("max_runs must be positive")
+        if not self._run_lock.acquire(blocking=False):
+            raise RuntimeError("this Server already has an active operation")
         try:
-            _check(lib.iperf_defaults(t))
-            lib.iperf_set_test_role(t, b"s")
-            lib.iperf_set_test_server_port(t, int(self.port))
-            if self.bind_host:
-                _set_str(lib.iperf_set_test_bind_address, t, self.bind_host)
-            while not self._stop_event.is_set():
-                try:
-                    self._run_iteration(t)
-                except IperfError:
-                    # If stop() has been requested, suppress errors caused by
-                    # the socket being closed during shutdown. Otherwise
-                    # re-raise to surface unexpected server errors.
-                    if self._stop_event.is_set():
-                        break
-                    raise
+            options = self._snapshot(events=on_event is not None)
+            if self._stop_event.is_set():
+                return
+            result = _run_worker(
+                options,
+                on_event=on_event,
+                on_result=on_result,
+                max_runs=max_runs,
+                should_stop=self._stop_event.is_set,
+                timeout=timeout,
+            )
+            if (
+                on_result is None
+                and not result.ok
+                and result.execution is not None
+                and result.execution.status == "failed"
+            ):
+                raise IperfError(result.error or "Native server failed")
         finally:
-            lib.iperf_free_test(t)
+            self._run_lock.release()
 
-    async def aserve_once(self) -> None:
-        """Run the server for a single test asynchronously."""
+    async def aserve_once(
+        self,
+        *,
+        on_event: Callable[[NativeEvent], None] | None = None,
+        timeout: float | None = None,
+    ) -> Result:
+        """Await one server result using an executor thread.
+
+        Cancelling this await does not cancel the executor operation. Set a
+        timeout to bound its worker independently of the awaiting task.
+        """
         loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, partial(self.run_once))
+        return await loop.run_in_executor(
+            None, partial(self.run_once, on_event=on_event, timeout=timeout)
+        )
 
     def stop(self) -> None:
-        """Signal the serve_forever loop to stop."""
+        """Request that serve_forever stop before its next native test."""
         self._stop_event.set()

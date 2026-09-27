@@ -1,115 +1,106 @@
-"""Additional unit tests for Server and error handling."""
+"""Tests for server worker isolation and result/error transport."""
 
+import sys
+from dataclasses import asdict
 from types import SimpleNamespace
 
 import pytest
 
-from iperf3_lib.exceptions import IperfError
+from iperf3_lib.exceptions import IperfLibraryError
 from iperf3_lib.iperf_server import Server
+from iperf3_lib.result import Result
+from iperf3_lib.server_config import ServerConfig
 
 
-def test_run_iteration_check_raises(monkeypatch):
-    """Test that _run_iteration raises IperfError on negative return from run_server."""
-    # Patch lib so iperf_run_server returns a negative value -> _check raises
-    import iperf3_lib.iperf_server as server_mod
+def test_run_once_passes_all_options_and_returns_worker_result(monkeypatch):
+    """Admit one detached snapshot and preserve worker result identity."""
+    import iperf3_lib.iperf_server as module
 
-    fake_ffi = SimpleNamespace()
-    fake_ffi.NULL = 0
+    config = ServerConfig(bind_address="127.0.0.1", bind_device="lo", json_stream=True)
+    server = Server(config=config)
+    expected = asdict(config)
 
-    # mimic cffi new
-    def ffi_new(spec, val):
-        return val
+    def event_handler(event):
+        pass
 
-    fake_ffi.new = ffi_new
-    # mimic cffi.string used in _check
-    fake_ffi.string = lambda s: s
+    result = Result(ok=True, reporting_role="server")
+    calls = []
 
-    fake_lib = SimpleNamespace()
-    fake_lib.i_errno = 0
+    def worker(options, **kwargs):
+        calls.append((options, kwargs))
+        server.config.port = 9999
+        assert options == expected
+        return result
 
-    def iperf_strerror(errno):
-        return b"err"
-
-    fake_lib.iperf_strerror = iperf_strerror
-
-    def iperf_run_server(t):
-        return -1
-
-    def iperf_reset_test(t):
-        return None
-
-    fake_lib.iperf_run_server = iperf_run_server
-    fake_lib.iperf_reset_test = iperf_reset_test
-
-    monkeypatch.setattr(server_mod, "ffi", fake_ffi)
-    monkeypatch.setattr(server_mod, "lib", fake_lib)
-
-    s = Server()
-    with pytest.raises(IperfError):
-        s._run_iteration(object())
+    monkeypatch.setattr(module, "_run_worker", worker)
+    assert server.run_once(on_event=event_handler, timeout=5) is result
+    assert calls == [(expected, {"on_event": event_handler, "max_runs": 1, "timeout": 5})]
 
 
-def test_run_once_with_bind_host(monkeypatch):
-    """Test that run_once applies bind_host as a local bind address."""
-    import iperf3_lib.iperf_server as server_mod
+def test_lazy_worker_forwarding_supplies_server_role(monkeypatch):
+    """Exercise the wrapper seam without loading the native execution module."""
+    import iperf3_lib.iperf_server as module
 
-    fake_ffi = SimpleNamespace()
-    fake_ffi.NULL = 0
+    calls = []
+    result = Result(ok=False, error="native failure")
 
-    # mimic cffi new
-    def ffi_new(spec, val):
-        return val
+    def worker(*args, **kwargs):
+        calls.append((args, kwargs))
+        return result
 
-    fake_ffi.new = ffi_new
-    # mimic cffi.string
-    fake_ffi.string = lambda s: s
+    monkeypatch.setitem(sys.modules, "iperf3_lib._execution", SimpleNamespace(run_worker=worker))
+    assert module._run_worker({"port": 5201}, timeout=2) is result
+    assert calls == [(("server", {"port": 5201}), {"timeout": 2})]
 
-    fake_lib = SimpleNamespace()
-    called = {}
-    fake_lib.i_errno = 0
 
-    def iperf_strerror(errno):
-        return b"err"
+@pytest.mark.parametrize("error", [IperfLibraryError("allocation"), TimeoutError("deadline")])
+def test_worker_errors_propagate_and_release_instance_lock(monkeypatch, error):
+    """Setup and bounded-execution errors leave the instance reusable."""
+    import iperf3_lib.iperf_server as module
 
-    fake_lib.iperf_strerror = iperf_strerror
+    def worker(*args, **kwargs):
+        raise error
 
-    def iperf_new_test():
-        return object()
+    monkeypatch.setattr(module, "_run_worker", worker)
+    server = Server()
+    with pytest.raises(type(error), match=str(error)):
+        server.run_once()
+    result = Result(ok=False, error="retained native error")
+    monkeypatch.setattr(module, "_run_worker", lambda *a, **kw: result)
+    assert server.run_once() is result
 
-    def iperf_defaults(t):
-        return 0
 
-    def iperf_set_test_role(t, c):
-        return None
+@pytest.mark.parametrize("method", ["run_once", "serve_forever"])
+@pytest.mark.parametrize("value", [False, "2", 0, -1, float("nan"), float("inf")])
+def test_server_rejects_invalid_timeout_before_worker(monkeypatch, method, value):
+    """Require a positive finite deadline without permissive bool coercion."""
+    import iperf3_lib.iperf_server as module
 
-    def iperf_set_test_server_port(t, p):
-        return None
+    monkeypatch.setattr(module, "_run_worker", lambda *a, **kw: pytest.fail("worker admitted"))
+    with pytest.raises((ValueError, TypeError), match="timeout"):
+        getattr(Server(), method)(timeout=value)
 
-    def iperf_set_test_bind_address(t, h):
-        called["bind_address"] = h
 
-    def iperf_run_server(t):
-        return 0
+@pytest.mark.parametrize("method", ["run_once", "serve_forever"])
+def test_server_rejects_non_callable_event_handler(method):
+    """Reject callback typos before native configuration or allocation."""
+    with pytest.raises(TypeError, match="on_event"):
+        getattr(Server(), method)(on_event=1)
 
-    def iperf_reset_test(t):
-        return None
 
-    def iperf_free_test(t):
-        return None
+@pytest.mark.asyncio
+async def test_aserve_once_returns_result_and_forwards_options(monkeypatch):
+    """Retain the real result through the asynchronous convenience method."""
+    server = Server()
 
-    fake_lib.iperf_new_test = iperf_new_test
-    fake_lib.iperf_defaults = iperf_defaults
-    fake_lib.iperf_set_test_role = iperf_set_test_role
-    fake_lib.iperf_set_test_server_port = iperf_set_test_server_port
-    fake_lib.iperf_set_test_bind_address = iperf_set_test_bind_address
-    fake_lib.iperf_run_server = iperf_run_server
-    fake_lib.iperf_reset_test = iperf_reset_test
-    fake_lib.iperf_free_test = iperf_free_test
+    def handler(event):
+        pass
 
-    monkeypatch.setattr(server_mod, "ffi", fake_ffi)
-    monkeypatch.setattr(server_mod, "lib", fake_lib)
+    result = Result(ok=True)
 
-    s = Server(bind_host="0.0.0.0")
-    s.run_once()
-    # address stored as bytes from ffi.new("char[]", b"...") -> decode for comparison
-    assert called.get("bind_address").decode() == "0.0.0.0"
+    def run_once(**kwargs):
+        assert kwargs == {"on_event": handler, "timeout": 3}
+        return result
+
+    monkeypatch.setattr(server, "run_once", run_once)
+    assert await server.aserve_once(on_event=handler, timeout=3) is result

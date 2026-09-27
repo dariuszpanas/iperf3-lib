@@ -150,7 +150,7 @@ class RunEstimate:
     """Requested active time and target payload for one sequential run, including warm-up."""
 
     rate: ResolvedRate
-    active_seconds: int
+    active_seconds: int | None
     estimated_payload_bits: int | None
 
 
@@ -159,7 +159,7 @@ class PlanEstimate:
     """Admission arithmetic only; no network overhead or wall-clock enforcement."""
 
     runs: tuple[RunEstimate, ...]
-    active_seconds: int
+    active_seconds: int | None
     estimated_payload_bits: int | None
     estimated_payload_bytes: int | None
 
@@ -197,18 +197,31 @@ def estimate_plan(
             raise TypeError("configs must contain ClientConfig values")
         cfg = replace(config)
         rate = resolve_rate(cfg, intents[index] if intents is not None else None)
-        active = cfg.duration + cfg.omit
+        active = cfg.duration + cfg.omit if cfg.duration else None
         bits = rate.aggregate_bps_all_directions
-        runs.append(RunEstimate(rate, active, bits * active if bits is not None else None))
-    active_seconds = sum(run.active_seconds for run in runs)
+        runs.append(
+            RunEstimate(
+                rate, active, bits * active if bits is not None and active is not None else None
+            )
+        )
+    active_seconds = (
+        sum(run.active_seconds for run in runs if run.active_seconds is not None)
+        if all(run.active_seconds is not None for run in runs)
+        else None
+    )
     payload_bits = (
         sum(run.estimated_payload_bits for run in runs if run.estimated_payload_bits is not None)
         if all(run.estimated_payload_bits is not None for run in runs)
         else None
     )
     payload_bytes = (payload_bits + 7) // 8 if payload_bits is not None else None
-    if max_active_seconds is not None and active_seconds > max_active_seconds:
-        raise ValueError("plan exceeds the active-time admission budget")
+    if max_active_seconds is not None:
+        if active_seconds is None:
+            raise ValueError(
+                "plan active-time estimate is unknown; finite budget cannot be admitted"
+            )
+        if active_seconds > max_active_seconds:
+            raise ValueError("plan exceeds the active-time admission budget")
     if max_payload_bytes is not None:
         if payload_bytes is None:
             raise ValueError("plan payload estimate is unbounded; finite budget cannot be admitted")

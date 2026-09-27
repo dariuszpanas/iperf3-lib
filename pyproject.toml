@@ -131,6 +131,7 @@ markers = [
 
 [tool.coverage.run]
 source = ["src"]
+patch = ["subprocess"]
 omit = ["*/tests/*", "*/__pycache__/*"]
 
 [tool.coverage.report]

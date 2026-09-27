@@ -8,7 +8,6 @@ from sweep_helpers import Clock, measured, prepared
 
 from iperf3_lib.analysis import ComparisonPolicy
 from iperf3_lib.config import ClientConfig, Protocol
-from iperf3_lib.exceptions import UnsupportedFeatureError
 from iperf3_lib.intent import RateIntent
 from iperf3_lib.sweeps import SweepAxis, prepare_sweep, run_sweep, summarize_sweep
 from iperf3_lib.trials import PlanBudget, TrialPolicy
@@ -141,12 +140,11 @@ def test_later_invalid_combinations_reject_the_full_plan(axes):
 
 
 @pytest.mark.parametrize("field", ["mptcp", "json_stream"])
-def test_unsupported_base_modes_rejected(field):
-    """Wrapper-unsupported modes remain rejected even when the axis itself is valid."""
+def test_isolated_base_modes_admitted(field):
+    """Static plans accept worker features; runtime capability remains separately checked."""
     config = ClientConfig("host", duration=1, rate=1)
     setattr(config, field, True)
-    with pytest.raises(UnsupportedFeatureError):
-        prepared(base=config)
+    assert getattr(prepared(base=config).base_config, field) is True
 
 
 def test_all_budgets_include_warmup_omit_parallel_and_both_directions():

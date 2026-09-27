@@ -12,12 +12,13 @@ import sys
 import tarfile
 import textwrap
 import zipfile
-from dataclasses import asdict
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
+from iperf3_lib.config import config_to_dict
+from iperf3_lib.result import VerifiedSetting
 from scripts.release_artifacts import (
     check_public_documentation,
     digest,
@@ -340,10 +341,12 @@ def _recorded_native_run(version="3.21", profile="tcp-forward"):
     timing.completed_at_seconds = timing.started_at_seconds + config.duration + 0.5
     timing.elapsed_seconds = config.duration + 0.5
     result.completed_at_seconds = timing.completed_at_seconds
-    requested = asdict(config)
+    requested = config_to_dict(config)
     requested["protocol"] = config.protocol.value
     requested["server"] = str(config.server)
     result.execution.configuration.requested = requested
+    for name in requested:
+        result.execution.configuration.effective.setdefault(name, VerifiedSetting())
     result.execution.python_version = "3.14.7"
     result.execution.platform = "recorded qualification environment"
     return result, config

@@ -277,8 +277,8 @@ def test_duplicate_unsupported_unbounded_and_invalid_plan_inputs_are_rejected():
             prepare_plan(specs, policy=TrialPolicy(), budget=PlanBudget(None, None))
     with pytest.raises(ValueError, match="unbounded"):
         prepare_trials(spec.config, budget=PlanBudget(None, 100))
-    with pytest.raises(RuntimeError, match="unsupported"):
-        prepare_trials(ClientConfig("host", mptcp=True), budget=PlanBudget(None, None))
+    with pytest.raises(ValueError, match="unlimited"):
+        prepare_trials(ClientConfig("host", duration=0), budget=PlanBudget(None, None))
     with pytest.raises(ValueError):
         prepare_plan([spec], policy=None, budget=PlanBudget(None, None))
     with pytest.raises(ValueError):
