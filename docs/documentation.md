@@ -17,6 +17,11 @@ uses local system fonts.
 | `.github/workflows/docs.yml` | GitHub Pages build and deployment |
 | `site/` | Generated output, ignored by Git |
 
+Keep the repository README as a short project overview and entry point to these
+pages. Maintain examples, supported-version tables, execution limits, and
+release history in the documentation; link to them from the README instead of
+copying them. The README is also the package description on PyPI.
+
 ## Build and preview
 
 ```bash
@@ -62,7 +67,8 @@ uses current stable uv, with dependency versions recorded in `uv.lock`.
 ## Version policy
 
 This site documents `main`, and its banner identifies APIs that have not shipped.
-Keep `changelog.md`, the homepage, and the README explicit about that boundary.
-At release time update those statements together with package metadata. Until
+Keep `changelog.md`, the homepage, and the installation guide explicit about that
+boundary. The README links readers to those version-specific instructions.
+At release time update the documentation together with package metadata. Until
 versioned documentation is introduced, link users of older releases to their
 tagged README and source rather than presenting current APIs as historical ones.

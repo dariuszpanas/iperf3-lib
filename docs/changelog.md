@@ -111,10 +111,12 @@ Their final qualification must use the combined revision; the earlier retained
 
 ### Deferred beyond 0.3.0
 
-Adaptive UDP load selection, typed live events, and isolated execution remain
-open follow-ups. Their [design and observation evidence](design/advanced-execution.md)
-does not establish adaptive capacity discovery, supported event delivery, hard
-deadlines, cancellation of native calls, or concurrent native plans.
+Adaptive UDP load selection remains deferred. The initial event callbacks and
+isolated workers described above are included; broader typed event schemas,
+async consumers, byte and retention limits, cancellation propagation, concurrent
+plans, and parent-death cleanup remain open follow-ups. See the
+[advanced execution design](design/advanced-execution.md) for those remaining
+contracts and their qualification requirements.
 
 ### Migration from 0.2.0
 

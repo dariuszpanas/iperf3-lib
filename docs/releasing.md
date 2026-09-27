@@ -93,9 +93,9 @@ all 12 receipts and aggregate workflow result together before publication.
    in `uv.lock`. Keep historical artifact producer identities unchanged. Record
    selected changes under a versioned **unreleased candidate** heading in the
    [changelog](changelog.md); a metadata version does not establish publication.
-   Update the README, installation examples, migration instructions, and banner
-   together. Use version-conditional README wording that remains accurate when
-   the same qualified artifact bytes are published.
+   Update installation examples, migration instructions, and the banner
+   together. Keep the README's documentation links current; release history
+   and version-specific instructions belong in the linked pages.
 3. Run local quality/unit gates before the Docker/native matrix. Merge the
    candidate through the normal required checks, then run a build-only hosted
    rehearsal for the resulting exact commit. Inspect the retained distributions,
