@@ -31,7 +31,7 @@ compare results, and run finite sequential experiments from Python.
 
     [Results guide](guides/results.md)
 
-- **Keep portable evidence**
+- **Save results**
 
     Save native and normalized measurements with requested settings, verified
     observations, producer identity, and timing provenance.
@@ -91,12 +91,3 @@ Use the [native option inventory](reference/native-options.md) to find binding,
 protocol, transport, server-policy and output controls. Option availability also
 depends on the native build, kernel and peer; a configuration request is not
 proof of effective network behavior.
-
-These pages follow `main`. The APIs introduced in **0.3** require that version
-or a reviewed source revision; before publication, install from source.
-Published **0.2.0** uses Pydantic models. The [changelog](changelog.md) records
-publication status and the [migration guide](guides/migration-0.3.md) explains
-compatibility changes.
-
-The [roadmap](roadmap.md) records the selected scope, expanded native-control
-work, and the remaining advanced execution and adaptive UDP qualification.

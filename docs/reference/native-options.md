@@ -6,11 +6,6 @@ and **3.21** command-line parsers to the Python API. Use it alongside the
 It includes deprecated aliases and options enabled only in particular native
 builds. Parser presence is not a claim that an operating system can apply an option.
 
-The expanded controls are development APIs tracked in
-[#53](https://github.com/dariuszpanas/iperf3-lib/issues/53). Their implementation
-and qualification must be checked at the source revision being installed;
-earlier 0.3.0 candidate checks do not qualify subsequent additions.
-
 ## How Python reaches libiperf
 
 Basic client configurations use the existing direct CFFI setters. Expanded
@@ -140,7 +135,7 @@ The server field names and complete validation contract are listed in
 | `-v`, `--version` | Capability report and package version | Does not exit the application. |
 | `-h`, `--help` | Python help and this documentation | Does not exit the application. |
 
-## Qualification and maintenance
+## Platform support
 
 Linux is the project's native qualification platform. The presence of an
 option in a tagged parser, a public header, or a capability report does not
@@ -148,13 +143,9 @@ establish that a particular kernel, native build, peer, or permission set can
 execute it. Unsupported requested settings must fail explicitly. Keep original
 native errors and distinguish unknown verification from a proven effective value.
 
-When updating either supported native version, compare **all** tagged parser
-entries, including conditional options and aliases, against this inventory.
-Update configuration validation, capability constraints, recipes, and actual
-native evidence together. Broader event and isolation qualification remains
-tracked in [#35](https://github.com/dariuszpanas/iperf3-lib/issues/35) and
-[#36](https://github.com/dariuszpanas/iperf3-lib/issues/36); this table does not
-close their acceptance criteria.
+See [compatibility and execution limits](compatibility.md) for the supported
+platforms and the [event and timeout guide](../guides/native-controls.md#observe-events-and-bound-a-run)
+for worker behavior.
 
 Authoritative inventories:
 

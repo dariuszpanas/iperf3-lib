@@ -1,89 +1,211 @@
-# Local Prometheus and Grafana qualification
+# Prometheus and Grafana example
 
-This example runs real, bounded libiperf benchmarks through the complete path:
+Run bounded libiperf benchmarks and view the results through this pipeline:
 
 ```text
 Python Client -> loopback iperf3 server -> atomic .prom file
     -> node_exporter textfile collector -> Prometheus -> Grafana
 ```
 
-It uses Docker Desktop's existing Kubernetes cluster and the dedicated
-`iperf3-lib-observability` namespace. All benchmark traffic stays on loopback
-inside one pod. No benchmark runs on a scrape or on a schedule: you explicitly
-start each batch. The dashboard shows latest-run snapshots and their history,
-not physical network capacity.
+Use any chosen Kubernetes context with Linux nodes: kind, Colima, or a work
+cluster. All test traffic stays on loopback inside the benchmark pod. Tests run
+only when you request them; scraping and dashboard refresh generate no traffic.
 
-## Prerequisites and build
+## Choose a context
 
-Enable Kubernetes in Docker Desktop and install `kubectl`, Docker, uv, and make.
-Run the following commands from the repository root. They use the explicit
-`docker-desktop` context without changing your current context.
+These commands use a POSIX shell on Linux or macOS, from the repository root.
+Install `kubectl`, uv, and Docker for the image build below. A containerd cluster
+can import the built image from another machine or pull it from a registry.
+Choose an existing cluster:
 
-First verify that the namespace is not already owned by another run:
+```sh
+kubectl config get-contexts
+export KUBE_CONTEXT="$(kubectl config current-context)"
+# Or: export KUBE_CONTEXT=your-context-name
+export OBS_NAMESPACE=iperf3-lib-observability
 
-```bash
-kubectl --context docker-desktop get namespace iperf3-lib-observability --ignore-not-found
-```
-
-If it exists, inspect it before reusing it. For a new stack, run the non-native
-gates first, then build and test the native image. The default native version is
-3.21; repeat `make docker-test IPERF3_VERSION=3.19.1 DOCKER_IMAGE=iperf3-lib-test:min`
-to exercise the minimum supported version as well.
-
-```bash
+kubectl --context "$KUBE_CONTEXT" get namespace "$OBS_NAMESPACE" --ignore-not-found
 uv sync --frozen --dev
-uv run make check test workflow-lint
-uv run make docker-test DOCKER_IMAGE=iperf3-lib-test:local
-uv run --frozen python scripts/docker_validate.py build --dockerfile examples/observability/Dockerfile --build-arg BASE_IMAGE=iperf3-lib-test:local --image iperf3-lib-observability:dev
-kubectl --context docker-desktop apply --dry-run=client -k examples/observability
-kubectl --context docker-desktop apply -k examples/observability
-kubectl --context docker-desktop -n iperf3-lib-observability rollout status deployment/benchmark --timeout=120s
-kubectl --context docker-desktop -n iperf3-lib-observability rollout status deployment/prometheus --timeout=120s
-kubectl --context docker-desktop -n iperf3-lib-observability rollout status deployment/grafana --timeout=120s
 ```
 
-The example image copies the current source tree over the locally built native
-image. It uses `imagePullPolicy: Never`, so it cannot silently fetch a different
-image. Docker Desktop Kubernetes and Docker share the local image store.
-After source changes, repeat the example image build and restart only its pod:
+Use the dedicated namespace above; inspect an existing namespace before reusing
+it. You need permission to create the example's namespace and workloads, exec
+into its benchmark container, and port-forward its services. Passing
+`--context` selects the target without changing the current kubeconfig context.
+See [Kubernetes context selection](https://kubernetes.io/docs/tasks/access-application-cluster/configure-access-multiple-clusters/).
 
-```bash
-kubectl --context docker-desktop -n iperf3-lib-observability rollout restart deployment/benchmark
-kubectl --context docker-desktop -n iperf3-lib-observability rollout status deployment/benchmark --timeout=120s
+The services use ClusterIP and no ingress. Grafana permits anonymous Viewer
+access; Prometheus and node_exporter also have no authentication. Other cluster
+workloads may reach those services even though the local port forwards bind to
+loopback. In a shared cluster, use a suitable sandbox and your cluster's network
+and access policies.
+
+## Build and deliver the image
+
+The two benchmark containers use `iperf3-lib-observability:dev` with
+`imagePullPolicy: Never`. Building on your laptop alone does not put that image
+on every Kubernetes node. Choose the matching delivery path below.
+
+### Docker build
+
+For kind, a registry-based cluster, or Colima with the Docker runtime:
+
+```sh
+docker build -t iperf3-lib-test:local .
+docker build -f examples/observability/Dockerfile \
+  --build-arg BASE_IMAGE=iperf3-lib-test:local \
+  -t iperf3-lib-observability:dev .
 ```
 
-Restarting that pod clears its ephemeral metric and evidence files. Start new
-port forwards after any rollout that replaces the target pod.
+The first image builds libiperf; the second adds the example runner.
+Build for the Linux architecture of your cluster's nodes. The commands use
+the builder's default architecture; an ARM laptop image will not run on an
+AMD64-only cluster without a matching image build.
 
-## Open local endpoints
+### kind
 
-Run each command in a separate terminal. Port forwards bind only to loopback:
+For a kind cluster named `observability` (context `kind-observability`), load
+the image into its nodes after building:
 
-```bash
-kubectl --context docker-desktop -n iperf3-lib-observability port-forward --address 127.0.0.1 service/grafana 13000:3000
+```sh
+export KUBE_CONTEXT=kind-observability
+kind load docker-image iperf3-lib-observability:dev --name observability
 ```
 
-```bash
-kubectl --context docker-desktop -n iperf3-lib-observability port-forward --address 127.0.0.1 service/prometheus 19090:9090
+Use your existing cluster's name. To create a new one first, use
+`kind create cluster --name observability`. The
+[kind image-loading guide](https://kind.sigs.k8s.io/docs/user/quick-start/#loading-an-image-into-your-cluster)
+explains loading into named clusters and local-image pull policies.
+
+### Colima
+
+With Colima's **Docker runtime**, build using that profile's Docker engine.
+For the default profile, `export DOCKER_CONTEXT=colima` selects it for the Docker
+commands above; choose its Kubernetes context separately with `KUBE_CONTEXT`.
+A new default profile can be started with `colima start --kubernetes`.
+
+With Colima's **containerd runtime**, Kubernetes uses the `k8s.io` image
+namespace. Export the completed image from your Docker builder, copy the archive
+to the Colima host if needed, and import it there:
+
+```sh
+# On the Docker builder:
+docker save -o iperf3-lib-observability.tar iperf3-lib-observability:dev
+# On the Colima host:
+colima nerdctl --namespace k8s.io load < iperf3-lib-observability.tar
 ```
 
-```bash
-kubectl --context docker-desktop -n iperf3-lib-observability port-forward --address 127.0.0.1 service/benchmark 19100:9100
+A new containerd profile can be started with
+`colima start --runtime containerd --kubernetes`. Use the matching profile for
+all commands. See [Colima's runtime and image guidance](https://github.com/abiosoft/colima#kubernetes)
+and [nerdctl image loading](https://github.com/containerd/nerdctl#usage).
+Docker images in another engine are not automatically available to containerd.
+
+### Work or remote cluster: registry overlay
+
+Push a uniquely tagged image to a registry reachable by your cluster:
+
+```sh
+export REGISTRY_REPO=registry.example.com/your-team/iperf3-lib-observability
+export IMAGE_TAG=example-1
+docker tag iperf3-lib-observability:dev "$REGISTRY_REPO:$IMAGE_TAG"
+docker push "$REGISTRY_REPO:$IMAGE_TAG"
+```
+
+Replace the registry and tag with your own. Create a temporary Kustomize overlay
+that changes both benchmark containers to registry pulls:
+
+```sh
+overlay_dir="$(mktemp -d)"
+cp -R examples/observability "$overlay_dir/base"
+cat > "$overlay_dir/kustomization.yaml" <<EOF
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - base
+images:
+  - name: iperf3-lib-observability
+    newName: $REGISTRY_REPO
+    newTag: "$IMAGE_TAG"
+patches:
+  - target:
+      kind: Deployment
+      name: benchmark
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: benchmark
+      spec:
+        template:
+          spec:
+            containers:
+              - name: benchmark
+                imagePullPolicy: IfNotPresent
+              - name: iperf-server
+                imagePullPolicy: IfNotPresent
+EOF
+export OBS_MANIFESTS="$overlay_dir"
+```
+
+For a private registry, add your namespace's `imagePullSecrets` to the overlay's
+pod spec. Use a new tag for each rebuild, or pin the pushed digest.
+The tracked base files stay unchanged. See
+[Kustomize image and patch customization](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/#customizing)
+and [Kubernetes image pull policies](https://kubernetes.io/docs/concepts/containers/images/#image-pull-policy).
+
+## Deploy
+
+For kind or Colima's local image path, select the base manifests:
+
+```sh
+export OBS_MANIFESTS=examples/observability
+```
+
+For a registry, retain the overlay path set above. Review and apply it:
+
+```sh
+kubectl kustomize "$OBS_MANIFESTS"
+kubectl --context "$KUBE_CONTEXT" apply -k "$OBS_MANIFESTS"
+kubectl --context "$KUBE_CONTEXT" -n "$OBS_NAMESPACE" rollout status deployment/benchmark --timeout=120s
+kubectl --context "$KUBE_CONTEXT" -n "$OBS_NAMESPACE" rollout status deployment/prometheus --timeout=120s
+kubectl --context "$KUBE_CONTEXT" -n "$OBS_NAMESPACE" rollout status deployment/grafana --timeout=120s
+```
+
+The deployments select Linux nodes and use ephemeral storage. Declared limits
+total 1.7 CPU cores and 1,984 MiB of memory, in addition to cluster overhead. The monitoring images are
+pinned by digest in `stack.yaml`. The benchmark container starts idle.
+
+## Open the dashboard
+
+Run these commands in three terminals, setting the same `KUBE_CONTEXT` and
+`OBS_NAMESPACE` in each:
+
+```sh
+kubectl --context "$KUBE_CONTEXT" -n "$OBS_NAMESPACE" port-forward --address 127.0.0.1 service/grafana 13000:3000
+```
+
+```sh
+kubectl --context "$KUBE_CONTEXT" -n "$OBS_NAMESPACE" port-forward --address 127.0.0.1 service/prometheus 19090:9090
+```
+
+```sh
+kubectl --context "$KUBE_CONTEXT" -n "$OBS_NAMESPACE" port-forward --address 127.0.0.1 service/benchmark 19100:9100
 ```
 
 Open the [Grafana dashboard](http://127.0.0.1:13000/d/iperf3-lib-observability).
-Grafana has anonymous **Viewer** access for this local example. The services use
-ClusterIP, with no ingress or NodePort. This configuration is intended for local
-qualification; choose authentication and network access controls before using
-it as a shared monitoring service.
+Its Prometheus datasource and panels are provisioned automatically.
 
-## Generate actual results
+## Run benchmarks and verify the metrics
 
-```bash
-kubectl --context docker-desktop -n iperf3-lib-observability exec deployment/benchmark -c benchmark -- python /app/examples/observability/benchmark.py run --scenario all
+```sh
+kubectl --context "$KUBE_CONTEXT" -n "$OBS_NAMESPACE" exec deployment/benchmark -c benchmark -- \
+  python /app/examples/observability/benchmark.py run --scenario all
+uv run --frozen python examples/observability/verify.py --context "$KUBE_CONTEXT" \
+  --output .vault/observability-validation.json
 ```
 
-The batch takes about 50 seconds and performs five successful two-second runs:
+The batch takes about 50 seconds and includes these two-second successful tests:
 
 | Profile | Native request |
 | --- | --- |
@@ -91,84 +213,50 @@ The batch takes about 50 seconds and performs five successful two-second runs:
 | `tcp-reverse` | Two TCP streams from server to client |
 | `tcp-bidirectional` | Two TCP streams in each direction simultaneously |
 | `udp` | One UDP stream with 1,200-byte datagrams |
-| `transition` | Two TCP streams, then a connection to unused loopback port 5202 |
+| `transition` | Two TCP streams, then a deliberate failure on unused loopback port 5202 |
 
-Every successful run requests 4,000,000 bits/s **per stream**. Runs are
-serialized by a file lock. Six-second pauses allow the two-second scrape
-schedule to capture each stage. Actual transferred bytes and measurements are
-retained in the returned native JSON. The final deliberate failure replaces
-`transition.prom` using the same stable labels: success becomes zero, the
-completion time advances, the last-success timestamp remains, and throughput
-from the prior run disappears from current queries.
+Successful tests request 4,000,000 bits/s per stream. Runs are serialized;
+six-second pauses let the two-second scrape schedule capture the changes.
+You can also pass an individual profile to `--scenario`, or `failure` after
+`transition` to inspect the success-to-failure behavior separately.
 
-UDP loss can be zero on loopback. Its measured ratio and jitter are still
-checked against the native result; this example does not inject artificial
-packet loss. Sender and receiver observations remain separate throughout.
+The verifier compares saved native JSON with Prometheus and Grafana API samples:
+directions, sender/receiver observations, units, scrape freshness, and textfile
+parsing must match. Missing, duplicate, unexpected, or incorrect samples fail.
+The failed profile must retain its last-success time and publish no current
+throughput; historical successful samples remain visible in the plots.
 
-`--scenario` also accepts one of the profile names above or `failure`. For a
-manual success-to-failure experiment, run `transition`, observe a scrape, and
-then run `failure`. The default container command only waits; it generates no
-traffic itself.
+Without `--context`, the verifier resolves the current kubeconfig context once.
+It prints and records that context and the dedicated namespace. Its default
+HTTP endpoints are the three forwards above; `--prometheus-url`, `--grafana-url`,
+and `--node-exporter-url` override them. Forward all three from the same context
+used to read the native receipts.
 
-## Verify the complete path
+Results older than 15 minutes fail verification; rerun the batch to refresh
+them, or set `--max-run-age` deliberately. The optional JSON output includes
+native results and queried vectors. `.vault/` is ignored by Git.
+Check the rendered panels too: loopback throughput demonstrates the pipeline,
+not an external network's capacity.
 
-After the batch finishes and with all three port forwards active:
+## Update and clean up
 
-```bash
-uv run python examples/observability/verify.py --output .vault/observability-validation.json
+After source changes, rebuild and deliver the image again. For registry
+deployments, update the overlay to a new tag and apply it. For local images,
+reload the image into the nodes and restart the benchmark deployment:
+
+```sh
+kubectl --context "$KUBE_CONTEXT" -n "$OBS_NAMESPACE" rollout restart deployment/benchmark
+kubectl --context "$KUBE_CONTEXT" -n "$OBS_NAMESPACE" rollout status deployment/benchmark --timeout=120s
 ```
 
-The verifier fails unless:
+Restarting clears that pod's metric files. Reconnect affected port forwards and
+run another batch.
 
-- Native JSON confirms the requested protocol, duration, stream count, rate,
-  reverse flag, and bidirectional flag.
-- node_exporter accepts the textfiles and Prometheus has a healthy, fresh scrape.
-- Every expected sample matches native JSON in both Prometheus's instant-query
-  API and Grafana's `POST /api/ds/query` dashboard API, including exact labels,
-  bits-to-bytes, percent-to-ratio, and milliseconds-to-seconds conversions.
-- No samples are missing, duplicated, nonfinite, or unexpected.
-- The failed profile retains its previous last-success time and has no current
-  throughput sample.
-- Grafana has provisioned the expected dashboard.
+To remove the example, stop the forwards with Ctrl+C and delete its dedicated
+namespace:
 
-Evidence older than 15 minutes fails by default; run another explicit batch to
-refresh it. The `--max-run-age` option changes that evidence-age threshold, but
-the current-scrape freshness check remains in place. The optional output receipt
-contains native JSON and the independently queried vectors. The `.vault/` path
-is ignored by Git.
-
-Current status and freshness panels use instant queries. Throughput, loss, and
-jitter plots show history: a previous successful sample remains in historical
-queries after a failed run, while no current throughput value is published for
-that failed profile. Check the rendered dashboard as well as the API receipt.
-
-## Isolation and reproducibility
-
-- All containers run without root, privilege escalation, service-account
-  tokens, or added Linux capabilities. Root filesystems are read-only.
-- There are no host mounts or host networking. Bounded `emptyDir` volumes hold
-  textfiles, native temporary stream files, and ephemeral monitoring data.
-- Declared container limits total 1.7 CPU cores and 1,984 MiB for the three
-  steady-state pods. Prometheus retains at most two hours or 128 MB of samples.
-- Prometheus 3.15.0, node_exporter 1.12.1, and Grafana 13.2.2 images are pinned by
-  digest. Grafana uses its bundled plugins with automatic installation and
-  updates disabled, so startup does not replace the pinned plugin files.
-
-The manifest flags follow the official
-[node_exporter textfile collector documentation](https://github.com/prometheus/node_exporter#textfile-collector),
-[Prometheus scrape configuration](https://prometheus.io/docs/prometheus/latest/configuration/configuration/),
-[Grafana provisioning documentation](https://grafana.com/docs/grafana/latest/administration/provisioning/),
-and [Grafana plugin update settings](https://grafana.com/docs/grafana/latest/datasources/prometheus/#plugin-updates).
-
-## Cleanup
-
-Stop the three port-forward terminals with Ctrl+C, then remove only this
-example's namespace:
-
-```bash
-kubectl --context docker-desktop delete namespace iperf3-lib-observability
+```sh
+kubectl --context "$KUBE_CONTEXT" delete namespace "$OBS_NAMESPACE"
 ```
 
-This removes its deployments, services, generated ConfigMaps, and ephemeral
-metrics and dashboards. It leaves other namespaces and the local Docker images
-untouched.
+This removes the example's workloads and stored measurements.

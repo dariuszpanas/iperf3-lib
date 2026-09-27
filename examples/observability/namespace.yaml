@@ -5,4 +5,4 @@ metadata:
   labels:
     app.kubernetes.io/part-of: iperf3-lib-observability
     pod-security.kubernetes.io/enforce: restricted
-    pod-security.kubernetes.io/enforce-version: v1.36
+    pod-security.kubernetes.io/enforce-version: latest

@@ -27,10 +27,6 @@ final qualification and an explicit publication decision remain required.
   passwords outside configuration/artifact metadata. Existing artifacts with
   the original configuration fields remain readable.
 
-These changes are tracked in [#53](https://github.com/dariuszpanas/iperf3-lib/issues/53).
-Their final qualification must use the combined revision; the earlier retained
-0.3.0 candidate evidence does not qualify later source changes.
-
 ### Finite experiments and assessments
 
 - Add [finite parameter sweeps](guides/sweeps.md) with preflight budgets, recorded cell order,
@@ -94,29 +90,16 @@ Their final qualification must use the combined revision; the earlier retained
   zero values, and omit unavailable Prometheus measurements. Keep reverse
   summary directions consistent and diagnose ambiguous bidirectional stream
   mappings. Saved native errors and incomplete output no longer appear successful.
-- Add a [Docker Desktop Kubernetes/Grafana example](guides/grafana.md) with
+- Add a [Kubernetes/Grafana example](guides/grafana.md) with
   native JSON-to-metric comparison and success/failure freshness checks.
 
-### Development and release qualification
+### Development tooling
 
-- Build once and retain a wheel/sdist pair with revision, version and hash
-  evidence; qualify installed distributions across the native matrix before
-  any separately authorized publication. Manual qualification is build-only.
-- Stage local Docker validation through one locked, verified context shared
-  across worktrees, preserving selected dirty bytes and avoiding host mounts.
+- Add installed-package checks and retained wheel/sdist artifacts to release CI.
+- Reuse a stable staging directory for local Docker validation.
 - Refresh development dependencies and use current stable uv in CI and Docker.
 - Adopt YAGA commit, workflow, repository, and source/test-change policies here.
-- Add a Zensical site, GitHub Pages deployment, documentation checks, and
-  an issue-based roadmap.
-
-### Deferred beyond 0.3.0
-
-Adaptive UDP load selection remains deferred. The initial event callbacks and
-isolated workers described above are included; broader typed event schemas,
-async consumers, byte and retention limits, cancellation propagation, concurrent
-plans, and parent-death cleanup remain open follow-ups. See the
-[advanced execution design](design/advanced-execution.md) for those remaining
-contracts and their qualification requirements.
+- Add a Zensical documentation site with GitHub Pages deployment and link checks.
 
 ### Migration from 0.2.0
 

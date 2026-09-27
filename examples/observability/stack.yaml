@@ -14,6 +14,8 @@ spec:
       labels:
         app: iperf3-benchmark
     spec:
+      nodeSelector:
+        kubernetes.io/os: linux
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
@@ -129,6 +131,8 @@ spec:
       labels:
         app: iperf3-prometheus
     spec:
+      nodeSelector:
+        kubernetes.io/os: linux
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
@@ -208,6 +212,8 @@ spec:
       labels:
         app: iperf3-grafana
     spec:
+      nodeSelector:
+        kubernetes.io/os: linux
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true

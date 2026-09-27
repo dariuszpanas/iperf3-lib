@@ -42,6 +42,6 @@ and execution limits.
 ## Contributing
 
 See the [contributor guide](https://dariuszpanas.github.io/iperf3-lib/contributing.html)
-for development setup, checks, and repository policies. The
-[roadmap](https://dariuszpanas.github.io/iperf3-lib/roadmap.html) and
-[issues](https://github.com/dariuszpanas/iperf3-lib/issues) track planned work.
+for development setup, checks, and repository policies. Use
+[GitHub issues](https://github.com/dariuszpanas/iperf3-lib/issues) to report bugs
+or discuss planned work.

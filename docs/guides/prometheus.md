@@ -118,7 +118,7 @@ delete stale files automatically.
 
 ## Explore the complete pipeline
 
-The [local Grafana guide](grafana.md) provides a Docker Desktop Kubernetes
+The [Grafana guide](grafana.md) provides a Kubernetes
 example with a native iperf server, explicitly requested client runs, node_exporter,
 Prometheus, and a provisioned dashboard. Use it to inspect completed-run
 measurements and freshness across the complete collection path.
