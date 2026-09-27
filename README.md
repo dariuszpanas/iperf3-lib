@@ -36,9 +36,28 @@ sequential experiments. CFFI is the only direct runtime dependency.
 - Render completed results as Prometheus gauges or atomic node_exporter textfiles;
   scraping never starts a benchmark.
 
-Synchronous clients, async convenience methods, and a minimal server wrapper
-remain available. The [roadmap](https://dariuszpanas.github.io/iperf3-lib/roadmap.html)
+Synchronous clients, async convenience methods, and Python servers share the
+result model. The [roadmap](https://dariuszpanas.github.io/iperf3-lib/roadmap.html)
 records selected scope and follow-up designs.
+
+## Choose the controls you need
+
+| Task | Python controls |
+| --- | --- |
+| Select endpoints and interfaces | Destination/port, client local address and source port, server local address, named device, IPv4/IPv6. |
+| Shape traffic | TCP/UDP/SCTP, forward/reverse/bidirectional, streams, duration/byte/block termination, rate intent, pacing, payload and transport tuning. |
+| Inspect native results | Client/server `Result`, original JSON, directional summaries, intervals, optional remote server output. |
+| Bound or observe a run | `Client.run(timeout=..., on_event=...)` uses an isolated Python/CFFI worker; typed events retain delivery-loss information. |
+| Build experiments | Capabilities, portable artifacts, analysis, repeated assessments, finite sweeps and Prometheus snapshots. |
+
+The [complete option inventory](https://dariuszpanas.github.io/iperf3-lib/reference/native-options.html)
+maps all flags from both supported native versions, including platform limits
+and command-line-only concerns. Start with the
+[native-control recipes](https://dariuszpanas.github.io/iperf3-lib/guides/native-controls.html)
+or [rate intent and capabilities](https://dariuszpanas.github.io/iperf3-lib/guides/configuration-intent.html).
+Expanded controls are development work under
+[#53](https://github.com/dariuszpanas/iperf3-lib/issues/53); use a reviewed source
+revision containing them. Earlier candidate qualification does not cover later changes.
 
 ## Support
 
@@ -61,16 +80,17 @@ export IPERF3_LIB=/usr/local/lib/libiperf.so
 
 ### Current limitations
 
-- MPTCP cannot be selected through libiperf's published ABI. Setting
-  `ClientConfig(mptcp=True)` raises `UnsupportedFeatureError`.
-- Streaming JSON is not exposed. Setting `json_stream=True` raises
-  `UnsupportedFeatureError`; normal runs still return one complete JSON result.
-- `Client.arun()` and `Server.aserve_once()` run blocking libiperf calls in an
-  executor thread. Cancelling the awaiting task does not stop the native call.
-- Concurrent operations in the same process are not supported. Serialize runs
-  or isolate them in separate processes.
-- `Server.stop()` is cooperative: it prevents the next server iteration but
-  cannot interrupt an active blocking `iperf_run_server()` call.
+- Native option support depends on the installed build, kernel, peer and
+  permissions. MPTCP requires TCP/native/kernel support; UDP GSRO requires 3.21.
+- Basic direct client calls share libiperf's process-global state. Serialize
+  them; multiple client objects or executor threads do not provide isolation.
+- Expanded controls, streaming, an event callback or an explicit timeout select
+  an isolated Python/CFFI worker. A timeout terminates and reaps that worker;
+  callbacks have bounded delivery and may drop events, with retained counts.
+- Async convenience uses executor threads. Cancelling an await alone does not
+  terminate its operation; pass an explicit execution timeout to bound it.
+- `Server.stop()` is cooperative between runs. Use the server's explicit
+  session timeout to bound waiting for or handling clients.
 
 ## Install
 
@@ -128,7 +148,7 @@ result = await Client(config).arun()
 
 ## Results and Prometheus metrics
 
-`Result` keeps the complete native JSON in `raw` and provides normalized
+`Result` keeps parsed native JSON in `raw` and provides normalized
 `flows`, `intervals`, protocol, duration, and timestamp fields. Each flow
 identifies its direction independently from whether the native measurement was
 reported by the sender or receiver. Missing measurements are `None`; measured
@@ -137,13 +157,17 @@ and native error documents are failed results. The legacy `summary_mbps`
 convenience still returns `0.0` when no rate is available. Review the
 [result semantics](https://dariuszpanas.github.io/iperf3-lib/guides/results.html)
 before making automated acceptance decisions.
+Streaming on native 3.19.1 reconstructs `raw` from retained event envelopes and
+labels that provenance explicitly; 3.21 streaming enables full native output.
+Bounded callback queues do not impose a memory bound on retained result data.
 For durable storage, the
 [versioned artifact API](https://dariuszpanas.github.io/iperf3-lib/guides/artifacts.html)
 preserves normalized measurements, native JSON, requested and verified settings,
 and timing provenance. It loads without libiperf. `Result.to_dict()` remains
 an unversioned dataclass snapshot.
-Configuration strings for protocols are normalized to `Protocol`; numeric
-configuration fields require integers (not booleans or numeric strings), and
+Configuration strings for protocols are normalized to `Protocol`; count, byte
+and rate fields require integers, while interval fields accept finite numbers. All
+of these reject boolean substitution and implicit numeric-string conversion, and
 boolean options require actual booleans. Hostnames remain strings, and standard
 library IPv4/IPv6 address objects are accepted.
 
@@ -192,11 +216,16 @@ server.
 from iperf3_lib import Server
 
 server = Server(port=5201, bind_host="127.0.0.1")
-server.run_once()
+result = server.run_once()
+print(result.ok, result.reporting_role)
 ```
 
-`serve_forever()` reuses one libiperf test object across sequential runs. See
-the cooperative shutdown limitation above before embedding it in a service.
+`bind_host` is an address assigned to the local host, not a network-device name.
+Replace loopback with the desired interface's assigned IP address for a remote
+test. Use `ServerConfig` for named-device binding and server policies; see
+[server configuration](https://dariuszpanas.github.io/iperf3-lib/reference/configuration.html#server-configuration).
+For sequential clients, use `server.serve_forever()` with result callbacks and
+an explicit whole-session timeout when a bounded wait is required.
 
 ## Contributing
 

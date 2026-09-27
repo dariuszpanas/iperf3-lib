@@ -8,18 +8,66 @@ example with the published package.
 
 | API | Return value | Behavior |
 | --- | --- | --- |
-| `Client(cfg: ClientConfig, *, rate_intent=None)` | `Client` | Retains configuration and optional `RateIntent`; admission snapshots and resolves them. |
-| `Client.run()` | `Result` | Performs one blocking native client run. |
-| `await Client.arun()` | `Result` | Executes `run()` in an executor thread. |
-| `Server(port=5201, bind_host=None)` | `Server` | Creates the Python server wrapper; native allocation happens when serving. |
-| `Server.run_once()` | `None` | Blocks for one native server test. |
-| `await Server.aserve_once()` | `None` | Executes `run_once()` in an executor thread. |
-| `Server.serve_forever()` | `None` | Reuses a native test across sequential iterations until stopped. |
+| `Client(cfg: ClientConfig, *, rate_intent=None, password=None)` | `Client` | Retains configuration and optional `RateIntent`; admission snapshots and resolves them. Password is separate from retained configuration. |
+| `Client.run(*, timeout=None, on_event=None)` | `Result` | Basic calls use direct CFFI; expanded controls, MPTCP, streaming, timeout or callback select an isolated Python/CFFI worker. |
+| `await Client.arun(*, timeout=None, on_event=None)` | `Result` | Executes `run()` in an executor thread; cancellation of the await does not cancel that operation. |
+| `Server(port=5201, bind_host=None)` or `Server(config=ServerConfig(...))` | `Server` | Legacy address/port arguments or detached typed configuration; do not combine the two forms. |
+| `Server.run_once(*, timeout=None, on_event=None)` | `Result` | Returns one server result from an isolated worker. |
+| `await Server.aserve_once(*, timeout=None, on_event=None)` | `Result` | Executes `run_once()` in an executor thread. |
+| `Server.serve_forever(*, on_result=None, on_event=None, max_runs=None, timeout=None)` | `None` | Sequential results delivered after freeing each native test; timeout covers the complete serving session. |
 | `Server.stop()` | `None` | Signals the serving loop to stop between iterations. |
 
-Import `Client`, `ClientConfig`, `Protocol`, and `Server` from `iperf3_lib`.
+Import `Client`, `ClientConfig`, `Protocol`, `Server`, and `ServerConfig` from
+`iperf3_lib`. `ServerConfig` is also available from `iperf3_lib.server_config`.
 Read [running tests](../guides/running-tests.md) for error handling, async
 cancellation, and process-isolation limits.
+
+`timeout` is a positive finite number of seconds, or `None`. It includes worker
+startup and terminates/reaps the process before raising `TimeoutError`; forced
+process termination does not promise native finalizer execution. An independent
+watchdog stops the child even during a blocked callback; returning control to
+the caller still waits for the callback to return. Basic direct
+calls remain non-reentrant within the calling process.
+
+A `Server` rejects reentrant operations on the same instance. `stop()` is
+cooperative between tests; it does not interrupt an active listener. A stopped
+serving loop starts no new worker, but `run_once()` remains available. Native
+failed attempts are retained as results and passed to `on_result`; worker setup
+errors raise. Without `on_result`, a native failed result raises `IperfError`
+from `serve_forever()` instead of silently discarding the failure. An idle exit
+without JSON produces an incomplete result and ends the serving loop. Each
+iteration allocates, defaults, configures and frees a fresh native test in the
+same worker process; results cannot inherit a prior iteration's JSON.
+
+### Native events and worker evidence
+
+Import `NativeEvent` from `iperf3_lib.events`. It is a frozen dataclass with
+`kind: str`, detached `data`, `sequence: int`, and `received_at_seconds: float`.
+The receipt timestamp is distinct from native measurement boundaries.
+
+Supplying `on_event` enables streaming. Callbacks run in the calling Python
+thread (the executor thread for async methods), never within a native C callback.
+Both event queues are bounded at 256. Sequence gaps and the result extension
+`iperf3_lib.event_delivery` record `emitted`, `dropped`, and `queue_capacity`.
+Result capture is independent of dropped live delivery. Native 3.21 streaming
+enables full final output. On 3.19.1, `raw` is explicitly labelled
+`reconstructed_events`, with original event envelopes retained separately;
+reconstruction does not claim fields absent from those native events.
+The reconstruction marker is
+`extensions["iperf3_lib.native_json"]["representation"]`; its `events` list
+retains the copied envelopes. `execution.reconstructed_json` is the diagnostic
+code. Full native-document capture has no reconstruction extension. Retained
+result/event evidence is not subject to the live-delivery queue capacity.
+After a callback raises, further callback delivery stops; the active native run
+finishes and the error is raised after worker shutdown.
+
+`iperf3_lib.native_configuration` contains available `{field: {getter, value}}`
+receipts. These prove native stored requests, not kernel-applied settings or
+achieved measurements. See [native-control examples](../guides/native-controls.md)
+and the [complete option inventory](native-options.md).
+
+Server requests are retained separately in `iperf3_lib.server_config`; native
+getter receipts do not turn those requests into proof of kernel behavior.
 
 ## Rate intent and capability reports
 
@@ -64,7 +112,7 @@ perform native-JSON validation.
 | --- | --- |
 | `ok: bool` | Client execution status. Required when constructing a result. |
 | `error: str \| None` | Failure message, when available. |
-| `raw: dict[str, Any]` | Original native JSON, or an empty dictionary when no JSON was returned. |
+| `raw: dict[str, Any]` | Parsed native JSON, an explicitly labelled streaming-event reconstruction on 3.19.1, or an empty dictionary when no JSON was returned. |
 | `end: EndStats \| None` | Compatibility view of primary native end summaries. |
 | `protocol: str \| None` | Native protocol string normalized to lowercase. |
 | `bidirectional: bool` | Native simultaneous-bidirectional flag. |
@@ -211,7 +259,9 @@ semantics.
 interface exposes a symbol, returning `False` on loading/detection failures.
 Accessing `HAS_BIDIR`, `HAS_JSON_OUTPUT`, `HAS_JSON_CALLBACK`,
 `HAS_PROTOCOL_SELECTION`, or `HAS_BIND_ADDRESS` performs a lazy symbol probe.
-`HAS_MPTCP` and `HAS_JSON_STREAM` are always `False` for this backend.
+Legacy flags are narrow compatibility probes; they are not an exhaustive native
+option inventory. Parser-backed worker controls do not require a dedicated
+setter for every feature.
 
 These flags do not prove operating system support or a successful native run.
 Importing the module does not load libiperf. `get_capabilities(probe_native=False)`
@@ -246,6 +296,11 @@ Inputs include `Selection`, `IntervalPolicy`, `AnalysisTrial(trial_id, result)`,
 All are ordinary frozen dataclasses; nested mappings retain their usual mutability.
 Invalid numbers, counts, option enums and comparison receipts raise `ValueError`.
 Missing measurement evidence produces an explicit data-quality outcome.
+
+Nondefault advanced requests and policy-named advanced fields activate
+comparison dimensions for every trial. Each needs verified native evidence,
+including peers using defaults; matching requests never supply that evidence.
+See [advanced comparison rules](../guides/analysis.md#advanced-configuration-in-comparisons).
 
 The [analysis guide](../guides/analysis.md) specifies formulas, default policies,
 compatibility fields, coverage and methodology requirements.

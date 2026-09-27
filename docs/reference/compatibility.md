@@ -46,18 +46,45 @@ loaded raises `IperfLibraryError` rather than falling back to another name.
 | TCP, UDP, SCTP selection | Uses the public protocol setter and verifies the selected protocol with a getter. |
 | Reverse and parallel streams | Exposed through `ClientConfig`. |
 | Simultaneous bidirectional mode | Exposed when the native setter is available. |
-| Native JSON | One complete result after the run. |
-| MPTCP | `mptcp=True` is explicitly rejected. |
-| Streaming JSON | `json_stream=True` is explicitly rejected. |
-| Async convenience | Executor-backed calls; cancellation does not stop native execution. |
-| Concurrent native operations | Requires separate processes; same-process concurrency is unsupported. |
-| Server shutdown | Cooperative between iterations; no interruption of a blocking native call. |
+| Expanded controls | Validated typed fields select an isolated Python worker using libiperf's public parser through CFFI. No `iperf3` executable is needed for that path. |
+| Native JSON | Completed client/server results remain available independently of live event delivery. |
+| MPTCP | `mptcp=True` uses the worker; requires TCP and native/kernel support. |
+| Streaming JSON | `json_stream=True` or an event callback selects bounded worker event delivery. |
+| Async convenience | Executor-backed operations; cancelling the await does not stop an operation. |
+| Concurrent native operations | Basic direct calls remain non-reentrant. Expanded worker calls isolate native state; ordinary client construction alone does not select isolation. |
+| Execution timeout | Explicit `timeout` terminates/reaps the worker before raising; native C finalizers are not promised on forced termination. |
+| Server shutdown | `stop()` is cooperative between iterations; a worker timeout bounds the complete server session. |
 
-An iperf3 command-line option is not automatically a Python API option. Only
-the fields in the [configuration reference](configuration.md) are exposed.
+An iperf3 command-line option is not automatically a Python API option. The
+[complete option inventory](native-options.md) distinguishes typed controls,
+native-version/platform constraints, and CLI presentation/process concerns.
+The [configuration reference](configuration.md) defines accepted fields.
 [Capability reports](../guides/configuration-intent.md) distinguish wrapper,
-native, and qualification evidence. Additional native options remain evaluated
-follow-ups in the [roadmap](../roadmap.md).
+native, and qualification evidence. The development additions in
+[#53](https://github.com/dariuszpanas/iperf3-lib/issues/53) require their own
+qualification; earlier release-candidate checks do not qualify later changes.
+Native 3.21 adds GSRO and server maximum-duration controls absent from 3.19.1.
+
+## Authentication compatibility
+
+Authentication has been qualified with libiperf 3.21 and OpenSSL 3.5.7. A
+bounded upstream CLI-to-CLI check authenticated and transferred 131,072 bytes.
+The same credentials, keys and OpenSSL version failed with libiperf 3.19.1:
+the client reported authentication failure and OpenSSL reported
+`output buffer too small`. This reproduced without the Python wrapper.
+
+The [3.19.1 authentication implementation](https://github.com/esnet/iperf/blob/3.19.1/src/iperf_auth.c)
+passes a zero output length to OpenSSL's encryption call; the
+[3.21 implementation](https://github.com/esnet/iperf/blob/3.21/src/iperf_auth.c)
+initializes that length to the allocated buffer size. Treat authenticated
+operation with the tested 3.19.1/OpenSSL 3 build as a known native limitation,
+even when credentials are valid. Other native builds may differ.
+
+The wrapper preserves native authentication access and a failed `Result`;
+it does not reject every 3.19.1 build or replace the native cryptographic
+implementation. For authenticated benchmarks, use the qualified 3.21 build.
+Client `use_pkcs1_padding=True` is rejected with 3.21 because that native flag
+is server-only; leave it at its default for a 3.21 client.
 
 ## Troubleshooting
 
@@ -70,9 +97,16 @@ loading is deferred.
 feature table and loaded library version. Symbol availability, wrapper
 support, and a successful test are separate checks.
 
-**An asyncio timeout expires, but traffic continues.** The executor thread
-still owns a blocking native operation. Wait for its completion before
-reusing the process, or design execution around separate worker processes.
+**An asyncio timeout expires, but traffic continues.** Cancelling the await
+leaves its executor operation running. Pass the library's `timeout` argument
+to select a worker deadline independently of the await. Wait for a basic
+direct operation to finish before reusing its native process.
+
+**A callback is slow or events are missing.** Callbacks run synchronously in
+Python. Keep them short: bounded queues drop events. The independent timeout
+watchdog still stops the worker, but caller return waits for a blocked callback.
+Inspect delivery counts and capture provenance; final result capture is
+independent of delivery loss, while 3.19.1 streaming reconstructs native events.
 
 **The reported number differs from the iperf3 terminal summary.** Compare
 the same direction, observation point, interval, and units in `result.raw`.

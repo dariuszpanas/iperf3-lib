@@ -80,7 +80,9 @@ settings verified through returned evidence.
 The low-level `ClientConfig.rate` remains bits/s **per stream**. Higher-level
 [`RateIntent`, unit parsing, and admission estimates](configuration-intent.md)
 are separate APIs. Native feature rejection still raises
-`UnsupportedFeatureError` when applied; MPTCP and streaming remain unsupported.
+`UnsupportedFeatureError` when the installed native build cannot apply a request.
+The [expanded native controls](native-controls.md) add worker-backed MPTCP and
+streaming; use a reviewed revision containing that implementation.
 See the [configuration reference](../reference/configuration.md) for exact
 bounds and protocol defaults.
 
@@ -261,7 +263,18 @@ then construct these dataclasses. The library does not require that adapter
 or reproduce Pydantic's model framework. Validate any manually assembled
 result through the artifact writer before durable storage.
 
-Async convenience still uses executor threads, cancellation still leaves an
-active native call running, and same-process native concurrency remains
-unsupported. Dataclass migration changes none of those guarantees. Future
-execution proposals remain in the [advanced design](../design/advanced-execution.md).
+Async convenience still uses executor threads, and cancelling an await alone
+leaves its operation running. Basic direct native calls remain non-reentrant.
+Expanded controls, event callbacks and explicit execution timeouts select the
+[isolated Python/CFFI worker](native-controls.md#observe-events-and-bound-a-run).
+This is a separate execution feature from the dataclass migration.
+
+The expanded server API returns `Result` from `run_once()` and `aserve_once()`;
+published 0.2.0 returned `None`. Existing code that ignores the return value can
+continue doing so. `Server(port=..., bind_host=...)` remains available; use
+`Server(config=ServerConfig(...))` for additional controls. Binding text is
+validated explicitly instead of silently ignoring falsey invalid values.
+`serve_forever()` delivers sequential attempt results to `on_result`, with an
+optional whole-session timeout. See [running servers](running-tests.md#use-the-python-server-wrapper)
+for failure and stop behavior, and the [advanced design](../design/advanced-execution.md)
+for broader qualification criteria.

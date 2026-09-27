@@ -41,6 +41,12 @@ Every axis needs a nonempty tuple of distinct values. The supported names are
 Protocol values are `tcp`, `udp`, or `sctp`; actual platform support still applies.
 A `rate` axis cannot be combined with a base `RateIntent`.
 
+Expanded native controls can be fixed in the base configuration; they do not
+automatically become sweep axes. The finite active-time requirement excludes
+count-terminated and unlimited-duration configurations with unknown time
+estimates. Keep transport, payload and host controls consistent when defining
+comparable cells.
+
 The product size, repetitions and warm-ups must fit `TrialPolicy.max_trials`
 (default 1,000) before expansion. Every combination must pass configuration and
 rate validation before execution. Sweeps require a finite `max_active_seconds`.
@@ -123,6 +129,14 @@ actual observations; a group label does not establish comparability. Caller
 override failed cell qualification. A group needs at least two cells with enough
 eligible samples; one cell does not become a cross-cell comparison merely because
 it has multiple repetitions. No comparison is added when policy is omitted.
+
+Advanced controls fixed in the base configuration also follow the
+[advanced comparison evidence rule](analysis.md#advanced-configuration-in-comparisons).
+They do not become sweep axes. When activated by a nondefault request or named
+policy field, each compared sample needs a verified native observation, even
+when all requested values match. A cell can have valid measurements and
+qualified axes while its cross-cell comparison is incompatible because a fixed
+advanced setting lacks returned-value or getter evidence.
 
 ## Save and validate a sweep report
 

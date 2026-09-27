@@ -23,16 +23,18 @@ release qualification, and candidate metadata does not establish publication.
 | Trials, baselines and CI reports | Include | Finite sequential execution, retained failures, explicit assessments and frozen report v1; [#32](https://github.com/dariuszpanas/iperf3-lib/issues/32). |
 | Explicit parameter sweeps | Include | [Finite reproducible cells](guides/sweeps.md) with observed setting qualification and retained partial outcomes; [#33](https://github.com/dariuszpanas/iperf3-lib/issues/33). |
 | Adaptive UDP selection | Defer beyond 0.3.0 | Controlled impaired-link and non-monotonic operating-range qualification remains open; [#34](https://github.com/dariuszpanas/iperf3-lib/issues/34). |
-| Typed live events | Defer beyond 0.3.0 | Version-specific native observations do not qualify queue, overflow, stress or abandonment behavior; [#35](https://github.com/dariuszpanas/iperf3-lib/issues/35). |
-| Isolated execution | Defer beyond 0.3.0 | Worker ownership, crash, termination and orphan cleanup need qualification; [#36](https://github.com/dariuszpanas/iperf3-lib/issues/36). |
+| Expanded native controls | Add under #53 | [Complete option coverage](reference/native-options.md), typed client/server configuration, bound listeners and native behavior need combined qualification; [#53](https://github.com/dariuszpanas/iperf3-lib/issues/53). |
+| Typed live events | First bounded worker API under #53 | Callback delivery and final results have separate contracts; broader stress and abandonment criteria remain in [#35](https://github.com/dariuszpanas/iperf3-lib/issues/35). |
+| Isolated execution | Worker required for expanded native parsing | Python/CFFI process ownership and explicit timeouts are implemented; broader lifecycle qualification remains in [#36](https://github.com/dariuszpanas/iperf3-lib/issues/36). |
 | Documentation and qualification | Include | Migration guide, public docs, YAGA policies, stable local Docker staging and retained distribution checks; [#25](https://github.com/dariuszpanas/iperf3-lib/issues/25), [#38](https://github.com/dariuszpanas/iperf3-lib/issues/38), [#43](https://github.com/dariuszpanas/iperf3-lib/issues/43). Final candidate evidence remains required. |
 
-The experiment scope is finite sequential trials and explicit sweeps. Adaptive
-UDP selection, live-event delivery, and isolated workers are
-follow-on candidates after 0.3.0. Their
-[design disposition](design/advanced-execution.md) records proposed contracts,
-bounded native observations, and the remaining qualification work. Those
-issues remain open; the designs do not expose new APIs.
+The experiment scope remains finite sequential trials and explicit sweeps.
+Adaptive UDP selection is deferred. The later native-option review added an
+isolated worker and bounded event API because safe native-parser integration
+needs process ownership. The [execution guide](guides/native-controls.md)
+defines that concrete contract; the [advanced design](design/advanced-execution.md)
+retains broader qualification criteria. Implementation alone does not close
+those issues or establish release readiness for the combined revision.
 
 ## What exists today
 
@@ -41,11 +43,11 @@ Documentation tracks the development branch. The following foundation is on
 
 | Area | Current foundation | Remaining work |
 | --- | --- | --- |
-| Configuration | Validated dataclasses, explicit rate intent and admission estimates, configuration provenance, and layered capability reports. | Qualify additional native options; retain application-owned profiles and defer asymmetric simultaneous budgets. |
+| Configuration | Validated client/server dataclasses, rate intent and admission estimates, expanded native controls and layered capability reports. | Qualify the combined option coverage; retain application-owned profiles and defer asymmetric simultaneous budgets. |
 | Results | Directional and per-stream summaries, interval scope/bytes/duration/warm-up metadata, explicit missing values, and execution provenance. | Preserve this evidence contract as analysis and experiments expand. |
 | Serialization | Strict version-1 result artifacts, assessment and sweep reports, portable loading, and retained trial/cell evidence. | Preserve frozen interpretation and historical producers as new contracts evolve. |
 | Metrics | Latest-run Prometheus gauges, omitted unavailable values, freshness fields, atomic replacement, and a local Grafana qualification fixture. | Repeat integration qualification for the final release candidate. |
-| Execution | Synchronous APIs and asynchronous convenience methods using executor threads. | Live events and isolated execution for stronger deadline, cancellation, or concurrency guarantees. |
+| Execution | Basic direct clients plus isolated Python/CFFI workers for expanded controls, servers, event delivery and explicit timeouts. | Preserve direct-call limits; complete the broader stress, cancellation and cleanup criteria separately. |
 | Analysis | Measured throughput, interval stability, stream balance/scaling, directional comparisons, and retained transport/CPU evidence. | Repeat installed analysis and report qualification for the final candidate. |
 | Plans | Finite sequential trials, retained baselines, median assessments, and bounded sweeps with verified cell settings and versioned reports. | Final candidate qualification; advanced adaptive selection remains deferred. |
 
@@ -145,10 +147,11 @@ unavailable verification explicit. Capability reports distinguish wrapper
 support, native symbol availability, tested platform/version constraints, and
 supplied runtime outcomes.
 
-Additional wrapper coverage may include pacing, socket buffers,
-congestion-control selection, and server output. These expose native
-functionality. Higher-level analysis and experiments are a separate
-contribution. Every accepted configuration field must be applied exactly once
+The [native option review #53](https://github.com/dariuszpanas/iperf3-lib/issues/53)
+extends coverage to binding, transport/pacing, count termination, payload,
+authentication and server controls. The [coverage reference](reference/native-options.md)
+accounts for all tagged flags and keeps native/platform limits explicit.
+Every accepted configuration field must be applied exactly once
 or rejected explicitly, with native behavior checked through returned JSON
 or a matching getter.
 
@@ -242,27 +245,25 @@ sequentially under the current execution contract.
 Tracking: [typed live events #35](https://github.com/dariuszpanas/iperf3-lib/issues/35)
 and [isolated execution #36](https://github.com/dariuszpanas/iperf3-lib/issues/36).
 
-A typed live-event API is proposed separately from the complete-result API.
-Native callbacks should copy and enqueue quickly, with parsing and user
-callbacks outside the native callback. Queue bounds, event loss, malformed
-events, and consumer abandonment need explicit contracts.
+The first public callback API and isolated Python/CFFI worker are part of
+[#53](https://github.com/dariuszpanas/iperf3-lib/issues/53). Typed native events
+are delivered outside the C callback, with bounded queues and dropped-event
+counts. Result evidence is retained independently of delivery loss, with explicit
+event reconstruction on native 3.19.1 and full native output on 3.21. Explicit timeouts
+terminate and reap the worker and raise `TimeoutError`; they do not manufacture
+a final native summary or claim native finalizer execution.
 
-Reliable deadlines, cancellation, and concurrent plans need an isolation
-design. Explore bounded Python worker processes calling libiperf through
-CFFI, with clear lifecycle ownership and result transport. Forced termination
-must produce an incomplete outcome; it cannot manufacture a final native
-summary.
+Basic direct calls remain non-reentrant. Cancelling an async await alone does
+not stop its executor operation. A watchdog stops the child independently of
+synchronous callbacks, but a blocked callback still delays return to the caller.
+Server stop remains cooperative between tests, with a fresh native test per iteration.
 
-Until those designs are implemented and qualified, cancelling an await does
-not stop the blocking native call and concurrent native operations within
-one process remain unsupported.
-
-Both proposals are follow-on candidates after 0.3.0. The
+The
 [execution design](design/advanced-execution.md#typed-live-events) and
 [native observation report](design/native-event-observations.md) explain the
-minimum/latest streaming difference, proposed transport and cleanup contracts,
-and tests still needed. In particular, the small loopback probe does not
-establish a supported event API or cancellation guarantee.
+minimum/latest streaming difference and broader qualification criteria. Keep
+#35/#36 open until their actual criteria have evidence; the historical small
+loopback probe alone does not qualify production event delivery or cleanup.
 
 ## Working principles
 
@@ -299,6 +300,7 @@ criteria.
 | Adaptive UDP exploration | [#34](https://github.com/dariuszpanas/iperf3-lib/issues/34) | #33 |
 | Live events | [#35](https://github.com/dariuszpanas/iperf3-lib/issues/35) | #27 |
 | Isolated execution | [#36](https://github.com/dariuszpanas/iperf3-lib/issues/36) | #28 |
+| Native controls and discoverability | [#53](https://github.com/dariuszpanas/iperf3-lib/issues/53) | Typed configuration, worker lifecycle, client/server native qualification. |
 
 Dependencies describe implementation order. Design discussions can proceed
 in parallel, and issue status remains authoritative as plans evolve.
