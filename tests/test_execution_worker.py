@@ -82,7 +82,7 @@ def child(monkeypatch, body, *, read_request=True):
     )
 
     def popen(args, **kwargs):
-        assert args == [sys.executable, "-m", "iperf3_lib._worker"]
+        assert args == _execution._worker_command()
         process = original([sys.executable, "-u", "-c", program], **kwargs)
         processes.append(process)
         return process

@@ -46,7 +46,9 @@ If cleanup cannot be confirmed, `IperfCleanupError` takes precedence over the
 original failure and retains it as its cause. The library retains ownership for
 subsequent reaping, and the server remains unavailable until its worker is
 reaped. Forced termination returns no partial `Result` and does not establish
-that native C finalizers executed. Parent-death protection is not provided.
+that native C finalizers executed. Linux workers install a parent-death signal
+before native execution; see [worker lifetime](../guides/running-tests.md#worker-lifetime-on-linux)
+for the bootstrap, creating-thread and platform boundaries.
 
 Async methods use the built-in isolated path, without calling overrides of
 `run()` or `run_once()`. Worker setup errors, including `IperfError`, propagate;
