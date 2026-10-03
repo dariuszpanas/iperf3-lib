@@ -6,6 +6,9 @@ These pages describe `main`. Released versions remain available through
 
 ## Unreleased
 
+- Protect isolated Linux workers with a parent-death signal before loading the
+  native library. Qualify worker lifetime and cancellation from installed wheels
+  and sdists across the supported Python/libiperf matrix.
 - Always isolate `Client.arun()` and propagate cancellation through client/server
   worker cleanup, including repeated cancellation and completion/deadline races.
   Preserve synchronous execution and cooperative `Server.stop()` behavior.

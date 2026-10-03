@@ -102,13 +102,33 @@ Async methods use their built-in isolated implementation rather than invoking
 an override of `run()` or `run_once()`. Setup errors therefore follow worker
 semantics: they raise, whereas some direct-client setup errors produce failed
 results. Wrapping a synchronous method in your own executor does not stop its
-native operation when its await is cancelled. Plan cancellation and cleanup
-after abrupt parent-process death remain unsupported.
+native operation when its await is cancelled. Plan cancellation remains
+unsupported.
 
 Do not use `result.ok` as a performance acceptance decision: a completed test
 can have low throughput or substantial loss. Choose application thresholds with
 `AssessmentPolicy`, then use `assess_plan` for
 [repeated trials and baseline assessment](trials.md).
+
+## Worker lifetime on Linux
+
+Library-launched Linux workers install a kernel parent-death signal before
+importing the native worker. If the owning parent dies, the kernel sends
+`SIGKILL` to the worker. Startup also verifies the expected parent identity;
+if the parent has already disappeared or protection cannot be installed, the
+worker exits before running libiperf. This behavior is new after 0.3.0.
+
+Linux ties this signal to the thread that created the child. The library keeps
+that thread alive until the operation and its cleanup finish. After parent
+death, the worker's OS resources are released and the system's init process or
+subreaper owns final reaping. Forced termination does not run native finalizers
+or return a partial measurement to the vanished caller.
+
+This protection covers the worker after its bootstrap executes. It does not
+supervise arbitrary descendants or recover a stalled interpreter before
+bootstrap. Other platforms retain their existing worker behavior without this
+Linux lifetime guarantee. Normal cancellation and explicit deadlines continue
+to use the [bounded shutdown sequence](#integrate-with-asyncio).
 
 ## Use the Python server wrapper
 

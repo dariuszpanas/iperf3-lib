@@ -31,7 +31,10 @@ impairment, stress, and cancellation have **not** been qualified by that probe.
 events. Async methods now always use isolated workers and propagate cancellation
 after worker cleanup. An active callback must return before the await completes;
 unconfirmed cleanup raises `IperfCleanupError`. This post-0.3.0 change does not
-establish plan cancellation, retained partial artifacts, or parent-death cleanup.
+establish plan cancellation or retained partial artifacts. Linux workers now
+install a parent-death signal before native execution; see the
+[worker lifetime contract](../../docs/guides/running-tests.md#worker-lifetime-on-linux)
+for bootstrap, creating-thread and descendant boundaries.
 Concurrent direct native calls in one process
 remain unsupported. A plan's admission estimates do not provide a hard deadline;
 an explicit worker timeout has a separate process-termination contract.
@@ -216,10 +219,15 @@ silently removed from a distribution. Parent cancellation must await terminal
 cleanup before releasing an admission slot.
 
 The parent owns process handles and bounded reaping on every path. Workers
-should create no application subprocesses. Parent death needs a separately
-tested Linux lifetime mechanism or watchdog; terminating a process alone does
-not guarantee orphan prevention. Python also documents that forced termination
-can skip cleanup and damage pipes/queues. See
+should create no application subprocesses. The current Linux bootstrap installs
+`PR_SET_PDEATHSIG` with `SIGKILL` and verifies the expected parent before loading
+the worker. Linux binds this signal to the creating thread, which the library
+retains throughout execution and cleanup. The init process or a subreaper owns
+reaping after parent death. This does not supervise arbitrary descendants or
+the interpreter before bootstrap. See the
+[Linux parent-death contract](https://man7.org/linux/man-pages/man2/PR_SET_PDEATHSIG.2const.html).
+Python also documents that forced termination can skip cleanup and damage
+pipes/queues. See
 [the termination contract](https://docs.python.org/3/library/multiprocessing.html#multiprocessing.Process.terminate).
 
 Avoid shared mutable queues or locks across workers that may be killed.

@@ -34,7 +34,7 @@ SCENARIO = textwrap.dedent(
     def record(*args, **kwargs):
         process = real_popen(*args, **kwargs)
         command = args[0] if args else kwargs.get('args')
-        if command == [sys.executable, '-m', 'iperf3_lib._worker']:
+        if command == _execution._worker_command():
             processes.append(process)
         return process
     _execution.subprocess.Popen = record
@@ -48,7 +48,7 @@ SCENARIO = textwrap.dedent(
             stderr=subprocess.DEVNULL,
         )
         with subprocess.Popen(
-            [sys.executable, '-m', 'iperf3_lib._worker'],
+            _execution._worker_command(),
             stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, text=True,
         ) as worker:
@@ -190,7 +190,7 @@ def test_cancellation_scenario_tracks_only_owned_worker_processes():
         "active-client-udp",
     ],
 )
-def test_native_cancellation_reaps_worker_releases_listener_and_allows_reuse(case):
+def test_native_cancellation_reaps_worker_releases_listener_and_allows_reuse(case, record_property):
     """Cancellation ends owned native work and permits a measured subsequent run."""
     completed = subprocess.run(
         [sys.executable, "-c", SCENARIO, json.dumps(case)],
@@ -201,6 +201,7 @@ def test_native_cancellation_reaps_worker_releases_listener_and_allows_reuse(cas
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
     receipt = json.loads(completed.stdout)
+    record_property("cancellation", json.dumps(receipt))
     assert receipt["cancelled_children"] == (2 if case["active"] else 1)
     assert receipt["reused"] is True
     if case["active"]:

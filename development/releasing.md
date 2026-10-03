@@ -59,6 +59,22 @@ format's smoke has a 120-second process deadline in the qualification
 container. This test harness does not change the library's documented
 cancellation or concurrency behavior.
 
+## Installed lifecycle checks in CI
+
+Current CI also qualifies operation cancellation and Linux parent-death cleanup
+from installed wheels and sdists. It builds one distribution pair from the
+candidate revision, then uses fresh environments outside the source checkout
+in all six Python/libiperf combinations. Import paths and installed package
+bytes must match the retained distributions. Missing or skipped lifecycle
+cases fail qualification.
+
+These checks retain separate lifecycle receipts with the source revision,
+distribution and harness hashes, interpreter/native versions, and per-case
+evidence. They cover idle workers and active TCP/UDP client/server operations,
+worker and socket release, and measured reuse. They complement the broader
+release smoke below; they do not establish concurrent plans, retained partial
+results or every proposed IPC guarantee.
+
 ## Inspect installed receipt v2
 
 The 0.3.0 qualification contract requires **12 successful receipt-v2 files**:

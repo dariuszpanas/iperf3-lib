@@ -31,3 +31,10 @@ any active callback. Unconfirmed cleanup raises `IperfCleanupError`; the library
 retains ownership of the worker. This support is new after 0.3.0. Cancelling an
 application-owned executor wrapper around a synchronous call does not stop its
 operation. See [execution limits](reference/compatibility.md#feature-boundaries).
+
+On Linux, library-launched workers install a parent-death signal before native
+execution. Parent death kills that worker and releases its OS resources; final
+reaping belongs to init or a subreaper. This is a worker lifetime mechanism,
+not a sandbox for native code or a supervisor for arbitrary descendants. See
+[worker lifetime](guides/running-tests.md#worker-lifetime-on-linux) for startup
+and platform boundaries.

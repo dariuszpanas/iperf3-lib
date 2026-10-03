@@ -11,12 +11,21 @@ import sys
 import threading
 import time
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any, Literal
 
 from ._cancellation import _ExecutionControl
 from .events import NativeEvent
 from .exceptions import IperfError, IperfLibraryError, UnsupportedFeatureError
 from .result import Diagnostic, ExecutionMetadata, Result, result_from_iperf_json
+
+
+def _worker_command() -> list[str]:
+    """Select the guarded Linux bootstrap without changing other platform paths."""
+    if sys.platform == "linux":
+        bootstrap = Path(__file__).with_name("_worker_lifetime.py").resolve()
+        return [sys.executable, str(bootstrap), str(os.getpid())]
+    return [sys.executable, "-m", "iperf3_lib._worker"]
 
 
 def _decode_result(message: dict[str, Any], role: Literal["client", "server"]) -> Result:
@@ -216,7 +225,7 @@ def run_worker(
     last_result: Result | None = None
     count = 0
     process = subprocess.Popen(
-        [sys.executable, "-m", "iperf3_lib._worker"],
+        _worker_command(),
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,

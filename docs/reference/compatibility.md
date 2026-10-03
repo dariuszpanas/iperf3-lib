@@ -54,6 +54,7 @@ loaded raises `IperfLibraryError` rather than falling back to another name.
 | Concurrent native operations | Basic direct calls remain non-reentrant. Expanded worker calls isolate native state; ordinary client construction alone does not select isolation. |
 | Execution timeout | Explicit `timeout` terminates/reaps the worker before raising; native C finalizers are not promised on forced termination. |
 | Server shutdown | `stop()` is cooperative between iterations; a worker timeout bounds the complete server session. |
+| Parent death | On Linux, a worker bootstrap installs `SIGKILL` on parent death and checks the expected parent before native execution. Other platforms have no corresponding guarantee. See [worker lifetime](../guides/running-tests.md#worker-lifetime-on-linux). |
 
 An iperf3 command-line option is not automatically a Python API option. The
 [complete option inventory](native-options.md) distinguishes typed controls,
