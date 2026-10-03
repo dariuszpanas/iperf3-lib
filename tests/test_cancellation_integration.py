@@ -11,8 +11,12 @@ import pytest
 SCENARIO = textwrap.dedent(
     r"""
     import asyncio
+    import importlib.metadata
     import json
+    import os
     import pathlib
+    import platform
+    import re
     import socket
     import subprocess
     import sys
@@ -50,11 +54,12 @@ SCENARIO = textwrap.dedent(
         with subprocess.Popen(
             _execution._worker_command(),
             stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE, text=True,
+            stderr=subprocess.PIPE,
         ) as worker:
-            output, errors = worker.communicate('invalid JSON\n', timeout=5)
-        assert worker.returncode == 0, errors
-        assert json.loads(output.splitlines()[0])['class'] == 'JSONDecodeError'
+            # Valid framing without protocol identity fails before native load.
+            output, errors = worker.communicate(b'\x00\x00\x00\x02{}', timeout=5)
+        assert worker.returncode != 0 and errors, (output, errors)
+        assert output == b''
         assert processes == [worker]
         assert worker.stdin.closed and worker.stdout.closed
         print(json.dumps({'owned_workers': len(processes), 'pipes_closed': True}))
@@ -80,6 +85,26 @@ SCENARIO = textwrap.dedent(
         with socket.socket() as released:
             released.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             released.bind((host, port))
+
+    def worker_receipt(result, process):
+        from iperf3_lib.ffi.api import POSSIBLE_NAMES, ffi, lib
+        receipt = result.extensions['iperf3_lib.worker']
+        assert receipt['protocol_version'] == 1
+        assert receipt['pid'] == process.pid
+        assert receipt['run_index'] == 1
+        for name in ('request_id', 'worker_id'):
+            assert re.fullmatch('[0-9a-f]{32}', receipt[name])
+        producer = receipt['producer']
+        assert producer['native_version'] == ffi.string(lib.iperf_get_iperf_version()).decode()
+        assert producer['python_version'] == platform.python_version()
+        assert producer['package_version'] == importlib.metadata.version('iperf3-lib')
+        selector = (
+            {'source': 'IPERF3_LIB', 'value': os.environ['IPERF3_LIB']}
+            if os.getenv('IPERF3_LIB')
+            else {'source': 'platform_search', 'candidates': list(POSSIBLE_NAMES)}
+        )
+        assert producer['library_selector'] == selector
+        return receipt
 
     async def main():
         loop = asyncio.get_running_loop()
@@ -137,10 +162,17 @@ SCENARIO = textwrap.dedent(
         assert server_result.ok, server_result.error
         assert client_result.raw['end']['sum_received']['bytes'] > 0
         assert_released()
+        server_receipt = worker_receipt(server_result, processes[-2])
+        client_receipt = worker_receipt(client_result, processes[-1])
+        assert server_receipt['worker_id'] != client_receipt['worker_id']
+        assert server_receipt['request_id'] != client_receipt['request_id']
         print(json.dumps({
             'cancelled_children': cancelled_children,
             'reused': True,
             'measured_bytes_before_cancel': measured_bytes[0] if measured_bytes else 0,
+            'reuse_bytes': client_result.raw['end']['sum_received']['bytes'],
+            'reused_client_worker': client_receipt,
+            'reused_server_worker': server_receipt,
         }))
 
     try:

@@ -25,6 +25,13 @@ CASES = (
     "active-server-udp",
     "active-client-udp",
 )
+IPC_CASES = (
+    "wrong-identity",
+    "oversized-header",
+    "truncated-frame",
+    "saturated-events",
+    "partial-frame-cancel",
+)
 TESTS = {
     "test_cancellation_integration.py": (
         "test_native_cancellation_reaps_worker_releases_listener_and_allows_reuse",
@@ -33,6 +40,10 @@ TESTS = {
     "test_worker_lifetime_integration.py": (
         "test_parent_death_stops_native_worker_and_releases_listener",
         "worker_lifetime",
+    ),
+    "test_worker_ipc_integration.py": (
+        "test_installed_worker_transport_contract",
+        "worker_ipc",
     ),
 }
 HARNESS = (
@@ -196,7 +207,11 @@ def require_installed_package(manifest: dict, prefix: Path, source: Path) -> str
 
 def expected_tests() -> list[str]:
     """Return the exact required parametrized lifecycle cases."""
-    return [f"{name}::{test}[{case}]" for name, (test, _) in TESTS.items() for case in CASES]
+    return [
+        f"{name}::{test}[{case}]"
+        for name, (test, property_name) in TESTS.items()
+        for case in (IPC_CASES if property_name == "worker_ipc" else CASES)
+    ]
 
 
 class _Reports:
@@ -249,12 +264,74 @@ def validate_results(result: dict) -> None:
             active = "[active-" in nodeid
             if (
                 evidence.get("reused") is not True
+                or type(evidence.get("cancelled_children")) is not int
                 or evidence.get("cancelled_children") != (2 if active else 1)
-                or (active and evidence.get("measured_bytes_before_cancel", 0) <= 0)
+                or type(evidence.get("measured_bytes_before_cancel")) is not int
+                or (
+                    evidence["measured_bytes_before_cancel"] <= 0
+                    if active
+                    else evidence["measured_bytes_before_cancel"] != 0
+                )
             ):
                 raise ValueError(
                     f"cancellation receipt lacks measured lifecycle evidence: {nodeid}"
                 )
+            workers = [
+                evidence.get(name) for name in ("reused_client_worker", "reused_server_worker")
+            ]
+            for worker in workers:
+                if (
+                    not isinstance(worker, dict)
+                    or type(worker.get("protocol_version")) is not int
+                    or worker.get("protocol_version") != 1
+                    or type(worker.get("run_index")) is not int
+                    or worker.get("run_index") != 1
+                    or type(worker.get("pid")) is not int
+                    or worker["pid"] <= 0
+                    or any(
+                        not isinstance(worker.get(key), str)
+                        or re.fullmatch(r"[0-9a-f]{32}", worker[key]) is None
+                        for key in ("request_id", "worker_id")
+                    )
+                    or not isinstance(worker.get("producer"), dict)
+                    or any(
+                        not isinstance(worker["producer"].get(key), str)
+                        or not worker["producer"][key]
+                        for key in ("package_version", "python_version", "native_version")
+                    )
+                    or not isinstance(worker["producer"].get("library_selector"), dict)
+                    or worker["producer"]["python_version"] != result.get("python")
+                    or worker["producer"]["native_version"] != result.get("native_version")
+                    or worker["producer"]["package_version"] != result.get("package_version")
+                ):
+                    raise ValueError(
+                        f"cancellation receipt lacks worker producer evidence: {nodeid}"
+                    )
+            if (
+                any(
+                    workers[0][key] == workers[1][key] for key in ("pid", "request_id", "worker_id")
+                )
+                or type(evidence.get("reuse_bytes")) is not int
+                or evidence.get("reuse_bytes", 0) <= 0
+            ):
+                raise ValueError(f"cancellation receipt lacks distinct measured reuse: {nodeid}")
+        elif property_name == "worker_ipc":
+            case = nodeid.rsplit("[", 1)[1].removesuffix("]")
+            if (
+                evidence.get("case") != case
+                or evidence.get("workers_reaped") is not True
+                or evidence.get("pipes_closed") is not True
+                or (
+                    case == "saturated-events"
+                    and (type(evidence.get("dropped")) is not int or evidence["dropped"] <= 0)
+                )
+                or (case == "partial-frame-cancel" and evidence.get("cancelled") is not True)
+                or (
+                    case in {"wrong-identity", "oversized-header", "truncated-frame"}
+                    and evidence.get("rejected") is not True
+                )
+            ):
+                raise ValueError(f"worker IPC receipt lacks transport evidence: {nodeid}")
         else:
             active = "[active-" in nodeid
             parent, worker = evidence.get("parent_pid"), evidence.get("worker_pid")
@@ -270,6 +347,7 @@ def validate_results(result: dict) -> None:
                 or evidence.get("worker_reaped") is not True
                 or evidence.get("listener_released") is not True
                 or evidence.get("reused") is not True
+                or type(evidence.get("reuse_bytes")) is not int
                 or evidence.get("reuse_bytes", 0) <= 0
                 or type(traffic) is not int
                 or (traffic <= 0 if active else traffic != 0)
@@ -297,6 +375,7 @@ def _test(args) -> int:
         ):
             raise ValueError("installed qualification interpreter/native matrix identity differs")
         result.update(
+            package_version=importlib.metadata.version("iperf3-lib"),
             python=platform.python_version(),
             executable=sys.executable,
             native_version=native,

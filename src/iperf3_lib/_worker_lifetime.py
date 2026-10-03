@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import ctypes
-import json
 import os
 import runpy
 import signal
@@ -37,14 +36,13 @@ def protect_parent(expected_pid: int) -> None:
 
 
 def main() -> None:
-    """Fail closed through the worker protocol before importing any package code."""
+    """Fail closed before package imports or a protocol identity is available."""
     try:
         if len(sys.argv) != 2:
             raise ValueError("Worker bootstrap requires its expected parent PID")
         protect_parent(int(sys.argv[1]))
     except Exception as exc:
-        print(json.dumps({"type": "error", "class": "IperfLibraryError", "message": str(exc)}))
-        print('{"type":"done"}', flush=True)
+        print(f"Worker lifetime bootstrap failed: {exc}", file=sys.stderr, flush=True)
         raise SystemExit(1) from exc
     runpy.run_module("iperf3_lib._worker", run_name="__main__")
 

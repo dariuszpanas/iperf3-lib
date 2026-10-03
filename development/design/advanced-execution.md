@@ -174,24 +174,36 @@ guarantees depend on qualified isolation.
 
 ### Startup and transport
 
-Start with one fresh Python process per trial. The worker loads the selected
+The implementation starts a fresh Python interpreter through `subprocess.Popen`
+for each client operation or sequential server session. The worker loads the selected
 libiperf and owns one native test; C pointers and live callbacks never cross
-the process boundary. An explicit spawn context is the initial design
-candidate for the supported Linux matrix. Do not change the application's
-global multiprocessing context. A caller-provided context would need to meet
-the documented, tested start-method contract.
+the process boundary. Sequential server runs allocate and free a separate native
+test for each iteration. This leaves application multiprocessing settings alone.
 
-Python's defaults vary by platform and version, including a POSIX default
-change in 3.14. Selecting and testing a context explicitly avoids relying on
-those defaults. See [Python's start-method documentation](https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods).
+Private protocol version 1 uses four-byte big-endian lengths and strict UTF-8
+JSON objects on dedicated pipes. Request and worker nonces, contiguous transport
+sequences and run indices bind every message to its session. Duplicate JSON
+keys, nonfinite numbers, malformed/truncated/oversized frames, replay and wrong
+ordering invalidate that channel. Server continuation commands authorize exactly
+one next run. Native event sequence numbers remain separate and can have gaps
+when delivery is dropped.
 
-Version the IPC envelope independently of the
-[result artifact](../../docs/guides/artifacts.md): request ID, worker ID, protocol
-version, validated configuration/intent, selected library identity, and
-serialized artifacts/events. Use bounded length-prefixed JSON bytes and
-dedicated per-worker channels. Validate the request in both processes and
-acknowledge readiness only after native loading and capability inspection.
-Retain producer identity and worker PID in terminal receipts.
+Frames are limited to 16 MiB; live events to 1 MiB. Each side admits at most
+256 queued events and 8 MiB of serialized event data, plus a separate bounded
+FIFO allowance for control messages. Native capture and decoded-object overhead
+are not covered by those wire limits. Oversized final results fail explicitly.
+Producer readiness follows configuration/native setup and records the actual
+PID, package/Python/native versions and an honestly labelled library selector.
+It establishes neither a listening socket nor binary authenticity. Results
+retain that receipt separately from the independently versioned
+[result artifact](../../docs/guides/artifacts.md).
+
+Transport completion requires the terminal receipt, clean EOF and reaped exit
+zero. The parent rejects bytes after terminal and bounds its wait for output
+closure and process exit. Cancellation or a deadline that already won cannot
+be replaced by a late result. Live callbacks and sequential result callbacks
+can execute before the final session receipt; only a successful API return
+establishes complete session shutdown.
 
 Bound admitted workers and total traffic before spawning. Each worker runs
 one native operation at a time. Applications must also account for contention

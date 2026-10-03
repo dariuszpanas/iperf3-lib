@@ -47,7 +47,7 @@ def test_parent_guard_arms_sigkill_before_checking_parent(monkeypatch, linux_sig
 def test_bootstrap_guard_failure_never_imports_the_package(
     monkeypatch, capsys, failure, linux_sigkill
 ):
-    """Every unsupported, failed or stale-parent guard fails through the IPC protocol."""
+    """A failed guard exits before package import or protocol identity is available."""
 
     class Prctl:
         """Model the kernel call result without changing this test process."""
@@ -70,15 +70,14 @@ def test_bootstrap_guard_failure_never_imports_the_package(
     with pytest.raises(SystemExit) as captured:
         _worker_lifetime.main()
     assert captured.value.code == 1
-    error, done = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
-    assert error["type"] == "error" and error["class"] == "IperfLibraryError"
+    output = capsys.readouterr()
+    assert output.out == ""
     expected = {
         "syscall": "Cannot arm worker parent-death protection",
         "parent_changed": "Worker parent exited",
         "unsupported": "requires Linux",
     }
-    assert expected[failure] in error["message"]
-    assert done == {"type": "done"}
+    assert expected[failure] in output.err
 
 
 @pytest.mark.parametrize("platform", ["linux", "win32", "darwin"])

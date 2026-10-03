@@ -161,6 +161,31 @@ def _passed_results():
                 "reuse_bytes": 12,
             }
         )
+        if key == "worker_ipc":
+            evidence = {
+                "case": nodeid.rsplit("[", 1)[1].removesuffix("]"),
+                "workers_reaped": True,
+                "pipes_closed": True,
+                "dropped": 1,
+                "cancelled": True,
+                "rejected": True,
+            }
+        if key == "cancellation":
+            evidence["reuse_bytes"] = 12
+            for index, name in enumerate(("reused_client_worker", "reused_server_worker")):
+                evidence[name] = {
+                    "protocol_version": 1,
+                    "run_index": 1,
+                    "pid": 200 + index,
+                    "request_id": str(index) * 32,
+                    "worker_id": str(index + 2) * 32,
+                    "producer": {
+                        "package_version": "0.3.0",
+                        "python_version": "3.14.2",
+                        "native_version": "iperf 3.21",
+                        "library_selector": {"source": "platform_search", "candidates": []},
+                    },
+                }
         reports.extend(
             {
                 "nodeid": nodeid,
@@ -170,12 +195,99 @@ def _passed_results():
             }
             for phase in ("setup", "call", "teardown")
         )
-    return {"exit_code": 0, "collected": qualification.expected_tests(), "reports": reports}
+    return {
+        "exit_code": 0,
+        "collected": qualification.expected_tests(),
+        "reports": reports,
+        "python": "3.14.2",
+        "native_version": "iperf 3.21",
+        "package_version": "0.3.0",
+    }
 
 
 def test_lifecycle_results_require_every_expected_case_and_native_receipt():
     """The exact positive full selection can qualify."""
     qualification.validate_results(_passed_results())
+
+
+@pytest.mark.parametrize(
+    "path,value",
+    [
+        (("reused_client_worker", "protocol_version"), True),
+        (("reused_client_worker", "run_index"), True),
+        (("reused_client_worker", "pid"), True),
+        (("cancelled_children",), True),
+        (("measured_bytes_before_cancel",), False),
+        (("reuse_bytes",), True),
+        (("reuse_bytes",), "12"),
+        (("reused_client_worker", "producer", "python_version"), "3.12.0"),
+        (("reused_client_worker", "producer", "native_version"), "iperf 3.19.1"),
+        (("reused_client_worker", "producer", "package_version"), "99.0.0"),
+        (("reused_client_worker", "pid"), 201),
+        (("reused_client_worker", "request_id"), "1" * 32),
+        (("reused_client_worker", "worker_id"), "3" * 32),
+    ],
+    ids=[
+        "boolean-protocol",
+        "boolean-run",
+        "boolean-pid",
+        "boolean-count",
+        "boolean-measurement",
+        "boolean-reuse",
+        "string-reuse",
+        "wrong-python",
+        "wrong-native",
+        "wrong-package",
+        "duplicate-pid",
+        "duplicate-request",
+        "duplicate-worker",
+    ],
+)
+def test_cancellation_receipts_bind_integer_counts_and_distinct_producer_identity(path, value):
+    """Receipt coercion or reused identities cannot qualify another measured worker."""
+    result = _passed_results()
+    report = next(
+        report
+        for report in result["reports"]
+        if report["phase"] == "call" and "cancellation" in report["nodeid"]
+    )
+    receipt = json.loads(report["properties"]["cancellation"])
+    target = receipt
+    for key in path[:-1]:
+        target = target[key]
+    target[path[-1]] = value
+    report["properties"]["cancellation"] = json.dumps(receipt)
+    with pytest.raises(ValueError, match="cancellation receipt"):
+        qualification.validate_results(result)
+
+
+@pytest.mark.parametrize(
+    "case,field,value",
+    [
+        ("wrong-identity", "rejected", False),
+        ("oversized-header", "case", "wrong-identity"),
+        ("truncated-frame", "pipes_closed", False),
+        ("saturated-events", "dropped", 0),
+        ("saturated-events", "dropped", True),
+        ("partial-frame-cancel", "cancelled", False),
+        ("partial-frame-cancel", "workers_reaped", False),
+    ],
+)
+def test_transport_receipts_require_observed_rejection_loss_and_cleanup(case, field, value):
+    """A passing test status alone cannot qualify transport and process ownership."""
+    result = _passed_results()
+    report = next(
+        report
+        for report in result["reports"]
+        if report["phase"] == "call"
+        and "worker_ipc" in report["nodeid"]
+        and report["nodeid"].endswith(f"[{case}]")
+    )
+    receipt = json.loads(report["properties"]["worker_ipc"])
+    receipt[field] = value
+    report["properties"]["worker_ipc"] = json.dumps(receipt)
+    with pytest.raises(ValueError, match="worker IPC receipt"):
+        qualification.validate_results(result)
 
 
 @pytest.mark.parametrize(
@@ -264,6 +376,7 @@ def test_isolated_pytest_hook_retains_actual_case_phases_and_properties(tmp_path
     """Exercise collection and pytest report hooks in an isolated subprocess."""
     expected = _passed_results()
     for filename, (test, property_name) in qualification.TESTS.items():
+        cases = qualification.IPC_CASES if property_name == "worker_ipc" else qualification.CASES
         receipts = [
             report["properties"][property_name]
             for report in expected["reports"]
@@ -272,7 +385,7 @@ def test_isolated_pytest_hook_retains_actual_case_phases_and_properties(tmp_path
         (tmp_path / filename).write_text(
             textwrap.dedent(f"""
             import pytest
-            @pytest.mark.parametrize("index", range(5), ids={qualification.CASES!r})
+            @pytest.mark.parametrize("index", range(5), ids={cases!r})
             def {test}(index, record_property):
                 if {skip!r} and index == 0:
                     pytest.skip("simulated unavailable qualification")
@@ -287,7 +400,8 @@ def test_isolated_pytest_hook_retains_actual_case_phases_and_properties(tmp_path
         runner = runpy.run_path(sys.argv[1])
         plugin = runner['_Reports']()
         status = pytest.main(['-c', 'pytest.ini', '-q', *runner['expected_tests']()], plugins=[plugin])
-        result = {'exit_code': int(status), 'collected': plugin.collected, 'reports': plugin.reports}
+        result = {'exit_code': int(status), 'collected': plugin.collected, 'reports': plugin.reports,
+                  'python': '3.14.2', 'native_version': 'iperf 3.21', 'package_version': '0.3.0'}
         try:
             runner['validate_results'](result)
         except ValueError:

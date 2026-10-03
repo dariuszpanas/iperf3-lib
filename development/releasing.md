@@ -61,7 +61,8 @@ cancellation or concurrency behavior.
 
 ## Installed lifecycle checks in CI
 
-Current CI also qualifies operation cancellation and Linux parent-death cleanup
+Current CI also qualifies operation cancellation, Linux parent-death cleanup
+and the private worker transport
 from installed wheels and sdists. It builds one distribution pair from the
 candidate revision, then uses fresh environments outside the source checkout
 in all six Python/libiperf combinations. Import paths and installed package
@@ -71,7 +72,11 @@ cases fail qualification.
 These checks retain separate lifecycle receipts with the source revision,
 distribution and harness hashes, interpreter/native versions, and per-case
 evidence. They cover idle workers and active TCP/UDP client/server operations,
-worker and socket release, and measured reuse. They complement the broader
+worker and socket release, and measured reuse. Five additional pipe scenarios
+check wrong-session and oversized/truncated input, terminal delivery under byte
+saturation, and cancellation during a partial frame. Each distribution must
+pass all fifteen selected cases with explicit cleanup and transport evidence.
+They complement the broader
 release smoke below; they do not establish concurrent plans, retained partial
 results or every proposed IPC guarantee.
 
