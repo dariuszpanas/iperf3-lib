@@ -200,9 +200,12 @@ result = Client(config).run(timeout=10, on_event=on_event)
 `received_at_seconds`. The receipt time is not the interval's native measurement
 boundary. The callback runs in the calling Python thread (`arun()` uses its
 executor thread), never inside a native C callback. Both sides of the transport
-use queues with capacity 256. Keep callbacks short; sequence gaps and
+use queues with capacity 256 events and 8 MiB of serialized event data. Each
+live event is limited to 1 MiB; excess events are dropped and counted. Keep
+callbacks short; sequence gaps and
 `result.extensions["iperf3_lib.event_delivery"]` report delivery loss through
-`emitted`, `dropped`, and `queue_capacity`. A complete result remains the basis
+`emitted`, `dropped`, `queue_capacity`, `queue_bytes`, and `event_bytes`.
+A complete result remains the basis
 for artifacts and final analysis; callbacks do not replace it. Native 3.21
 streaming also enables its full-output facility. Native 3.19.1 has no such
 facility: the wrapper explicitly labels `raw` as `reconstructed_events` and
@@ -214,6 +217,22 @@ The marker and envelopes are in
 The `execution.reconstructed_json` diagnostic identifies reconstructed capture.
 Full native-document capture needs no reconstruction extension. Bounded live
 delivery queues do not bound memory used for the retained intervals/result.
+
+The private worker protocol limits each request or result frame to 16 MiB of
+JSON. A result exceeding that limit raises `IperfLibraryError`; it is not
+truncated into a successful result. Control messages have reserved queue space
+so live-event overflow cannot displace the final result or terminal receipt.
+Each channel checks protocol version, request/worker identities, message
+sequence and server run order. Malformed, truncated, replayed or trailing data
+fails the operation. A successful return requires a terminal receipt, clean
+end of output and a reaped worker with exit status zero.
+
+`result.extensions["iperf3_lib.worker"]` retains the worker PID, run index,
+session identities and its readiness producer receipt: package, Python and
+native versions plus the library selection request. Readiness means native
+setup completed; it does not mean a server socket is listening. The selection
+request is not a verified library file path or binary digest. This private
+protocol version is independent of the public result artifact version.
 
 After a callback raises, further delivery stops. The active native run is
 allowed to finish, and the callback error is then raised. An explicit timeout

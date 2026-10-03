@@ -6,6 +6,10 @@ These pages describe `main`. Released versions remain available through
 
 ## Unreleased
 
+- Version and bound isolated worker messages, validate session identities and
+  ordering, retain readiness receipts, and require clean output shutdown before
+  returning a completed result. Reserve control capacity under event overload;
+  reject oversized results explicitly.
 - Protect isolated Linux workers with a parent-death signal before loading the
   native library. Qualify worker lifetime and cancellation from installed wheels
   and sdists across the supported Python/libiperf matrix.

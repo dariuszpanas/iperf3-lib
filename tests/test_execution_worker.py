@@ -14,7 +14,7 @@ from types import SimpleNamespace
 import pytest
 import pytest_asyncio
 
-from iperf3_lib import _execution, _worker
+from iperf3_lib import _execution, _ipc, _worker
 from iperf3_lib.exceptions import IperfLibraryError, UnsupportedFeatureError
 
 RESULT = {
@@ -70,25 +70,103 @@ async def finish_child_test(task, processes):
         pass
 
 
-def child(monkeypatch, body, *, read_request=True):
+def child(monkeypatch, body, *, read_request=True, ready=True):
     """Replace only the child program, retaining actual pipe/process behavior."""
     original = subprocess.Popen
     processes = []
     program = (
-        "import json,sys,time\n"
-        + ("request=json.loads(sys.stdin.readline())\n" if read_request else "")
+        "import io,json,os,struct,sys,time,platform,importlib.metadata\n"
+        "from iperf3_lib import _ipc\n"
+        "from iperf3_lib.ffi.api import POSSIBLE_NAMES\n"
+        + (
+            "request=_ipc.read_frame(sys.stdin.buffer)\n"
+            "session=_ipc.Session.from_request(request)\n"
+            "session.validate(request)\n"
+            if read_request
+            else ""
+        )
         + f"result={RESULT!r}\n"
-        "def send(message):\n print(json.dumps(message),flush=True)\n" + body
+        "runs=0\nfailed=False\n"
+        "def receive():\n return session.validate(_ipc.read_frame(sys.stdin.buffer))\n"
+        "def send(message):\n"
+        " global runs,failed\n"
+        " message=dict(message)\n"
+        " kind=message['type']\n"
+        " index=runs+1\n"
+        " if kind=='result': runs+=1\n"
+        " if kind=='error': failed=True\n"
+        " if kind=='done':\n"
+        "  message={'type':'terminal','status':'failed' if failed else 'completed','runs':runs}\n"
+        "  index=max(1,runs)\n"
+        " sys.stdout.buffer.write(session.emit(message,run_index=index))\n"
+        " sys.stdout.buffer.flush()\n"
+        "ready_message={'type':'ready','pid':os.getpid(),'producer':{"
+        "'python_version':platform.python_version(),"
+        "'package_version':importlib.metadata.version('iperf3-lib'),"
+        "'native_version':'iperf 3.21','library_selector':"
+        "({'source':'IPERF3_LIB','value':os.environ['IPERF3_LIB']} if os.getenv('IPERF3_LIB') "
+        "else {'source':'platform_search','candidates':list(POSSIBLE_NAMES)})}}\n"
+        + ("send(ready_message)\n" if read_request and ready else "")
+        + body.replace("json.loads(sys.stdin.readline())", "receive()")
     )
 
     def popen(args, **kwargs):
         assert args == _execution._worker_command()
-        process = original([sys.executable, "-u", "-c", program], **kwargs)
+        # Windows venv launchers create another process. Use the actual base
+        # interpreter so the fake worker's PID matches the owned OS process.
+        interpreter = sys._base_executable if sys.platform == "win32" else sys.executable
+        process = original([interpreter, "-u", "-c", program], **kwargs)
         processes.append(process)
         return process
 
     monkeypatch.setattr(_execution.subprocess, "Popen", popen)
     return processes
+
+
+def worker_request(role="client", **options):
+    """Construct one real protocol request and its sequenced command writer."""
+    session = _ipc.Session.new()
+    request = _ipc.read_frame(
+        io.BytesIO(
+            session.emit(
+                {
+                    "type": "request",
+                    "role": role,
+                    "options": {},
+                    "password": None,
+                    "events": False,
+                    "max_runs": None if role == "server" else 1,
+                    **options,
+                }
+            )
+        )
+    )
+    return request, session
+
+
+def execute_worker(request, output=None, *, continuation=()):
+    """Exercise the worker's complete framed session with native stand-ins."""
+    request, session = worker_request(**request)
+    commands = io.BytesIO(
+        b"".join(
+            session.emit({"type": "continue", "continue": value}, run_index=index)
+            for index, value in enumerate(continuation, 1)
+        )
+    )
+    return _worker.execute(request, io.BytesIO() if output is None else output, commands)
+
+
+def worker_messages(output):
+    """Decode every complete response frame and require clean stream exhaustion."""
+    stream = io.BytesIO(output.getvalue())
+    messages = []
+    session = None
+    while (message := _ipc.read_frame(stream)) is not None:
+        if session is None:
+            session = _ipc.Session(message["request_id"], message["worker_id"])
+        session.validate(message)
+        messages.append(message)
+    return messages
 
 
 def test_client_result_is_copied_and_child_is_reaped(monkeypatch):
@@ -187,9 +265,110 @@ def test_failed_native_return_without_error_code_remains_explicit():
 def test_abnormal_native_exit_does_not_terminate_host(monkeypatch, body):
     """Parser exit and malformed IPC become explicit parent exceptions."""
     processes = child(monkeypatch, body)
-    with pytest.raises(IperfLibraryError, match="ended without"):
+    with pytest.raises(IperfLibraryError) as captured:
         _execution.run_worker("client", {})
     assert processes[0].poll() is not None
+    if body.startswith("sys.exit"):
+        assert "exit 7" in str(captured.value)
+        assert processes[0].returncode == 7
+
+
+@pytest.mark.parametrize(
+    "body,ready",
+    [
+        ("send(result)\nsend({'type':'done'})\n", False),
+        ("ready_message['pid'] += 1\nsend(ready_message)\n", False),
+        ("send(ready_message)\n", True),
+        (
+            "message=_ipc.read_frame(io.BytesIO(session.emit(result)))\nmessage['type']='unknown'\nsys.stdout.buffer.write(_ipc.encode_frame(message))\nsys.stdout.buffer.flush()\n",
+            True,
+        ),
+        ("send({'type':'done'})\n", True),
+        ("send(result)\nsend(result)\n", True),
+        ("send(result)\nsend({'type':'done'})\nsend(result)\n", True),
+        (
+            "send(result)\nsend({'type':'done'})\nsys.stdout.buffer.write(b'\\x00')\nsys.stdout.buffer.flush()\n",
+            True,
+        ),
+        ("sys.stdout.buffer.write(b'\\x00\\x00')\nsys.stdout.buffer.flush()\n", True),
+        ("sys.stdout.buffer.write(struct.pack('!I',100)+b'{}')\nsys.stdout.buffer.flush()\n", True),
+        ("sys.stdout.buffer.write(struct.pack('!I',2**31))\nsys.stdout.buffer.flush()\n", True),
+    ],
+    ids=[
+        "no-ready",
+        "wrong-pid",
+        "repeated-ready",
+        "unknown-kind",
+        "early-terminal",
+        "duplicate-result",
+        "after-terminal",
+        "terminal-trailing-byte",
+        "truncated-header",
+        "truncated-body",
+        "oversized-header",
+    ],
+)
+def test_real_pipe_protocol_faults_reject_results_and_release_process(monkeypatch, body, ready):
+    """Malformed, premature and trailing child output cannot become a successful Result."""
+    processes = child(monkeypatch, body, ready=ready)
+    with pytest.raises(IperfLibraryError):
+        _execution.run_worker("client", {}, timeout=3)
+    assert processes[0].poll() is not None
+    assert processes[0].stdin.closed and processes[0].stdout.closed
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("request_id", "f" * 32),
+        ("worker_id", "e" * 32),
+        ("protocol_version", 999),
+        ("transport_sequence", 1),
+        ("transport_sequence", 99),
+        ("run_index", 2),
+    ],
+    ids=[
+        "wrong-request",
+        "wrong-worker",
+        "wrong-version",
+        "replayed-sequence",
+        "sequence-gap",
+        "wrong-run",
+    ],
+)
+def test_real_pipe_replayed_or_unbound_results_are_rejected(monkeypatch, field, value):
+    """A plausible native result must belong to this exact ready worker and run."""
+    processes = child(
+        monkeypatch,
+        "envelope=_ipc.read_frame(io.BytesIO(session.emit(result,run_index=1)))\n"
+        f"envelope[{field!r}]={value!r}\n"
+        "sys.stdout.buffer.write(_ipc.encode_frame(envelope))\nsys.stdout.buffer.flush()\n",
+    )
+    with pytest.raises(IperfLibraryError):
+        _execution.run_worker("client", {}, timeout=3)
+    assert processes[0].poll() is not None
+    assert processes[0].stdin.closed and processes[0].stdout.closed
+
+
+@pytest.mark.parametrize(
+    "emitted,dropped", [(0, 1), (0, 0)], ids=["drops-exceed-emitted", "observed-exceeds-emitted"]
+)
+def test_result_cannot_contradict_received_event_delivery(monkeypatch, emitted, dropped):
+    """A final native receipt cannot erase observed events or invent impossible losses."""
+    event = (
+        "send({'type':'event','kind':'start','data':{},'sequence':1,'time':10})\n"
+        if dropped == 0
+        else ""
+    )
+    processes = child(
+        monkeypatch,
+        event + f"result.update(events_emitted={emitted},events_dropped={dropped})\n"
+        "send(result)\nsend({'type':'done'})\n",
+    )
+    with pytest.raises(IperfLibraryError, match="worker result"):
+        _execution.run_worker("client", {}, timeout=3)
+    assert processes[0].poll() is not None
+    assert processes[0].stdin.closed and processes[0].stdout.closed
 
 
 @pytest.mark.parametrize(
@@ -202,19 +381,20 @@ def test_abnormal_native_exit_does_not_terminate_host(monkeypatch, body):
 )
 def test_child_error_classes_are_allowlisted(monkeypatch, name, expected):
     """Transport never imports or executes a child-named exception class."""
-    child(
+    processes = child(
         monkeypatch,
         f"send({{'type':'error','class':{name!r},'message':'unavailable'}})\nsend({{'type':'done'}})\n",
     )
     with pytest.raises(expected, match="unavailable"):
         _execution.run_worker("client", {})
+    assert processes[0].poll() == 0
 
 
 def test_callback_exception_waits_for_active_native_completion(monkeypatch):
     """Callback failures are raised after the child completes and is reaped."""
     processes = child(
         monkeypatch,
-        "send({'type':'event','kind':'start','data':{},'sequence':1,'time':10})\ntime.sleep(.05)\nsend(result)\nsend({'type':'done'})\n",
+        "send({'type':'event','kind':'start','data':{},'sequence':1,'time':10})\ntime.sleep(.05)\nresult['events_emitted']=1\nsend(result)\nsend({'type':'done'})\n",
     )
 
     def callback(_):
@@ -227,7 +407,7 @@ def test_callback_exception_waits_for_active_native_completion(monkeypatch):
 
 def test_slow_callback_has_bounded_delivery_and_explicit_drops(monkeypatch):
     """Event drops preserve the final result and retain monotonic sequence numbers."""
-    child(
+    processes = child(
         monkeypatch,
         "for i in range(3000):\n send({'type':'event','kind':'interval','data':{},'sequence':i+1,'time':10})\nresult['events_emitted']=3000\nsend(result)\nsend({'type':'done'})\n",
     )
@@ -236,13 +416,184 @@ def test_slow_callback_has_bounded_delivery_and_explicit_drops(monkeypatch):
     def callback(event):
         seen.append(event.sequence)
         if len(seen) == 1:
-            time.sleep(0.2)
+            processes[0].wait(timeout=8)
 
     result = _execution.run_worker("client", {}, on_event=callback)
     assert result.ok and seen == sorted(set(seen))
     delivery = result.extensions["iperf3_lib.event_delivery"]
     assert delivery["dropped"] > 0
     assert len(seen) + delivery["dropped"] == 3000
+
+
+def test_large_event_byte_saturation_preserves_result_and_terminal(monkeypatch):
+    """A blocked callback cannot turn a byte-full event queue into lost terminal state."""
+    processes = child(
+        monkeypatch,
+        "for i in range(64):\n send({'type':'event','kind':'interval','data':{'payload':'x'*262144},'sequence':i+1,'time':10})\n"
+        "result['events_emitted']=64\nsend(result)\nsend({'type':'done'})\n",
+    )
+    seen = []
+
+    def callback(event):
+        seen.append(event.sequence)
+        assert len(event.data["payload"]) == 262144
+        if len(seen) == 1:
+            processes[0].wait(timeout=8)
+
+    result = _execution.run_worker("client", {}, on_event=callback, timeout=10)
+    delivery = result.extensions["iperf3_lib.event_delivery"]
+    assert result.ok and processes[0].poll() == 0
+    assert delivery["dropped"] > 0 and len(seen) + delivery["dropped"] == 64
+    assert seen == sorted(set(seen))
+    assert processes[0].stdin.closed and processes[0].stdout.closed
+
+
+def test_parent_inbox_byte_budget_reserves_result_and_terminal_capacity():
+    """Decoded queue accounting bounds bytes even before the event-count limit."""
+    inbox = _execution._Inbox()
+    admitted = _ipc.MAX_PENDING_EVENT_BYTES // _ipc.MAX_EVENT_BYTES
+    assert admitted < _ipc.MAX_PENDING_EVENTS
+    for index in range(admitted + 1):
+        inbox.put({"type": "event", "sequence": index}, _ipc.MAX_EVENT_BYTES)
+    assert inbox.events == admitted and inbox.event_bytes <= _ipc.MAX_PENDING_EVENT_BYTES
+    assert inbox.dropped == 1
+    inbox.put({"type": "result"}, _ipc.MAX_FRAME_BYTES)
+    inbox.put({"type": "terminal"}, 200)
+    inbox.finish()
+    for _ in range(admitted):
+        assert inbox.get(0)["type"] == "event"
+    assert inbox.get(0) == {"type": "result", "_parent_dropped": 1}
+    assert inbox.get(0) == {"type": "terminal"}
+    assert inbox.get(0) == {"type": "eof"}
+    assert (inbox.events, inbox.event_bytes, inbox.controls, inbox.control_bytes) == (0, 0, 0, 0)
+
+
+def test_deadline_interrupts_a_partial_response_frame(monkeypatch):
+    """An incomplete advertised payload never blocks the operation deadline."""
+    processes = child(
+        monkeypatch,
+        "sys.stdout.buffer.write(struct.pack('!I',10000)+b'{')\nsys.stdout.buffer.flush()\ntime.sleep(30)\n",
+    )
+    with pytest.raises(TimeoutError, match="process deadline"):
+        _execution.run_worker("client", {}, timeout=0.3)
+    assert processes[0].poll() is not None
+    assert processes[0].stdin.closed and processes[0].stdout.closed
+
+
+@pytest.mark.asyncio
+async def test_cancellation_interrupts_an_observed_partial_response_frame(monkeypatch):
+    """Cancelling after a partial payload arrives reaps the worker without waiting for bytes."""
+    processes = child(
+        monkeypatch,
+        "sys.stdout.buffer.write(struct.pack('!I',10000)+b'{')\nsys.stdout.buffer.flush()\ntime.sleep(30)\n",
+    )
+    partial = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    feed = _ipc.FrameDecoder.feed_sized
+
+    def observe(decoder, data):
+        frames = feed(decoder, data)
+        if decoder._length == 10000 and decoder._body == b"{":
+            loop.call_soon_threadsafe(partial.set)
+        return frames
+
+    monkeypatch.setattr(_ipc.FrameDecoder, "feed_sized", observe)
+    _, call = async_call("client")
+    task = asyncio.create_task(call)
+    try:
+        await asyncio.wait_for(partial.wait(), timeout=5)
+        task.cancel("cancel incomplete IPC")
+        with pytest.raises(asyncio.CancelledError, match="cancel incomplete IPC"):
+            await asyncio.wait_for(task, timeout=5)
+        assert processes[0].poll() is not None
+        assert processes[0].stdin.closed and processes[0].stdout.closed
+    finally:
+        await finish_child_test(task, processes)
+
+
+@pytest.mark.asyncio
+async def test_protocol_failure_stops_worker_while_callback_is_blocked(monkeypatch, tmp_path):
+    """A rejected frame stops native work before the running user callback returns."""
+    marker = tmp_path / "callback-entered"
+    processes = child(
+        monkeypatch,
+        "import pathlib\n"
+        "send({'type':'event','kind':'start','data':{},'sequence':1,'time':10})\n"
+        f"while not pathlib.Path({str(marker)!r}).exists(): time.sleep(.01)\n"
+        "sys.stdout.buffer.write(struct.pack('!I',2**31))\nsys.stdout.buffer.flush()\ntime.sleep(30)\n",
+    )
+    loop = asyncio.get_running_loop()
+    entered = asyncio.Event()
+    release = threading.Event()
+
+    def callback(event):
+        loop.call_soon_threadsafe(entered.set)
+        assert release.wait(6)
+
+    _, call = async_call("client", on_event=callback)
+    task = asyncio.create_task(call)
+    try:
+        await asyncio.wait_for(entered.wait(), timeout=5)
+        marker.touch()
+        await asyncio.wait_for(asyncio.to_thread(processes[0].wait, 3), timeout=4)
+        assert not task.done()
+        release.set()
+        with pytest.raises(IperfLibraryError, match="byte length"):
+            await asyncio.wait_for(task, timeout=5)
+        assert processes[0].stdin.closed and processes[0].stdout.closed
+    finally:
+        release.set()
+        await finish_child_test(task, processes)
+
+
+@pytest.mark.asyncio
+async def test_clean_terminal_eof_bounds_child_exit_while_callback_is_blocked(
+    monkeypatch, tmp_path
+):
+    """A terminal worker cannot linger behind a user callback after closing its output."""
+    from iperf3_lib._cancellation import _ExecutionControl
+
+    marker = tmp_path / "callback-entered"
+    processes = child(
+        monkeypatch,
+        "import pathlib\n"
+        "send({'type':'event','kind':'start','data':{},'sequence':1,'time':10})\n"
+        f"while not pathlib.Path({str(marker)!r}).exists(): time.sleep(.01)\n"
+        "result['events_emitted']=1\nsend(result)\nsend({'type':'done'})\n"
+        "os.close(sys.stdout.fileno())\ntime.sleep(30)\n",
+    )
+    wait_for_exit = _ExecutionControl.wait_for_exit
+    limits = []
+
+    def bounded_wait(control, timeout):
+        limits.append(timeout)
+        assert timeout == 5
+        return wait_for_exit(control, 0.2)
+
+    monkeypatch.setattr(_ExecutionControl, "wait_for_exit", bounded_wait)
+    loop = asyncio.get_running_loop()
+    entered = asyncio.Event()
+    release = threading.Event()
+
+    def callback(event):
+        loop.call_soon_threadsafe(entered.set)
+        assert release.wait(6)
+
+    _, call = async_call("client", on_event=callback)
+    task = asyncio.create_task(call)
+    try:
+        await asyncio.wait_for(entered.wait(), timeout=5)
+        marker.touch()
+        await asyncio.wait_for(asyncio.to_thread(processes[0].wait, 3), timeout=4)
+        assert limits == [5]
+        assert not task.done()
+        release.set()
+        with pytest.raises(IperfLibraryError, match="did not exit"):
+            await asyncio.wait_for(task, timeout=5)
+        assert processes[0].stdin.closed and processes[0].stdout.closed
+    finally:
+        release.set()
+        await finish_child_test(task, processes)
 
 
 @pytest.mark.parametrize(
@@ -344,14 +695,16 @@ def test_worker_copies_json_before_reset_and_frees_once(monkeypatch, role, fail)
         native_options, "configure_native", lambda *a, **k: SimpleNamespace(evidence={})
     )
     monkeypatch.setattr(native_options, "observe_native_options", lambda *a: {})
-    output = io.StringIO()
-    _worker.execute(
+    output = io.BytesIO()
+    execute_worker(
         {"role": role, "options": {}, "events": True},
         output,
-        io.StringIO('{"continue":true}\n{"continue":false}\n'),
+        continuation=(True, False),
     )
-    messages = [json.loads(line) for line in output.getvalue().splitlines()]
+    messages = worker_messages(output)
     results = [item for item in messages if item["type"] == "result"]
+    assert messages[0]["type"] == "ready" and messages[-1]["type"] == "terminal"
+    assert messages[-1]["status"] == "completed"
     assert len(results) == (2 if role == "server" else 1)
     assert all(len(item["raw"]["intervals"]) == 1 for item in results)
     assert bool(results[0]["error"]) is fail
@@ -371,7 +724,7 @@ def test_worker_setup_exception_frees_allocated_test(monkeypatch):
 
     monkeypatch.setattr(native_options, "configure_native", configure)
     with pytest.raises(ValueError, match="invalid native setup"):
-        _worker.execute({"role": "client", "options": {}}, io.StringIO(), io.StringIO())
+        execute_worker({"role": "client", "options": {}})
     assert native.frees == 1
 
 
@@ -427,7 +780,7 @@ def test_worker_writer_startup_failure_never_allocates_native_test(
 
         monkeypatch.setattr(_worker.threading, "Thread", fail_start)
     with pytest.raises(RuntimeError, match="startup unavailable"):
-        _worker.execute({"role": "client", "options": {}}, io.StringIO(), io.StringIO())
+        execute_worker({"role": "client", "options": {}})
     assert native.allocations == native.freed == []
     assert all(not thread.is_alive() for thread in threads)
 
@@ -569,7 +922,7 @@ def test_worker_broken_output_frees_native_test_and_joins_writer(worker_native, 
     """Broken output propagates explicitly after exactly-once native cleanup."""
     native, threads = worker_native
 
-    class BrokenOutput(io.StringIO):
+    class BrokenOutput(io.BytesIO):
         """Fail the selected pipe operation without depending on scheduling."""
 
         def write(self, value):
@@ -585,7 +938,7 @@ def test_worker_broken_output_frees_native_test_and_joins_writer(worker_native, 
             super().flush()
 
     with pytest.raises(IperfLibraryError, match="output transport failed"):
-        _worker.execute({"role": "client", "options": {}}, BrokenOutput(), io.StringIO())
+        execute_worker({"role": "client", "options": {}}, BrokenOutput())
     assert native.freed == native.allocations and len(native.freed) == 1
     assert all(not thread.is_alive() for thread in threads)
 
@@ -619,7 +972,7 @@ def test_worker_native_failures_close_writer_and_free_only_allocated_tests(
             }[stage]
             monkeypatch.setattr(native, target, fail)
     with pytest.raises(error, match=message):
-        _worker.execute({"role": "client", "options": {}}, io.StringIO(), io.StringIO())
+        execute_worker({"role": "client", "options": {}})
     assert native.freed == native.allocations
     assert len(native.freed) == (0 if stage == "allocate" else 1)
     assert all(not thread.is_alive() for thread in threads)
@@ -636,18 +989,19 @@ def test_second_server_setup_failure_frees_both_distinct_tests(monkeypatch, work
         return defaults(test)
 
     monkeypatch.setattr(native, "iperf_defaults", fail_second)
-    output = io.StringIO()
+    output = io.BytesIO()
     with pytest.raises(RuntimeError, match="second native setup failed"):
-        _worker.execute(
+        execute_worker(
             {"role": "server", "options": {}},
             output,
-            io.StringIO('{"continue":true}\n'),
+            continuation=(True,),
         )
     assert native.freed == native.allocations
     assert len({id(test) for test in native.freed}) == 2
     assert all(not thread.is_alive() for thread in threads)
-    messages = [json.loads(line) for line in output.getvalue().splitlines()]
-    assert len(messages) == 1 and messages[0]["type"] == "result"
+    messages = worker_messages(output)
+    assert [message["type"] for message in messages] == ["ready", "result", "error", "terminal"]
+    assert messages[-1]["status"] == "failed" and messages[-1]["runs"] == 1
 
 
 @pytest.mark.parametrize("complete", [False, True])
@@ -676,11 +1030,11 @@ def test_worker_stream_provenance_preserves_authoritative_document(
         return 0
 
     monkeypatch.setattr(native, "iperf_run_client", run)
-    output = io.StringIO()
-    _worker.execute({"role": "client", "options": {}, "events": False}, output, io.StringIO())
-    messages = [json.loads(line) for line in output.getvalue().splitlines()]
-    assert len(messages) == 1
-    message = messages[0]
+    output = io.BytesIO()
+    execute_worker({"role": "client", "options": {}, "events": False}, output)
+    messages = worker_messages(output)
+    assert [message["type"] for message in messages] == ["ready", "result", "terminal"]
+    message = messages[1]
     assert message["events_emitted"] == len(envelopes)
     assert message["events_dropped"] == 0
     assert native.freed == native.allocations
@@ -735,11 +1089,11 @@ def test_copied_authentication_error_survives_cleared_native_error_state(
 
     target = "iperf_run_client" if role == "client" else "iperf_run_server"
     monkeypatch.setattr(native, target, fail)
-    output = io.StringIO()
-    _worker.execute({"role": role, "options": {}}, output, io.StringIO())
-    messages = [json.loads(line) for line in output.getvalue().splitlines()]
-    assert len(messages) == 1
-    message = messages[0]
+    output = io.BytesIO()
+    execute_worker({"role": role, "options": {}}, output, continuation=(False,))
+    messages = worker_messages(output)
+    assert [message["type"] for message in messages] == ["ready", "result", "terminal"]
+    message = messages[1]
     assert message["error"] == message["raw"]["error"] == original_error
     result = _execution._decode_result(message, role)
     assert not result.ok and result.execution.status == "failed"
@@ -945,16 +1299,11 @@ async def test_client_cleanup_error_after_cancellation_is_not_reported_to_loop(
         await finish_child_test(task, [])
 
 
-@pytest.mark.parametrize("message", ["done", "eof"])
-def test_deadline_during_child_exit_wait_preserves_timeout(monkeypatch, message):
+def test_deadline_during_child_exit_wait_preserves_timeout(monkeypatch):
     """A deadline during terminal protocol handling keeps its public error class."""
     from iperf3_lib._cancellation import _ExecutionControl
 
-    body = (
-        "send(result)\nsend({'type':'done'})\ntime.sleep(30)\n"
-        if message == "done"
-        else "import os\nos.close(sys.stdout.fileno())\ntime.sleep(30)\n"
-    )
+    body = "send(result)\nsend({'type':'done'})\nos.close(sys.stdout.fileno())\ntime.sleep(30)\n"
     processes = child(monkeypatch, body)
     wait_for_exit = _ExecutionControl.wait_for_exit
     entered = []
@@ -999,11 +1348,15 @@ def test_terminal_cause_arbitration_preserves_first_committed_outcome(first):
 
 
 @pytest.mark.asyncio
+@pytest.mark.filterwarnings("error::pytest.PytestUnhandledThreadExceptionWarning")
 async def test_cancellation_before_validated_completion_discards_result(monkeypatch):
     """A received result remains provisional until the worker exit is confirmed."""
     from iperf3_lib._cancellation import _ExecutionControl
 
-    processes = child(monkeypatch, "send(result)\nsend({'type':'done'})\ntime.sleep(30)\n")
+    processes = child(
+        monkeypatch,
+        "send(result)\nsend({'type':'done'})\nos.close(sys.stdout.fileno())\ntime.sleep(30)\n",
+    )
     loop = asyncio.get_running_loop()
     entered = asyncio.Event()
     original = _ExecutionControl.wait_for_exit
@@ -1219,28 +1572,38 @@ async def test_cancellation_interrupts_full_startup_input_pipe(monkeypatch):
         await finish_child_test(task, processes)
 
 
-def test_completed_worker_with_retained_stdout_writer_does_not_block_cleanup(monkeypatch):
-    """An extra open writer cannot keep the IPC reader alive after worker completion."""
-    processes = child(monkeypatch, "")
+def test_terminal_worker_with_retained_stdout_writer_fails_closed_and_cleans_up(monkeypatch):
+    """A terminal receipt without clean EOF cannot qualify a provisional result."""
+    processes = child(monkeypatch, "send(result)\nsend({'type':'done'})\n")
     original_popen = _execution.subprocess.Popen
     read_descriptor, retained_writer = os.pipe()
-    reader = os.fdopen(read_descriptor, "r", encoding="utf-8")
+    reader = os.fdopen(read_descriptor, "rb", buffering=0)
+    relays = []
 
     def popen(*args, **kwargs):
         process = original_popen(*args, **kwargs)
-        process.stdout.close()
+        original_output = process.stdout
         process.stdout = reader
+
         # Keeping this OS pipe's writer open models a descriptor inherited by
         # another process. EOF cannot unblock a buffered reader during cleanup.
-        os.write(retained_writer, (json.dumps(RESULT) + '\n{"type":"done"}\n').encode())
+        def relay():
+            with original_output:
+                data = memoryview(original_output.buffer.read())
+            while data:
+                data = data[os.write(retained_writer, data) :]
+
+        thread = threading.Thread(target=relay)
+        relays.append(thread)
+        thread.start()
         return process
 
     monkeypatch.setattr(_execution.subprocess, "Popen", popen)
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
         future = pool.submit(_execution.run_worker, "client", {})
         try:
-            result = future.result(timeout=5)
-            assert result.ok
+            with pytest.raises(IperfLibraryError, match="EOF|terminal|output"):
+                future.result(timeout=8)
             assert processes[0].poll() == 0
             assert processes[0].stdin.closed and reader.closed
             os.fstat(retained_writer)
@@ -1251,3 +1614,6 @@ def test_completed_worker_with_retained_stdout_writer_does_not_block_cleanup(mon
                     process.kill()
                     process.wait(timeout=5)
             reader.close()
+            for thread in relays:
+                thread.join(timeout=2)
+                assert not thread.is_alive()

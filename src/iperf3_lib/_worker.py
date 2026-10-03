@@ -1,17 +1,19 @@
-"""Private one-session worker; never invoke native argument parsing in the host."""
+"""Private framed worker; native parsing and process-global state stay isolated."""
 
 from __future__ import annotations
 
+import importlib.metadata
 import json
 import os
-import queue
+import platform
 import sys
 import threading
 import time
-from typing import Any, TextIO
+from typing import Any, BinaryIO
 
+from ._ipc import BoundedFrameQueue, IPCError, Session, read_frame
 from .exceptions import IperfError, IperfLibraryError
-from .ffi.api import ffi, lib
+from .ffi.api import POSSIBLE_NAMES, ffi, lib
 
 
 def _native_error() -> str:
@@ -23,44 +25,128 @@ def _native_error() -> str:
     )
 
 
-def execute(request: dict[str, Any], output: TextIO, commands: TextIO) -> None:
-    """Allocate, configure, run and free one native test in this disposable process."""
+def _validate_request(request: dict[str, Any]) -> None:
+    """Reject ambiguous private commands before allocating any native test."""
+    if request["type"] != "request" or request["run_index"] != 1:
+        raise IPCError("Worker requires one initial request for run 1")
+    if request.get("role") not in {"client", "server"}:
+        raise IPCError("Worker role must be client or server")
+    if not isinstance(request.get("options"), dict):
+        raise IPCError("Worker options must be an object")
+    if type(request.get("events", False)) is not bool:
+        raise IPCError("Worker event admission must be a boolean")
+    maximum = request.get("max_runs", 1)
+    if maximum is not None and (type(maximum) is not int or maximum < 1):
+        raise IPCError("Worker maximum runs must be positive or null")
+    if request["role"] == "client" and maximum != 1:
+        raise IPCError("Client workers execute exactly one run")
+    if request.get("password") is not None and not isinstance(request["password"], str):
+        raise IPCError("Worker password must be a string or null")
+
+
+def _producer(version: str) -> dict[str, Any]:
+    """Report observed versions and a selector, without claiming a binary path."""
+    selector = os.environ.get("IPERF3_LIB")
+    return {
+        "package_version": importlib.metadata.version("iperf3-lib"),
+        "python_version": platform.python_version(),
+        "native_version": version,
+        "library_selector": (
+            {"source": "IPERF3_LIB", "value": selector}
+            if selector
+            else {"source": "platform_search", "candidates": list(POSSIBLE_NAMES)}
+        ),
+    }
+
+
+def execute(request: dict[str, Any], output: BinaryIO, commands: BinaryIO) -> None:
+    """Own framed output and free each native test before its result or terminal.
+
+    Event frames have byte and count bounds, with reserved control capacity.
+    Copied native JSON and reconstruction data are not a total memory bound.
+    """
     from .native_options import configure_native, observe_native_options
 
-    role = request["role"]
-    options = request["options"]
-    test = ffi.NULL
-    outgoing: queue.Queue[dict[str, Any] | None] = queue.Queue(maxsize=256)
+    session = Session.from_request(request)
+    outgoing = BoundedFrameQueue()
     writer_error: list[Exception] = []
 
     def write_messages() -> None:
         try:
-            while (item := outgoing.get()) is not None:
-                output.write(json.dumps(item, allow_nan=False) + "\n")
+            while True:
+                try:
+                    frame = outgoing.get()
+                except EOFError:
+                    return
+                pending = memoryview(frame)
+                while pending:
+                    written = output.write(pending)
+                    if written is None or written <= 0:
+                        raise IperfLibraryError("Native worker output transport made no progress")
+                    pending = pending[written:]
                 output.flush()
         except Exception as exc:
             writer_error.append(exc)
+            outgoing.close()
 
     writer = threading.Thread(target=write_messages, daemon=True)
-    writer.start()
+    try:
+        writer.start()
+    except BaseException:
+        outgoing.close()
+        if writer.ident is not None:
+            writer.join(timeout=5)
+        raise
 
-    def enqueue(item: dict[str, Any] | None) -> None:
-        while not writer_error:
-            try:
-                outgoing.put(item, timeout=0.1)
-                return
-            except queue.Full:
-                continue
-        raise IperfLibraryError("Native worker output transport failed")
+    def enqueue(message: dict[str, Any], run: int, *, event: bool = False) -> bool:
+        if writer_error:
+            raise IperfLibraryError("Native worker output transport failed") from writer_error[0]
+        return (
+            session.emit(
+                message,
+                run_index=run,
+                admit=lambda frame: outgoing.put(frame, event=event),
+            )
+            is not None
+        )
+
+    test = ffi.NULL
+    count = 0
+    run_index = 1
+    failure: BaseException | None = None
+
+    def release_test() -> None:
+        nonlocal test
+        if test != ffi.NULL:
+            owned, test = test, ffi.NULL
+            lib.iperf_free_test(owned)
 
     try:
+        session.validate(request)
+        _validate_request(request)
+        role = request["role"]
+        options = request["options"]
+        for symbol in (
+            "iperf_new_test",
+            "iperf_defaults",
+            "iperf_free_test",
+            "iperf_get_iperf_version",
+            "iperf_set_test_json_callback",
+            "iperf_run_client" if role == "client" else "iperf_run_server",
+        ):
+            getattr(lib, symbol)
         test = lib.iperf_new_test()
         if test == ffi.NULL:
             raise IperfLibraryError("iperf_new_test failed")
         if lib.iperf_defaults(test) < 0:
             raise IperfError(_native_error())
         setup = configure_native(test, role, options, password=request.get("password"))
-        version = ffi.string(lib.iperf_get_iperf_version()).decode("utf-8")
+        version_pointer = lib.iperf_get_iperf_version()
+        if version_pointer == ffi.NULL:
+            raise IperfLibraryError("Native library did not report its version")
+        version = ffi.string(version_pointer).decode("utf-8")
+        if not version:
+            raise IperfLibraryError("Native library reported an empty version")
         raw: dict[str, Any] = {}
         callback_errors: list[str] = []
         sequence = 0
@@ -94,28 +180,31 @@ def execute(request: dict[str, Any], output: TextIO, commands: TextIO) -> None:
                     elif kind in {"server_output_json", "server_output_text"}:
                         raw[kind] = part
                     sequence += 1
-                    if request.get("events"):
+                    if request.get("events", False):
+                        message = {
+                            "type": "event",
+                            "kind": kind,
+                            "data": part,
+                            "sequence": sequence,
+                            "time": time.time(),
+                        }
                         try:
-                            outgoing.put_nowait(
-                                {
-                                    "type": "event",
-                                    "kind": kind,
-                                    "data": part,
-                                    "sequence": sequence,
-                                    "time": time.time(),
-                                }
-                            )
-                        except queue.Full:
+                            admitted = enqueue(message, run_index, event=True)
+                        except IPCError:
+                            # An event exceeding its wire budget is lost
+                            # delivery, just like event queue overflow.
+                            admitted = False
+                        if not admitted:
                             dropped += 1
                 else:
                     raw = data
                     full_json_seen = True
             except Exception as exc:
-                callback_errors.append(f"Cannot decode native event: {type(exc).__name__}")
+                callback_errors.append(f"Cannot capture native event: {type(exc).__name__}")
 
         callback = ffi.callback("void(iperf_test *, char *)", capture)
         lib.iperf_set_test_json_callback(test, callback)
-        count = 0
+        enqueue({"type": "ready", "pid": os.getpid(), "producer": _producer(version)}, run_index)
         while True:
             raw = {}
             native_events = []
@@ -131,8 +220,6 @@ def execute(request: dict[str, Any], output: TextIO, commands: TextIO) -> None:
                 and isinstance(raw.get("error"), str)
                 and raw["error"] not in {"", "no error"}
             ):
-                # Some server failures return -1 after clearing i_errno. The
-                # copied JSON retains the specific authentication/policy error.
                 error = raw["error"]
             elif ret < 0 and error_code == 0:
                 error = "Native call failed without a specific native error code"
@@ -156,19 +243,27 @@ def execute(request: dict[str, Any], output: TextIO, commands: TextIO) -> None:
                 else "reconstructed_events",
                 "native_events": native_events if not full_json_seen else [],
             }
-            lib.iperf_free_test(test)
-            test = ffi.NULL
-            enqueue(message)
+            release_test()
+            enqueue(message, run_index)
             count += 1
             if role == "client":
                 break
-            command = commands.readline()
-            if not command or not json.loads(command).get("continue"):
+            command = read_frame(commands)
+            if command is None:
+                raise IPCError("Server continuation ended before a command was received")
+            session.validate(command)
+            if (
+                command["type"] != "continue"
+                or command["run_index"] != run_index
+                or type(command.get("continue")) is not bool
+            ):
+                raise IPCError("Server continuation must identify the completed run and a boolean")
+            if not command["continue"]:
                 break
-            if request.get("max_runs") is not None and count >= request["max_runs"]:
-                break
-            # libiperf reset retains its previous allocated JSON output string.
-            # A new test per session prevents stale output and native leakage.
+            maximum = request.get("max_runs", 1)
+            if maximum is not None and count >= maximum:
+                raise IPCError("Server continuation exceeds the requested maximum runs")
+            run_index += 1
             test = lib.iperf_new_test()
             if test == ffi.NULL:
                 raise IperfLibraryError("iperf_new_test failed")
@@ -176,39 +271,58 @@ def execute(request: dict[str, Any], output: TextIO, commands: TextIO) -> None:
                 raise IperfError(_native_error())
             setup = configure_native(test, role, options, password=request.get("password"))
             lib.iperf_set_test_json_callback(test, callback)
-        # These references must outlive every native call and free.
         _ = setup, callback
+    except BaseException as exc:
+        failure = exc
     finally:
-        if test != ffi.NULL:
-            lib.iperf_free_test(test)
-        if not writer_error:
-            enqueue(None)
-        writer.join(timeout=5)
+        try:
+            release_test()
+        except BaseException as exc:
+            failure = exc
+        try:
+            if failure is not None:
+                enqueue(
+                    {
+                        "type": "error",
+                        "class": type(failure).__name__,
+                        "message": str(failure)[:4096],
+                    },
+                    run_index,
+                )
+            enqueue(
+                {"type": "terminal", "status": "failed" if failure else "completed", "runs": count},
+                run_index,
+            )
+        finally:
+            outgoing.close()
+            writer.join(timeout=5)
     if writer_error or writer.is_alive():
-        raise IperfLibraryError("Native worker output transport failed")
+        raise IperfLibraryError("Native worker output transport failed") from (
+            writer_error[0] if writer_error else failure
+        )
+    if failure is not None:
+        raise failure
 
 
 def main() -> None:
-    """Reserve an IPC descriptor before redirecting native stdout away from it."""
-    with os.fdopen(os.dup(sys.stdout.fileno()), "w", encoding="utf-8", buffering=1) as output:
+    """Reserve binary IPC output and use one writer for every identified response."""
+    with os.fdopen(os.dup(sys.stdout.fileno()), "wb", buffering=0) as output:
         os.dup2(sys.stderr.fileno(), sys.stdout.fileno())
         try:
-            request = json.loads(sys.stdin.readline())
-            execute(request, output, sys.stdin)
+            request = read_frame(sys.stdin.buffer)
+            if request is None:
+                raise IPCError("Native worker received no initial request")
+            Session.from_request(request).validate(request)
         except Exception as exc:
-            output.write(
-                json.dumps(
-                    {
-                        "type": "error",
-                        "class": type(exc).__name__,
-                        "message": str(exc),
-                    }
-                )
-                + "\n"
-            )
-            output.flush()
-        output.write('{"type":"done"}\n')
-        output.flush()
+            print(f"Invalid native worker request: {exc}", file=sys.stderr, flush=True)
+            raise SystemExit(1) from exc
+        try:
+            execute(request, output, sys.stdin.buffer)
+        except Exception as exc:
+            # execute owns error and terminal delivery. Never append another
+            # response after its writer drained or its transport failed.
+            print(f"Native worker execution failed: {exc}", file=sys.stderr, flush=True)
+            raise SystemExit(1) from exc
 
 
 if __name__ == "__main__":
