@@ -82,10 +82,11 @@ not bundle libiperf or operate a benchmark scheduler or metrics service.
 ## Know the execution boundary
 
 Linux is the tested platform. Basic direct native calls share process-global
-state and must be serialized. Expanded controls, event delivery and explicit
-execution timeouts use isolated Python/CFFI workers. Async helpers use executor
-threads; cancelling an await alone does not stop the operation. See
-[compatibility and limitations](reference/compatibility.md).
+state and must be serialized. Async methods, expanded controls, event delivery
+and explicit execution timeouts use isolated Python/CFFI workers. On current
+`main`, cancelling `arun()` or `aserve_once()` waits for worker cleanup and any
+active callback; unconfirmed cleanup raises `IperfCleanupError`. This support
+is new after 0.3.0. See [compatibility and limitations](reference/compatibility.md).
 
 Use the [native option inventory](reference/native-options.md) to find binding,
 protocol, transport, server-policy and output controls. Option availability also

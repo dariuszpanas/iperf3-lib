@@ -1,7 +1,8 @@
 # Python API reference
 
-These APIs are available in 0.3.0. The site follows `main`; use documentation
-matching your installed version. See [installation](../getting-started.md)
+The site follows `main`; use documentation matching your installed version.
+Async worker cancellation and `IperfCleanupError` are unreleased additions after
+0.3.0. See [installation](../getting-started.md)
 for package setup.
 
 ## Clients and servers
@@ -10,10 +11,10 @@ for package setup.
 | --- | --- | --- |
 | `Client(cfg: ClientConfig, *, rate_intent=None, password=None)` | `Client` | Retains configuration and optional `RateIntent`; admission snapshots and resolves them. Password is separate from retained configuration. |
 | `Client.run(*, timeout=None, on_event=None)` | `Result` | Basic calls use direct CFFI; expanded controls, MPTCP, streaming, timeout or callback select an isolated Python/CFFI worker. |
-| `await Client.arun(*, timeout=None, on_event=None)` | `Result` | Executes `run()` in an executor thread; cancellation of the await does not cancel that operation. |
+| `await Client.arun(*, timeout=None, on_event=None)` | `Result` | Always uses an isolated worker; cancellation waits for worker cleanup before propagating `CancelledError`. |
 | `Server(port=5201, bind_host=None)` or `Server(config=ServerConfig(...))` | `Server` | Legacy address/port arguments or detached typed configuration; do not combine the two forms. |
 | `Server.run_once(*, timeout=None, on_event=None)` | `Result` | Returns one server result from an isolated worker. |
-| `await Server.aserve_once(*, timeout=None, on_event=None)` | `Result` | Executes `run_once()` in an executor thread. |
+| `await Server.aserve_once(*, timeout=None, on_event=None)` | `Result` | Runs one isolated server operation with cancellation cleanup. |
 | `Server.serve_forever(*, on_result=None, on_event=None, max_runs=None, timeout=None)` | `None` | Sequential results delivered after freeing each native test; timeout covers the complete serving session. |
 | `Server.stop()` | `None` | Signals the serving loop to stop between iterations. |
 
@@ -28,6 +29,30 @@ process termination does not promise native finalizer execution. An independent
 watchdog stops the child even during a blocked callback; returning control to
 the caller still waits for the callback to return. Basic direct
 calls remain non-reentrant within the calling process.
+
+Cancellation and deadline expiry share one process owner. Shutdown sends TERM,
+waits up to two seconds, then escalates to KILL within a total four-second
+process cleanup budget. This budget does not interrupt OS process creation or
+an already running Python callback. No further callbacks or server iterations
+are admitted after cancellation wins. Repeated task cancellation cannot abandon
+cleanup. Completion requires the final protocol response and successful process
+reaping; a late success cannot override a cancellation or deadline decision.
+After confirmed cleanup, task cancellation delivered before the coroutine
+finishes propagates `CancelledError` even if native completion or a deadline
+won just before delivery. A cleanup failure retains the original worker
+termination cause.
+
+If cleanup cannot be confirmed, `IperfCleanupError` takes precedence over the
+original failure and retains it as its cause. The library retains ownership for
+subsequent reaping, and the server remains unavailable until its worker is
+reaped. Forced termination returns no partial `Result` and does not establish
+that native C finalizers executed. Parent-death protection is not provided.
+
+Async methods use the built-in isolated path, without calling overrides of
+`run()` or `run_once()`. Worker setup errors, including `IperfError`, propagate;
+completed native failures remain failed results. Basic synchronous clients keep
+their direct setup-error behavior. Wrapping a synchronous call in an
+application-owned executor does not confer cancellation support.
 
 A `Server` rejects reentrant operations on the same instance. `stop()` is
 cooperative between tests; it does not interrupt an active listener. A stopped
@@ -254,6 +279,12 @@ semantics.
 `IperfError`, `IperfLibraryError`, and `UnsupportedFeatureError` are independent
 `RuntimeError` subclasses exported from the package root. Catching
 `IperfError` does not catch the other two.
+
+`IperfCleanupError` subclasses `IperfLibraryError` and reports unconfirmed worker
+cleanup. It is also exported from the package root. Successful task cancellation
+raises `asyncio.CancelledError`; an asyncio timeout can translate that into
+`TimeoutError` after cleanup. Cleanup errors are propagated instead of reporting
+successful cancellation.
 
 `iperf3_lib.capabilities.has_symbol(name)` reports whether the loaded CFFI
 interface exposes a symbol, returning `False` on loading/detection failures.

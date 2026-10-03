@@ -6,6 +6,13 @@ These pages describe `main`. Released versions remain available through
 
 ## Unreleased
 
+- Always isolate `Client.arun()` and propagate cancellation through client/server
+  worker cleanup, including repeated cancellation and completion/deadline races.
+  Preserve synchronous execution and cooperative `Server.stop()` behavior.
+- Report unconfirmed process cleanup through `IperfCleanupError`, retaining
+  ownership until the worker is reaped. Active callbacks still delay API return.
+- Async methods use the built-in worker path instead of overridden synchronous
+  methods; setup errors follow existing worker exception semantics.
 - Simplify the public documentation and navigation; keep maintainer procedures
   and detailed design notes in the repository.
 - Allow the Kubernetes/Grafana example to use the chosen kubeconfig context.

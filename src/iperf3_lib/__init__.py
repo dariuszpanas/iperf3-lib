@@ -2,7 +2,7 @@
 
 from .config import ClientConfig, Protocol
 from .events import NativeEvent
-from .exceptions import IperfError, IperfLibraryError, UnsupportedFeatureError
+from .exceptions import IperfCleanupError, IperfError, IperfLibraryError, UnsupportedFeatureError
 from .iperf_client import Client
 from .iperf_server import Server
 from .result import Diagnostic, FlowStats, IntervalStats, Result, SumStats
@@ -14,6 +14,7 @@ __all__ = [
     "Diagnostic",
     "FlowStats",
     "IperfError",
+    "IperfCleanupError",
     "IperfLibraryError",
     "IntervalStats",
     "NativeEvent",

@@ -13,6 +13,7 @@ import time
 from collections.abc import Callable
 from typing import Any, Literal
 
+from ._cancellation import _ExecutionControl
 from .events import NativeEvent
 from .exceptions import IperfError, IperfLibraryError, UnsupportedFeatureError
 from .result import Diagnostic, ExecutionMetadata, Result, result_from_iperf_json
@@ -92,6 +93,7 @@ def run_worker(
     max_runs: int | None = 1,
     should_stop: Callable[[], bool] | None = None,
     timeout: float | None = None,
+    _control: _ExecutionControl | None = None,
 ) -> Result:
     """Run native code in a child and reap it on every return/error path.
 
@@ -112,6 +114,8 @@ def run_worker(
             raise ValueError("timeout must be a positive finite number")
     if max_runs is not None and (type(max_runs) is not int or max_runs < 1):
         raise ValueError("max_runs must be a positive integer or None")
+    control = _control if _control is not None else _ExecutionControl()
+    control.check()
     if should_stop is not None and should_stop():
         return Result(
             ok=False,
@@ -134,22 +138,14 @@ def run_worker(
     messages: queue.Queue[dict[str, Any]] = queue.Queue(maxsize=256)
     dropped = 0
     closing = threading.Event()
-    expired = threading.Event()
-    termination_lock = threading.Lock()
-
-    def stop_child() -> None:
-        with termination_lock:
-            if process.poll() is None:
-                process.terminate()
-                try:
-                    process.wait(timeout=2)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait(timeout=2)
 
     def expire() -> None:
-        expired.set()
-        stop_child()
+        control.abort(TimeoutError(f"Native {role} exceeded the {timeout:g}s process deadline"))
+
+    def check() -> None:
+        if timeout is not None and time.monotonic() - started >= timeout:
+            expire()
+        control.check()
 
     watchdog = None
     if timeout is not None:
@@ -165,25 +161,55 @@ def run_worker(
                 continue
 
     def read_messages() -> None:
-        nonlocal dropped
         try:
-            for line in stdout:
-                if closing.is_set():
+            # Nonblocking descriptor reads keep shutdown independent of an
+            # inherited pipe writer. Closing a TextIOWrapper while another
+            # thread holds its read lock can otherwise block indefinitely.
+            pending = b""
+            while not closing.is_set():
+                try:
+                    chunk = os.read(stdout.fileno(), 65536)
+                except BlockingIOError:
+                    closing.wait(0.02)
+                    continue
+                if not chunk:
+                    if pending:
+                        deliver(pending)
                     break
-                item = json.loads(line)
-                if not isinstance(item, dict):
-                    raise ValueError("invalid worker message")
-                if item.get("type") == "event":
-                    try:
-                        messages.put_nowait(item)
-                    except queue.Full:
-                        dropped += 1
-                else:
-                    enqueue(item)
+                pending += chunk
+                while b"\n" in pending and not closing.is_set():
+                    line, pending = pending.split(b"\n", 1)
+                    deliver(line)
         except (ValueError, OSError) as exc:
             enqueue({"type": "transport_error", "message": str(exc)})
         finally:
             enqueue({"type": "eof"})
+
+    def deliver(line: bytes) -> None:
+        nonlocal dropped
+        item = json.loads(line)
+        if not isinstance(item, dict):
+            raise ValueError("invalid worker message")
+        if item.get("type") == "event":
+            try:
+                messages.put_nowait(item)
+            except queue.Full:
+                dropped += 1
+        else:
+            enqueue(item)
+
+    def write_message(message: dict[str, Any]) -> None:
+        data = memoryview((json.dumps(message, allow_nan=False) + "\n").encode("utf-8"))
+        while data:
+            check()
+            try:
+                written = os.write(stdin_descriptor, data)
+            except BlockingIOError:
+                closing.wait(0.02)
+                continue
+            if written == 0:
+                raise BrokenPipeError("Native worker stopped accepting input")
+            data = data[written:]
 
     reader = threading.Thread(target=read_messages, daemon=True)
     callback_error: Exception | None = None
@@ -203,30 +229,32 @@ def run_worker(
     assert process.stdin is not None and process.stdout is not None
     stdout = process.stdout
     try:
+        control.register(process)
+        stdin_descriptor = process.stdin.fileno()
+        os.set_blocking(stdin_descriptor, False)
+        os.set_blocking(stdout.fileno(), False)
         if watchdog is not None:
             assert timeout is not None
             watchdog.interval = max(0, timeout - (time.monotonic() - started))
             watchdog.start()
         reader.start()
+        check()
         try:
-            process.stdin.write(json.dumps(request, allow_nan=False) + "\n")
-            process.stdin.flush()
+            write_message(request)
         except BrokenPipeError as exc:
-            if expired.is_set():
-                raise TimeoutError("Native process deadline expired during startup") from exc
+            check()
             raise IperfLibraryError("Native worker closed its input during startup") from exc
         while True:
-            if expired.is_set() or (timeout is not None and time.monotonic() - started >= timeout):
-                raise TimeoutError(f"Native {role} exceeded the {timeout:g}s process deadline")
+            check()
             try:
                 message = messages.get(timeout=0.05)
             except queue.Empty:
                 continue
-            if expired.is_set():
-                raise TimeoutError(f"Native {role} exceeded the {timeout:g}s process deadline")
+            check()
             kind = message.get("type")
             if kind == "event":
                 if on_event is not None and callback_error is None:
+                    control.check()
                     try:
                         on_event(
                             NativeEvent(
@@ -251,23 +279,21 @@ def run_worker(
                 count += 1
                 native_completed = last_result.ok
                 if on_result is not None and callback_error is None:
+                    control.check()
                     try:
                         on_result(last_result)
                     except Exception as exc:
                         callback_error = exc
                 if role == "server":
-                    if expired.is_set():
-                        raise TimeoutError(
-                            f"Native {role} exceeded the {timeout:g}s process deadline"
-                        )
+                    check()
                     keep_running = (
                         callback_error is None
                         and native_completed
                         and (max_runs is None or count < max_runs)
                         and (should_stop is None or not should_stop())
                     )
-                    process.stdin.write(json.dumps({"continue": keep_running}) + "\n")
-                    process.stdin.flush()
+                    control.check()
+                    write_message({"continue": keep_running})
             elif kind == "error":
                 error_type = {
                     "TypeError": TypeError,
@@ -279,30 +305,47 @@ def run_worker(
                 }.get(message.get("class"), IperfLibraryError)
                 raise error_type(message.get("message", "Native worker failed"))
             elif kind == "done":
-                process.wait(timeout=5)
+                if not control.wait_for_exit(timeout=5):
+                    raise IperfLibraryError(
+                        "Native worker did not exit after completing its response"
+                    )
+                check()
                 if process.returncode:
                     raise IperfLibraryError(f"Native worker exited with code {process.returncode}")
                 if callback_error is not None:
                     raise callback_error
                 if last_result is None:
                     raise IperfLibraryError("Native worker returned no result")
+                control.complete()
                 return last_result
             elif kind in {"eof", "transport_error"}:
-                process.wait(timeout=5)
+                control.wait_for_exit(timeout=5)
+                check()
                 raise IperfLibraryError(
                     f"Native worker ended without completing its response (exit {process.returncode})"
                 )
+    except BaseException as exc:
+        if timeout is not None and time.monotonic() - started >= timeout:
+            expire()
+        control.abort(exc)
+        control.check()
+        raise
     finally:
         closing.set()
         if watchdog is not None:
             watchdog.cancel()
-        stop_child()
         try:
-            process.stdin.close()
-        except OSError:
-            pass
-        if reader.ident is not None:
-            reader.join(timeout=1)
-        stdout.close()
-        if watchdog is not None and watchdog.ident is not None:
-            watchdog.join(timeout=1)
+            control.close()
+        finally:
+            try:
+                process.stdin.close()
+            except OSError:
+                pass
+            if reader.ident is not None:
+                reader.join(timeout=1)
+            try:
+                stdout.close()
+            except OSError:
+                pass
+            if watchdog is not None and watchdog.ident is not None:
+                watchdog.join(timeout=1)

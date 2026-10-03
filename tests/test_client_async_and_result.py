@@ -1,118 +1,94 @@
-"""Async client tests and result parsing for iperf3-lib."""
+"""Async client worker admission and result/error preservation."""
+
+from types import SimpleNamespace
 
 import pytest
 
-from iperf3_lib.result import Result
-
-
-class DummyFFI:
-    """Dummy FFI class for simulating cffi in async tests."""
-
-    def __init__(self):
-        """Initialize DummyFFI with NULL attribute."""
-        self.NULL = 0
-
-    def string(self, s):
-        """Return the input string (simulate cffi.string)."""
-        return s
-
-    def new(self, spec, val):
-        """Return the value (simulate cffi.new)."""
-        return val
-
-
-class AsyncLib:
-    """Dummy lib for simulating async iperf3 client behavior."""
-
-    def __init__(self):
-        """Initialize AsyncLib with i_errno attribute."""
-        self.i_errno = 0
-        self.protocol_id = 1
-
-    def iperf_new_test(self):
-        """Simulate iperf_new_test call."""
-        return 1
-
-    def iperf_defaults(self, t):
-        """Simulate iperf_defaults call."""
-        return 0
-
-    def iperf_set_test_role(self, t, c):
-        """Simulate iperf_set_test_role call."""
-        return None
-
-    def iperf_set_test_server_hostname(self, t, s):
-        """Simulate iperf_set_test_server_hostname call."""
-        return None
-
-    def iperf_set_test_server_port(self, t, p):
-        """Simulate iperf_set_test_server_port call."""
-        return None
-
-    def iperf_set_test_duration(self, t, d):
-        """Simulate iperf_set_test_duration call."""
-        return None
-
-    def set_protocol(self, t, protocol_id):
-        """Select a protocol."""
-        self.protocol_id = protocol_id
-        return 0
-
-    def iperf_get_test_protocol_id(self, t):
-        """Return the selected protocol."""
-        return self.protocol_id
-
-    def iperf_set_test_json_output(self, t, v):
-        """Simulate iperf_set_test_json_output call."""
-        return None
-
-    def iperf_run_client(self, t):
-        """Simulate iperf_run_client call."""
-        return 0
-
-    def iperf_get_test_json_output_string(self, t):
-        """Simulate iperf_get_test_json_output_string call."""
-        raw = b'{"end": {"sum_sent": {"bits_per_second": 2000000.0}}}'
-        return raw
-
-    def iperf_free_test(self, t):
-        """Simulate iperf_free_test call."""
-        return None
+from iperf3_lib.config import ClientConfig, config_to_dict
+from iperf3_lib.exceptions import IperfError, IperfLibraryError, UnsupportedFeatureError
+from iperf3_lib.result import Result, result_from_iperf_json
 
 
 @pytest.mark.asyncio
 async def test_client_arun_and_summary(monkeypatch):
-    """Test async client arun and summary_mbps property."""
-    # patch ffi and lib
-    import iperf3_lib.ffi.api as api_mod
-    import iperf3_lib.iperf_client as client_mod
+    """Default async calls isolate native work and retain configuration and metrics."""
+    from iperf3_lib import _execution
+    from iperf3_lib import iperf_client as module
 
-    dummy_ffi = DummyFFI()
-    dummy_lib = AsyncLib()
+    cfg = ClientConfig(server="127.0.0.1", duration=1)
+    calls = []
 
-    monkeypatch.setattr(api_mod, "ffi", dummy_ffi)
-    monkeypatch.setattr(api_mod, "lib", dummy_lib)
+    def worker(role, options, **kwargs):
+        calls.append((role, options, kwargs))
+        return result_from_iperf_json({"end": {"sum_sent": {"bits_per_second": 2_000_000.0}}})
 
-    importlib = __import__("importlib")
-    importlib.reload(client_mod)
+    monkeypatch.setattr(_execution, "run_worker", worker)
+    monkeypatch.setattr(
+        module,
+        "lib",
+        SimpleNamespace(iperf_new_test=lambda: pytest.fail("native work in host process")),
+    )
+    result = await module.Client(cfg).arun()
+    assert result.ok and result.summary_mbps == pytest.approx(2)
+    assert result.execution.configuration.requested == config_to_dict(cfg)
+    assert calls[0][:2] == ("client", config_to_dict(cfg))
+    assert calls[0][2]["timeout"] is None
+    assert calls[0][2]["on_event"] is None
+    assert calls[0][2]["_control"] is not None
 
-    from iperf3_lib.config import ClientConfig, Protocol
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "error",
+    [
+        ValueError("invalid native setup"),
+        IperfError("native setup rejected"),
+        UnsupportedFeatureError("unsupported native option"),
+        IperfLibraryError("native allocation failed"),
+    ],
+)
+async def test_arun_preserves_explicit_worker_setup_errors(monkeypatch, error):
+    """Moving default async calls to a worker does not fabricate failed results."""
+    from iperf3_lib import _execution
     from iperf3_lib.iperf_client import Client
 
-    cfg = ClientConfig(server="127.0.0.1", duration=1, protocol=Protocol.TCP)
-    res = await Client(cfg).arun()
+    def worker(*args, **kwargs):
+        raise error
 
-    assert isinstance(res, Result)
-    assert res.ok is True
-    # summary_mbps should come from sum_sent bits_per_second (2,000,000 -> 2.0 Mbps)
-    assert abs(res.summary_mbps - 2.0) < 0.001
+    monkeypatch.setattr(_execution, "run_worker", worker)
+    with pytest.raises(type(error), match=str(error)) as captured:
+        await Client(ClientConfig("127.0.0.1")).arun()
+    assert captured.value is error
+
+
+@pytest.mark.asyncio
+async def test_arun_uses_owned_worker_without_invoking_run_override(monkeypatch):
+    """Synchronous overrides cannot bypass async ownership or alter native results."""
+    from iperf3_lib import _execution
+    from iperf3_lib.iperf_client import Client
+
+    class CustomClient(Client):
+        """Supply an application override that async execution must not invoke."""
+
+        def run(self, **kwargs):
+            """Reject accidental delegation from the asynchronous method."""
+            pytest.fail("arun invoked the synchronous run override")
+
+    native_failure = Result(ok=False, error="retained native failure")
+
+    def worker(role, options, **kwargs):
+        assert role == "client"
+        assert kwargs["_control"] is not None
+        return native_failure
+
+    monkeypatch.setattr(_execution, "run_worker", worker)
+    assert await CustomClient(ClientConfig("127.0.0.1")).arun() is native_failure
+    assert not native_failure.ok and native_failure.error == "retained native failure"
 
 
 def test_result_raw_uses_independent_default_dicts():
     """Do not share mutable raw result state between model instances."""
     first = Result(ok=True)
     second = Result(ok=True)
-
     first.raw["changed"] = True
-
     assert second.raw == {}

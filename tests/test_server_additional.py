@@ -1,12 +1,15 @@
 """Tests for server worker isolation and result/error transport."""
 
+import asyncio
+import subprocess
 import sys
+import threading
 from dataclasses import asdict
 from types import SimpleNamespace
 
 import pytest
 
-from iperf3_lib.exceptions import IperfLibraryError
+from iperf3_lib.exceptions import IperfCleanupError, IperfLibraryError
 from iperf3_lib.iperf_server import Server
 from iperf3_lib.result import Result
 from iperf3_lib.server_config import ServerConfig
@@ -91,6 +94,8 @@ def test_server_rejects_non_callable_event_handler(method):
 @pytest.mark.asyncio
 async def test_aserve_once_returns_result_and_forwards_options(monkeypatch):
     """Retain the real result through the asynchronous convenience method."""
+    import iperf3_lib.iperf_server as module
+
     server = Server()
 
     def handler(event):
@@ -98,9 +103,127 @@ async def test_aserve_once_returns_result_and_forwards_options(monkeypatch):
 
     result = Result(ok=True)
 
-    def run_once(**kwargs):
-        assert kwargs == {"on_event": handler, "timeout": 3}
+    def worker(options, **kwargs):
+        assert options == asdict(ServerConfig(json_stream=True))
+        assert kwargs["on_event"] is handler
+        assert kwargs["timeout"] == 3
+        assert kwargs["max_runs"] == 1
+        assert kwargs["_control"] is not None
+        assert server._run_lock.locked()
         return result
 
-    monkeypatch.setattr(server, "run_once", run_once)
+    monkeypatch.setattr(module, "_run_worker", worker)
     assert await server.aserve_once(on_event=handler, timeout=3) is result
+    assert not server._run_lock.locked()
+
+
+@pytest.mark.asyncio
+async def test_aserve_once_uses_owned_worker_without_invoking_run_once_override(monkeypatch):
+    """Synchronous overrides cannot bypass async server admission and ownership."""
+    import iperf3_lib.iperf_server as module
+
+    class CustomServer(Server):
+        """Supply an application override that async execution must not invoke."""
+
+        def run_once(self, **kwargs):
+            """Reject accidental delegation from the asynchronous method."""
+            pytest.fail("aserve_once invoked the synchronous run_once override")
+
+    server = CustomServer()
+    native_failure = Result(ok=False, error="retained native failure")
+
+    def worker(options, **kwargs):
+        assert kwargs["_control"] is not None
+        assert server._run_lock.locked()
+        return native_failure
+
+    monkeypatch.setattr(module, "_run_worker", worker)
+    assert await server.aserve_once() is native_failure
+    assert not server._run_lock.locked()
+    assert not native_failure.ok and native_failure.error == "retained native failure"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("first_cause", ["cancel", "timeout"])
+async def test_failed_cancellation_cleanup_holds_server_admission_until_reaped(
+    monkeypatch, first_cause
+):
+    """A failed kill is explicit and cannot admit a second live server worker."""
+    import iperf3_lib.iperf_server as module
+
+    ready = asyncio.Event()
+    exited = threading.Event()
+    release = threading.Event()
+    reaped = asyncio.Event()
+    controls = []
+    loop = asyncio.get_running_loop()
+    server = Server()
+
+    class UnreapableProcess:
+        """Report failed OS cleanup until the test supplies eventual process exit."""
+
+        def poll(self):
+            return 0 if exited.is_set() else None
+
+        def terminate(self):
+            raise OSError("termination unavailable")
+
+        def kill(self):
+            raise OSError("kill unavailable")
+
+        def wait(self, timeout):
+            if exited.wait(min(timeout, 0.01)):
+                return 0
+            raise subprocess.TimeoutExpired("retained server", timeout)
+
+    def worker(options, **kwargs):
+        control = kwargs["_control"]
+        controls.append(control)
+        control.register(UnreapableProcess())
+        if first_cause == "timeout":
+            control.abort(TimeoutError("initial deadline"))
+        loop.call_soon_threadsafe(ready.set)
+        try:
+            assert release.wait(5)
+            control.wait_for_exit(5)
+        finally:
+            control.close()
+
+    monkeypatch.setattr(module, "_run_worker", worker)
+    task = asyncio.create_task(server.aserve_once())
+    try:
+        await asyncio.wait_for(ready.wait(), timeout=2)
+        task.cancel("cancel retained server")
+        await asyncio.sleep(0)
+        release.set()
+        with pytest.raises(IperfCleanupError) as captured:
+            await asyncio.wait_for(task, timeout=2)
+        assert isinstance(
+            captured.value.__cause__,
+            TimeoutError if first_cause == "timeout" else asyncio.CancelledError,
+        )
+        assert not captured.value._control.cleanup_confirmed
+        assert server._run_lock.locked()
+        with pytest.raises(RuntimeError, match="already has an active operation"):
+            await server.aserve_once()
+    finally:
+        release.set()
+        try:
+            if not task.done():
+                task.cancel()
+            try:
+                await asyncio.wait_for(task, timeout=2)
+            except (asyncio.CancelledError, IperfCleanupError):
+                pass
+        finally:
+            # The wrapper registers its lock-release callback before the task
+            # returns. Observe reaping after that callback, including on failure.
+            if controls:
+                controls[0].when_reaped(lambda: loop.call_soon_threadsafe(reaped.set))
+            exited.set()
+            if controls:
+                await asyncio.wait_for(reaped.wait(), timeout=2)
+    assert not server._run_lock.locked()
+    result = Result(ok=True)
+    monkeypatch.setattr(module, "_run_worker", lambda *args, **kwargs: result)
+    assert await server.aserve_once() is result

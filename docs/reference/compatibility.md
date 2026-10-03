@@ -50,7 +50,7 @@ loaded raises `IperfLibraryError` rather than falling back to another name.
 | Native JSON | Completed client/server results remain available independently of live event delivery. |
 | MPTCP | `mptcp=True` uses the worker; requires TCP and native/kernel support. |
 | Streaming JSON | `json_stream=True` or an event callback selects bounded worker event delivery. |
-| Async convenience | Executor-backed operations; cancelling the await does not stop an operation. |
+| Async convenience | Always isolated; cancellation waits for worker cleanup and any active callback. Unconfirmed cleanup raises `IperfCleanupError`. This behavior is new after 0.3.0. |
 | Concurrent native operations | Basic direct calls remain non-reentrant. Expanded worker calls isolate native state; ordinary client construction alone does not select isolation. |
 | Execution timeout | Explicit `timeout` terminates/reaps the worker before raising; native C finalizers are not promised on forced termination. |
 | Server shutdown | `stop()` is cooperative between iterations; a worker timeout bounds the complete server session. |
@@ -93,10 +93,14 @@ loading is deferred.
 feature table and loaded library version. Symbol availability, wrapper
 support, and a successful test are separate checks.
 
-**An asyncio timeout expires, but traffic continues.** Cancelling the await
-leaves its executor operation running. Pass the library's `timeout` argument
-to select a worker deadline independently of the await. Wait for a basic
-direct operation to finish before reusing its native process.
+**An asyncio timeout expires, but traffic continues.** Version 0.3.0 leaves the
+executor operation running when its await is cancelled. Current `main` makes
+`arun()` and `aserve_once()` request worker termination and await cleanup and
+any active callback during cancellation. Unconfirmed cleanup raises
+`IperfCleanupError` and retains worker ownership.
+Application-owned executor wrappers around synchronous methods retain their
+original behavior. The library's `timeout` argument sets an independent worker
+deadline. Wait for a basic direct operation to finish before reusing its process.
 
 **A callback is slow or events are missing.** Callbacks run synchronously in
 Python. Keep them short: bounded queues drop events. The independent timeout
