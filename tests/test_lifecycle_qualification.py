@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import io
 import json
 import os
@@ -170,6 +171,8 @@ def _passed_results():
                 "cancelled": True,
                 "rejected": True,
             }
+        if key == "async_plan":
+            evidence = _async_plan_receipt(nodeid.rsplit("[", 1)[1].removesuffix("]"))
         if key == "cancellation":
             evidence["reuse_bytes"] = 12
             for index, name in enumerate(("reused_client_worker", "reused_server_worker")):
@@ -205,9 +208,197 @@ def _passed_results():
     }
 
 
+def _async_plan_receipt(case):
+    """Build explicit synthetic persisted evidence for fail-closed validator tests."""
+    from iperf3_lib.artifacts import artifact_from_result
+    from iperf3_lib.config import ClientConfig
+    from iperf3_lib.events import NativeEvent
+    from iperf3_lib.plan_execution import PlanExecutionResult, PlanTrialRecord
+    from iperf3_lib.plan_reports import dumps_plan_report, plan_report_from_execution
+    from iperf3_lib.result import result_from_iperf_json
+    from iperf3_lib.trials import PlanBudget, TrialPolicy, TrialSpec, prepare_plan
+
+    statuses, stop = {
+        "active-cancel-tcp": (["completed", "cancelled", "not_run"], "cancelled"),
+        "pause-cancel-tcp": (["completed", "not_run", "not_run"], "cancelled"),
+        "active-deadline-udp": (["completed", "timed_out", "not_run"], "timeout"),
+        "completed-tcp": (["completed", "completed", "completed"], None),
+        "stop-on-error-udp": (["completed", "failed", "not_run"], "stop_on_error"),
+    }[case]
+    protocol = case.rsplit("-", 1)[1]
+    plan = prepare_plan(
+        [
+            TrialSpec(
+                f"trial-{index}",
+                f"cell-{index}",
+                "measured",
+                0,
+                ClientConfig("127.0.0.1", duration=1, protocol=protocol),
+            )
+            for index in range(3)
+        ],
+        policy=TrialPolicy(repetitions=1, stop_on_error=True, pause_seconds=0.25),
+        budget=PlanBudget(None, None),
+    )
+    workers = [
+        {
+            "protocol_version": 1,
+            "run_index": 1,
+            "pid": 200 + index,
+            "request_id": str(index) * 32,
+            "worker_id": str(index + 2) * 32,
+            "producer": {
+                "package_version": "0.3.0",
+                "python_version": "3.14.2",
+                "native_version": "iperf 3.21",
+                "library_selector": {},
+            },
+        }
+        for index in range(2)
+    ]
+    records = []
+    for index, (spec, status) in enumerate(zip(plan.trials, statuses, strict=True)):
+        if status == "not_run":
+            records.append(PlanTrialRecord(spec, status, reason=stop))
+            continue
+        artifact = None
+        events = ()
+        if status in {"completed", "failed"}:
+            native = (
+                {
+                    "start": {"test_start": {"protocol": protocol.upper(), "reverse": 0}},
+                    "end": {"sum_received": {"bytes": 12, "seconds": 1}},
+                }
+                if status == "completed"
+                else {"error": "connection refused"}
+            )
+            result = result_from_iperf_json(native)
+            result.extensions["iperf3_lib.worker"] = workers[0]
+            artifact = artifact_from_result(result)
+        else:
+            events = (NativeEvent("interval", {"sum": {"bytes": 12}}, 1, 1001.0),)
+        records.append(
+            PlanTrialRecord(
+                spec,
+                status,
+                artifact=artifact,
+                reason=stop if events else None,
+                started_at_seconds=1000.0 + index,
+                completed_at_seconds=1001.0 + index,
+                elapsed_seconds=1.0,
+                partial_events=events,
+                events_observed=len(events),
+            )
+        )
+    execution = PlanExecutionResult(
+        plan,
+        tuple(records),
+        1000.0,
+        1010.0,
+        10.0,
+        0.25,
+        stop,
+        6 if case == "active-deadline-udp" else None,
+    )
+    encoded = dumps_plan_report(plan_report_from_execution(execution))
+    admitted = sum(status != "not_run" for status in statuses)
+    active = case.startswith("active-")
+    return {
+        "case": case,
+        "protocol": protocol,
+        "trial_statuses": statuses,
+        "stop_reason": stop,
+        "admitted_trials": admitted,
+        "plan_client_workers": admitted,
+        "total_workers_before_reuse": admitted + 1,
+        "workers_reaped": True,
+        "pipes_closed": True,
+        "listener_released": True,
+        "reused": True,
+        "report_roundtrip": True,
+        "detached": True,
+        "completed_trial_bytes": 12,
+        "reuse_bytes": 12,
+        "active_bytes_before_stop": 12 if active else 0,
+        "retained_interrupted_bytes": 12 if active else 0,
+        "report_json": encoded,
+        "report_sha256": hashlib.sha256(encoded.encode()).hexdigest(),
+        "completed_worker": workers[0],
+        "reuse_worker": workers[1],
+    }
+
+
 def test_lifecycle_results_require_every_expected_case_and_native_receipt():
     """The exact positive full selection can qualify."""
     qualification.validate_results(_passed_results())
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("plan_client_workers", 3),
+        ("admitted_trials", True),
+        ("workers_reaped", False),
+        ("pipes_closed", False),
+        ("listener_released", False),
+        ("completed_trial_bytes", 0),
+        ("active_bytes_before_stop", 0),
+        ("retained_interrupted_bytes", 0),
+        ("reuse_bytes", True),
+        ("trial_statuses", ["completed", "not_run", "not_run"]),
+        ("stop_reason", None),
+        ("report_sha256", "0" * 64),
+        ("report_roundtrip", False),
+        ("detached", False),
+    ],
+)
+def test_async_plan_receipts_require_measured_partial_history_and_owned_cleanup(field, value):
+    """Passing phase labels cannot replace native cleanup and persisted history evidence."""
+    result = _passed_results()
+    call = next(
+        report
+        for report in result["reports"]
+        if report["phase"] == "call" and report["nodeid"].endswith("[active-cancel-tcp]")
+    )
+    evidence = json.loads(call["properties"]["async_plan"])
+    evidence[field] = value
+    call["properties"]["async_plan"] = json.dumps(evidence)
+    with pytest.raises(ValueError, match="async plan receipt"):
+        qualification.validate_results(result)
+
+
+@pytest.mark.parametrize(
+    "change", ["status", "artifact", "producer", "traffic", "events", "timing"]
+)
+def test_async_plan_receipts_reject_resealed_contradictory_report_evidence(change):
+    """Updating a digest cannot hide a fabricated or contradictory partial report."""
+    result = _passed_results()
+    call = next(
+        report
+        for report in result["reports"]
+        if report["phase"] == "call" and report["nodeid"].endswith("[active-cancel-tcp]")
+    )
+    evidence = json.loads(call["properties"]["async_plan"])
+    report = json.loads(evidence["report_json"])
+    if change == "status":
+        report["execution"]["trials"][1]["status"] = "not_run"
+    elif change == "artifact":
+        report["execution"]["trials"][1]["artifact"] = report["execution"]["trials"][0]["artifact"]
+    elif change == "producer":
+        report["producer"]["version"] = "0.0.0"
+    elif change == "traffic":
+        report["execution"]["trials"][0]["artifact"]["result"]["raw"]["end"]["sum_received"][
+            "bytes"
+        ] = 99
+    elif change == "events":
+        report["execution"]["trials"][1]["partial_events"][0]["data"]["sum"]["bytes"] = 99
+    else:
+        report["execution"]["trials"][2]["started_at_seconds"] = 1004.0
+    evidence["report_json"] = json.dumps(report)
+    evidence["report_sha256"] = hashlib.sha256(evidence["report_json"].encode()).hexdigest()
+    call["properties"]["async_plan"] = json.dumps(evidence)
+    with pytest.raises(ValueError, match="async plan receipt"):
+        qualification.validate_results(result)
 
 
 @pytest.mark.parametrize(
@@ -376,7 +567,7 @@ def test_isolated_pytest_hook_retains_actual_case_phases_and_properties(tmp_path
     """Exercise collection and pytest report hooks in an isolated subprocess."""
     expected = _passed_results()
     for filename, (test, property_name) in qualification.TESTS.items():
-        cases = qualification.IPC_CASES if property_name == "worker_ipc" else qualification.CASES
+        cases = qualification.CASE_GROUPS[property_name]
         receipts = [
             report["properties"][property_name]
             for report in expected["reports"]

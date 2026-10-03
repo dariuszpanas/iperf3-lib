@@ -1,0 +1,554 @@
+{
+  "execution": {
+    "cleanup_confirmed": true,
+    "completed_at_seconds": 106,
+    "elapsed_seconds": 6,
+    "execution_success": false,
+    "observed_pause_seconds": 0,
+    "plan": {
+      "budget": {
+        "max_active_seconds": 3,
+        "max_payload_bytes": 300,
+        "stop_after_elapsed_seconds": null
+      },
+      "estimate": {
+        "active_seconds": 3,
+        "estimated_payload_bits": 2400,
+        "estimated_payload_bytes": 300,
+        "runs": [
+          {
+            "active_seconds": 1,
+            "estimated_payload_bits": 800,
+            "rate": {
+              "active_directions": [
+                "client_to_server"
+              ],
+              "aggregate_bps_all_directions": 800,
+              "aggregate_bps_per_direction": 800,
+              "native_per_stream_bps": 800,
+              "source": "legacy",
+              "unused_bps_per_direction": 0
+            }
+          },
+          {
+            "active_seconds": 1,
+            "estimated_payload_bits": 800,
+            "rate": {
+              "active_directions": [
+                "client_to_server"
+              ],
+              "aggregate_bps_all_directions": 800,
+              "aggregate_bps_per_direction": 800,
+              "native_per_stream_bps": 800,
+              "source": "legacy",
+              "unused_bps_per_direction": 0
+            }
+          },
+          {
+            "active_seconds": 1,
+            "estimated_payload_bits": 800,
+            "rate": {
+              "active_directions": [
+                "client_to_server"
+              ],
+              "aggregate_bps_all_directions": 800,
+              "aggregate_bps_per_direction": 800,
+              "native_per_stream_bps": 800,
+              "source": "legacy",
+              "unused_bps_per_direction": 0
+            }
+          }
+        ]
+      },
+      "order_seed": null,
+      "planned_pause_seconds": 0,
+      "policy": {
+        "max_trials": 1000,
+        "pause_seconds": 0,
+        "repetitions": 3,
+        "stop_on_error": false,
+        "warmup_runs": 0
+      },
+      "trials": [
+        {
+          "cell_id": "default",
+          "config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 1,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 800,
+            "reverse": false,
+            "server": "127.0.0.1",
+            "tos": null
+          },
+          "phase": "measured",
+          "rate_intent": null,
+          "repetition": 0,
+          "resolved_config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 1,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 800,
+            "reverse": false,
+            "server": "127.0.0.1",
+            "tos": null
+          },
+          "trial_id": "default:measured:0"
+        },
+        {
+          "cell_id": "default",
+          "config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 1,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 800,
+            "reverse": false,
+            "server": "127.0.0.1",
+            "tos": null
+          },
+          "phase": "measured",
+          "rate_intent": null,
+          "repetition": 1,
+          "resolved_config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 1,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 800,
+            "reverse": false,
+            "server": "127.0.0.1",
+            "tos": null
+          },
+          "trial_id": "default:measured:1"
+        },
+        {
+          "cell_id": "default",
+          "config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 1,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 800,
+            "reverse": false,
+            "server": "127.0.0.1",
+            "tos": null
+          },
+          "phase": "measured",
+          "rate_intent": null,
+          "repetition": 2,
+          "resolved_config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 1,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 800,
+            "reverse": false,
+            "server": "127.0.0.1",
+            "tos": null
+          },
+          "trial_id": "default:measured:2"
+        }
+      ]
+    },
+    "started_at_seconds": 100,
+    "stop_reason": "cancelled",
+    "timeout_seconds": null,
+    "trials": [
+      {
+        "artifact": {
+          "extensions": {},
+          "kind": "iperf3-lib.result",
+          "producer": {
+            "name": "iperf3-lib",
+            "version": "fixture-development"
+          },
+          "result": {
+            "availability": {},
+            "bidirectional": false,
+            "completed_at_seconds": null,
+            "cpu": [],
+            "diagnostics": [
+              {
+                "code": "provenance.unknown",
+                "evidence_paths": [
+                  "/raw/start/test_start"
+                ],
+                "message": "Traffic direction is unknown because native direction flags are missing.",
+                "path": "/execution/method",
+                "severity": "warning"
+              },
+              {
+                "code": "measurement.absent",
+                "evidence_paths": [],
+                "message": "Native endpoint summaries are incomplete for unknown.",
+                "path": null,
+                "severity": "warning"
+              }
+            ],
+            "duration_seconds": null,
+            "end": {
+              "sum_received": {
+                "bits_per_second": 800,
+                "bytes": 100,
+                "direction": "unknown",
+                "duration_seconds": 1,
+                "end_seconds": null,
+                "jitter_ms": null,
+                "lost_packets": null,
+                "lost_percent": null,
+                "observation": "receiver",
+                "omitted": null,
+                "packets": null,
+                "retransmits": null,
+                "start_seconds": null,
+                "tcp": null
+              },
+              "sum_sent": null
+            },
+            "error": null,
+            "execution": {
+              "configuration": {
+                "effective": {
+                  "bidirectional": {
+                    "evidence_paths": [],
+                    "state": "unavailable",
+                    "value": null
+                  },
+                  "blksize": {
+                    "evidence_paths": [],
+                    "state": "unavailable",
+                    "value": null
+                  },
+                  "duration": {
+                    "evidence_paths": [],
+                    "state": "unavailable",
+                    "value": null
+                  },
+                  "json_stream": {
+                    "evidence_paths": [],
+                    "state": "unavailable",
+                    "value": null
+                  },
+                  "mptcp": {
+                    "evidence_paths": [],
+                    "state": "unavailable",
+                    "value": null
+                  },
+                  "omit": {
+                    "evidence_paths": [],
+                    "state": "unavailable",
+                    "value": null
+                  },
+                  "parallel": {
+                    "evidence_paths": [],
+                    "state": "unavailable",
+                    "value": null
+                  },
+                  "port": {
+                    "evidence_paths": [],
+                    "state": "unavailable",
+                    "value": null
+                  },
+                  "protocol": {
+                    "evidence_paths": [
+                      "/raw/start/test_start/protocol"
+                    ],
+                    "state": "verified",
+                    "value": "tcp"
+                  },
+                  "rate": {
+                    "evidence_paths": [],
+                    "state": "unavailable",
+                    "value": null
+                  },
+                  "reverse": {
+                    "evidence_paths": [],
+                    "state": "unavailable",
+                    "value": null
+                  },
+                  "server": {
+                    "evidence_paths": [],
+                    "state": "unavailable",
+                    "value": null
+                  },
+                  "tos": {
+                    "evidence_paths": [],
+                    "state": "unavailable",
+                    "value": null
+                  }
+                },
+                "requested": null
+              },
+              "method": "unknown",
+              "native_system_info": null,
+              "native_version": null,
+              "platform": null,
+              "python_version": null,
+              "status": "completed",
+              "timing": {
+                "completed_at_seconds": null,
+                "elapsed_seconds": null,
+                "estimated_completed_at_seconds": null,
+                "native_started_at_seconds": null,
+                "requested_duration_seconds": null,
+                "started_at_seconds": null
+              }
+            },
+            "extensions": {},
+            "flows": [
+              {
+                "direction": "unknown",
+                "receiver": {
+                  "bits_per_second": 800,
+                  "bytes": 100,
+                  "direction": "unknown",
+                  "duration_seconds": 1,
+                  "end_seconds": null,
+                  "jitter_ms": null,
+                  "lost_packets": null,
+                  "lost_percent": null,
+                  "observation": "receiver",
+                  "omitted": null,
+                  "packets": null,
+                  "retransmits": null,
+                  "start_seconds": null,
+                  "tcp": null
+                },
+                "sender": null
+              }
+            ],
+            "intervals": [],
+            "ok": true,
+            "protocol": "tcp",
+            "raw": {
+              "end": {
+                "sum_received": {
+                  "bits_per_second": 800,
+                  "bytes": 100,
+                  "seconds": 1
+                }
+              },
+              "start": {
+                "test_start": {
+                  "protocol": "TCP"
+                }
+              }
+            },
+            "reporting_role": null,
+            "started_at_seconds": null,
+            "streams": []
+          },
+          "schema_version": 1
+        },
+        "cleanup_confirmed": true,
+        "completed_at_seconds": 101,
+        "diagnostics": [],
+        "elapsed_seconds": 1,
+        "events_dropped": 0,
+        "events_observed": 0,
+        "exception": null,
+        "partial_events": [],
+        "reason": null,
+        "returned_result_evidence": null,
+        "spec": {
+          "cell_id": "default",
+          "config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 1,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 800,
+            "reverse": false,
+            "server": "127.0.0.1",
+            "tos": null
+          },
+          "phase": "measured",
+          "rate_intent": null,
+          "repetition": 0,
+          "resolved_config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 1,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 800,
+            "reverse": false,
+            "server": "127.0.0.1",
+            "tos": null
+          },
+          "trial_id": "default:measured:0"
+        },
+        "started_at_seconds": 100,
+        "status": "completed"
+      },
+      {
+        "artifact": null,
+        "cleanup_confirmed": true,
+        "completed_at_seconds": 103,
+        "diagnostics": [],
+        "elapsed_seconds": 1,
+        "events_dropped": 1,
+        "events_observed": 2,
+        "exception": null,
+        "partial_events": [
+          {
+            "data": {
+              "bytes": 5
+            },
+            "kind": "interval",
+            "received_at_seconds": 102.5,
+            "sequence": 1
+          }
+        ],
+        "reason": "cancelled",
+        "returned_result_evidence": null,
+        "spec": {
+          "cell_id": "default",
+          "config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 1,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 800,
+            "reverse": false,
+            "server": "127.0.0.1",
+            "tos": null
+          },
+          "phase": "measured",
+          "rate_intent": null,
+          "repetition": 1,
+          "resolved_config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 1,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 800,
+            "reverse": false,
+            "server": "127.0.0.1",
+            "tos": null
+          },
+          "trial_id": "default:measured:1"
+        },
+        "started_at_seconds": 102,
+        "status": "cancelled"
+      },
+      {
+        "artifact": null,
+        "cleanup_confirmed": true,
+        "completed_at_seconds": null,
+        "diagnostics": [],
+        "elapsed_seconds": null,
+        "events_dropped": 0,
+        "events_observed": 0,
+        "exception": null,
+        "partial_events": [],
+        "reason": "cancelled",
+        "returned_result_evidence": null,
+        "spec": {
+          "cell_id": "default",
+          "config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 1,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 800,
+            "reverse": false,
+            "server": "127.0.0.1",
+            "tos": null
+          },
+          "phase": "measured",
+          "rate_intent": null,
+          "repetition": 2,
+          "resolved_config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 1,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 800,
+            "reverse": false,
+            "server": "127.0.0.1",
+            "tos": null
+          },
+          "trial_id": "default:measured:2"
+        },
+        "started_at_seconds": null,
+        "status": "not_run"
+      }
+    ]
+  },
+  "execution_mode": "sequential-owned",
+  "extensions": {
+    "example.synthetic": {
+      "purpose": "codec regression"
+    }
+  },
+  "kind": "iperf3-lib.plan-execution",
+  "pause_semantics": "global_completion_to_start",
+  "producer": {
+    "name": "example.fixture",
+    "version": "2"
+  },
+  "schema_version": 2
+}

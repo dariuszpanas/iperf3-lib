@@ -409,6 +409,43 @@ versions. Report-v1 imports preserve archived analysis and validate frozen
 baseline rules, finite budgets, report evolution, and CI status precedence.
 
 
+## Owned async plans (unreleased)
+
+Import `arun_plan` from `iperf3_lib.async_trials`:
+
+```text
+arun_plan(plan: PreparedPlan, *, timeout=None) -> PlanExecutionResult
+```
+
+Import `PlanExecutionResult`, `PlanTrialRecord`, `PlanExecutionReport`,
+`PlanCancelledError`, `PlanTimeoutError`, and `PlanCleanupError` from
+`iperf3_lib.plan_execution`. Each error exposes a detached `partial_result`;
+cleanup errors also retain original worker owners in `cleanup_errors`.
+The plan deadline is separate from the elapsed admission budget. Execution is
+sequential with global completion-to-next-start pauses. Interrupted records
+carry bounded `partial_events`, `events_observed`, and `events_dropped`;
+`cleanup_confirmed` and `execution_success` describe the full history.
+
+Import from `iperf3_lib.plan_reports`:
+
+```text
+plan_report_from_execution(execution) -> PlanExecutionReport
+plan_report_to_dict(report) -> dict
+plan_report_from_dict(mapping) -> PlanExecutionReport
+dumps_plan_report(report, *, indent=None) -> str
+loads_plan_report(text: str | bytes) -> PlanExecutionReport
+snapshot_plan_execution(execution) -> PlanExecutionResult
+render_plan_text(report) -> str
+render_plan_junit(report) -> str
+```
+
+These functions use standalone plan-execution schema 2, with
+`execution_mode="sequential-owned"` and
+`pause_semantics="global_completion_to_start"`. They share the report validation
+exceptions but do not reinterpret assessment-v1 or sweep-v1 histories. See
+[async plan evidence](../guides/trials.md#cancel-an-async-plan-and-retain-its-evidence)
+for cancellation, retention limits and compatibility boundaries.
+
 ## Parameter sweeps
 
 Import from `iperf3_lib.sweeps`:

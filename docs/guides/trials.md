@@ -5,8 +5,9 @@ for package setup.
 
 A trial plan runs a finite, declared sequence. It keeps warm-up, failed,
 incomplete, and unstarted runs so the report describes the entire experiment.
-Execution is synchronous and sequential; each trial calls `Client.run()` once.
-There are no hidden retries.
+`run_plan` is synchronous and sequential; each trial calls `Client.run()` once.
+The unreleased `arun_plan` API adds owned sequential async execution and retained
+partial results after cancellation. Neither runner retries trials.
 
 ## Admit a plan before generating traffic
 
@@ -55,11 +56,83 @@ payload estimates. Such trials require uncapped estimate budgets; an unlimited
 the retained request and must be considered when comparing measurements.
 
 The existing [non-reentrant execution contract](running-tests.md) applies.
-The runner adds no concurrent execution or cancellation API; individual client
+The synchronous runner adds no concurrent execution or cancellation API; individual client
 configurations select the direct or isolated-worker path described there.
 `stop_on_error=True` stops after failed, incomplete, or exceptional execution;
 remaining trials are retained as `not_run`. Process-control exceptions such
 as `KeyboardInterrupt` propagate.
+
+## Cancel an async plan and retain its evidence
+
+Available on `main` (unreleased), `arun_plan` accepts the same `PreparedPlan` and
+owns one isolated `Client.arun()` task at a time. Cancelling the plan stops new
+admissions, cancels the active client, waits for cleanup, and raises
+`PlanCancelledError`, an `asyncio.CancelledError` subclass. Its `partial_result`
+retains every declared trial. Repeated cancellation cannot interrupt cleanup.
+
+```python
+from pathlib import Path
+
+from iperf3_lib.async_trials import arun_plan
+from iperf3_lib.plan_execution import (
+    PlanCancelledError, PlanCleanupError, PlanTimeoutError,
+)
+from iperf3_lib.plan_reports import dumps_plan_report, plan_report_from_execution
+
+async def run_experiment(plan):
+    try:
+        execution = await arun_plan(plan, timeout=30)
+    except (PlanCancelledError, PlanTimeoutError, PlanCleanupError) as error:
+        report = plan_report_from_execution(error.partial_result)
+        Path("interrupted-plan.json").write_text(
+            dumps_plan_report(report, indent=2), encoding="utf-8"
+        )
+        raise
+    return execution
+```
+
+The positive `timeout` starts after static validation and covers executor queue
+time, worker startup, trials and pauses. It interrupts active work, unlike
+`stop_after_elapsed_seconds`, which only stops admission. Cleanup may extend
+beyond the deadline. Prefer this parameter when timeout evidence is needed;
+an outer `asyncio.timeout()` can translate cancellation into its own exception.
+`PlanTimeoutError` subclasses `TimeoutError`. `PlanCleanupError` subclasses
+`IperfLibraryError`, retains original `IperfCleanupError` objects in
+`cleanup_errors`, and takes precedence when cleanup cannot be confirmed.
+
+Completed, failed and incomplete native results retain canonical artifacts.
+An interrupted trial is `cancelled`, `timed_out`, or `cleanup_failed`; remaining
+trials are `not_run`. Cancellation during a pause retains the preceding artifact
+and observed pause without fabricating an active trial. A result already returned
+by the child is preserved even if cancellation arrives before the plan receives it.
+`execution_success` requires all trials completed, confirmed cleanup and no stop
+reason. Pauses run globally from one trial's completion to the next trial's start.
+
+Internal event collection enables `json_stream=True` for each native client.
+Artifacts retain the original caller config in their rate-intent extension and
+the effective streaming config in execution metadata. Libiperf 3.19.1 streaming
+results are reconstructed from events; 3.21 can supply the complete terminal
+JSON. Interrupted trials retain a detached prefix of at most 64 events, 1 MiB
+total and 64 KiB per event, including framing bytes. `events_observed` counts
+callbacks delivered to this collector; `events_dropped` counts retention drops.
+Neither measures native or transport event loss. Partial events are diagnostic
+evidence, not complete results or eligible performance samples.
+
+`PlanExecutionResult` and `PlanTrialRecord` are separate from the synchronous v1
+models. `plan_report_from_execution`, `dumps_plan_report` / `loads_plan_report`,
+and `plan_report_to_dict` / `plan_report_from_dict` use the standalone
+`kind="iperf3-lib.plan-execution", schema_version=2` envelope. Strict loading
+validates statuses, cleanup, event bounds, timing and sequential history without
+loading libiperf. `render_plan_text` and `render_plan_junit` describe execution;
+they make no performance assessment. JUnit always retains an error for an
+interrupted plan, including interruption between completed trials.
+
+The existing assessment-v1 and sweep-v1 models and codecs remain unchanged and
+do not accept async execution histories. Completed artifacts can be analyzed
+individually. Concurrent plans, bounded concurrent scheduling and async sweep
+assessment remain follow-up work in [issue #36](https://github.com/dariuszpanas/iperf3-lib/issues/36).
+Ownership applies to this invocation's workers; it does not coordinate other
+callers or make libiperf's process-global state reentrant.
 
 ## Assess measurements independently of execution
 
