@@ -32,6 +32,19 @@ IPC_CASES = (
     "saturated-events",
     "partial-frame-cancel",
 )
+PLAN_CASES = (
+    "active-cancel-tcp",
+    "pause-cancel-tcp",
+    "active-deadline-udp",
+    "completed-tcp",
+    "stop-on-error-udp",
+)
+CASE_GROUPS = {
+    "cancellation": CASES,
+    "worker_lifetime": CASES,
+    "worker_ipc": IPC_CASES,
+    "async_plan": PLAN_CASES,
+}
 TESTS = {
     "test_cancellation_integration.py": (
         "test_native_cancellation_reaps_worker_releases_listener_and_allows_reuse",
@@ -44,6 +57,10 @@ TESTS = {
     "test_worker_ipc_integration.py": (
         "test_installed_worker_transport_contract",
         "worker_ipc",
+    ),
+    "test_async_trials_integration.py": (
+        "test_native_async_plan_retains_partial_history_and_releases_workers",
+        "async_plan",
     ),
 }
 HARNESS = (
@@ -210,7 +227,7 @@ def expected_tests() -> list[str]:
     return [
         f"{name}::{test}[{case}]"
         for name, (test, property_name) in TESTS.items()
-        for case in (IPC_CASES if property_name == "worker_ipc" else CASES)
+        for case in CASE_GROUPS[property_name]
     ]
 
 
@@ -233,6 +250,127 @@ class _Reports:
                 "detail": str(report.longrepr) if report.longrepr else None,
             }
         )
+
+
+def _validate_plan_receipt(evidence: dict, result: dict, nodeid: str) -> None:
+    """Validate persisted plan history together with measured ownership evidence."""
+    from iperf3_lib.plan_reports import loads_plan_report
+
+    case = nodeid.rsplit("[", 1)[1].removesuffix("]")
+    statuses, stop, admitted = {
+        "active-cancel-tcp": (["completed", "cancelled", "not_run"], "cancelled", 2),
+        "pause-cancel-tcp": (["completed", "not_run", "not_run"], "cancelled", 1),
+        "active-deadline-udp": (["completed", "timed_out", "not_run"], "timeout", 2),
+        "completed-tcp": (["completed", "completed", "completed"], None, 3),
+        "stop-on-error-udp": (["completed", "failed", "not_run"], "stop_on_error", 2),
+    }[case]
+    protocol = case.rsplit("-", 1)[1]
+    active = case.startswith("active-")
+    try:
+        if (
+            evidence["case"] != case
+            or evidence["protocol"] != protocol
+            or evidence["trial_statuses"] != statuses
+            or evidence["stop_reason"] != stop
+            or any(
+                evidence[name] is not True
+                for name in (
+                    "workers_reaped",
+                    "pipes_closed",
+                    "listener_released",
+                    "reused",
+                    "report_roundtrip",
+                    "detached",
+                )
+            )
+            or any(
+                type(evidence[name]) is not int or evidence[name] != expected
+                for name, expected in (
+                    ("admitted_trials", admitted),
+                    ("plan_client_workers", admitted),
+                    ("total_workers_before_reuse", admitted + 1),
+                )
+            )
+            or any(
+                type(evidence[name]) is not int or evidence[name] <= 0
+                for name in ("completed_trial_bytes", "reuse_bytes")
+            )
+            or any(
+                type(evidence[name]) is not int
+                or (evidence[name] <= 0 if active else evidence[name] < 0)
+                for name in ("active_bytes_before_stop", "retained_interrupted_bytes")
+            )
+            or not isinstance(evidence["report_json"], str)
+            or hashlib.sha256(evidence["report_json"].encode("utf-8")).hexdigest()
+            != evidence["report_sha256"]
+        ):
+            raise ValueError("missing measured ownership or persisted report identity")
+        report = loads_plan_report(evidence["report_json"])
+        execution = report.execution
+        if (
+            report.producer.name != "iperf3-lib"
+            or report.producer.version != result["package_version"]
+            or [trial.status for trial in execution.trials] != statuses
+            or [trial.spec.trial_id for trial in execution.trials]
+            != [f"trial-{i}" for i in range(3)]
+            or execution.stop_reason != stop
+            or execution.timeout_seconds != (6 if case == "active-deadline-udp" else None)
+            or execution.cleanup_confirmed is not True
+            or execution.execution_success is not (case == "completed-tcp")
+            or sum(trial.started_at_seconds is not None for trial in execution.trials) != admitted
+        ):
+            raise ValueError("persisted execution disagrees with the required scenario")
+        first_artifact = execution.trials[0].artifact
+        if first_artifact is None:
+            raise ValueError("completed trial has no native artifact")
+        first = first_artifact.result
+        if (
+            first.raw["end"]["sum_received"]["bytes"] != evidence["completed_trial_bytes"]
+            or first.raw["start"]["test_start"]["protocol"] != protocol.upper()
+            or first.extensions["iperf3_lib.worker"] != evidence["completed_worker"]
+        ):
+            raise ValueError("completed native measurement or provenance differs from report")
+        workers = [evidence[name] for name in ("completed_worker", "reuse_worker")]
+        for worker in workers:
+            if (
+                type(worker["protocol_version"]) is not int
+                or worker["protocol_version"] != 1
+                or type(worker["run_index"]) is not int
+                or worker["run_index"] != 1
+                or type(worker["pid"]) is not int
+                or worker["pid"] <= 0
+                or any(
+                    not isinstance(worker[key], str)
+                    or not re.fullmatch("[0-9a-f]{32}", worker[key])
+                    for key in ("request_id", "worker_id")
+                )
+                or worker["producer"]["package_version"] != result["package_version"]
+                or worker["producer"]["python_version"] != result["python"]
+                or worker["producer"]["native_version"] != result["native_version"]
+                or not isinstance(worker["producer"]["library_selector"], dict)
+            ):
+                raise ValueError("native worker producer differs from installed runtime")
+        if any(workers[0][key] == workers[1][key] for key in ("pid", "request_id", "worker_id")):
+            raise ValueError("reuse did not identify a distinct worker")
+        retained = 0
+        for trial in execution.trials:
+            for event in trial.partial_events:
+                if event.kind != "interval" or not isinstance(event.data, dict):
+                    continue
+                summary = event.data.get("sum")
+                if isinstance(summary, dict):
+                    count = summary.get("bytes", 0)
+                    if type(count) is not int or count < 0:
+                        raise ValueError("partial interval has invalid native byte evidence")
+                    retained += count
+        if retained != evidence["retained_interrupted_bytes"]:
+            raise ValueError("retained interrupted traffic differs from partial report")
+        if case == "pause-cancel-tcp" and execution.observed_pause_seconds <= 0:
+            raise ValueError("pause cancellation did not retain observed pause time")
+    except (AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise ValueError(
+            f"async plan receipt lacks measured partial-history evidence: {nodeid}"
+        ) from exc
 
 
 def validate_results(result: dict) -> None:
@@ -260,7 +398,9 @@ def validate_results(result: dict) -> None:
             raise ValueError(f"lifecycle case has no native receipt: {nodeid}") from exc
         if not isinstance(evidence, dict) or not evidence:
             raise ValueError(f"lifecycle case has an empty native receipt: {nodeid}")
-        if property_name == "cancellation":
+        if property_name == "async_plan":
+            _validate_plan_receipt(evidence, result, nodeid)
+        elif property_name == "cancellation":
             active = "[active-" in nodeid
             if (
                 evidence.get("reused") is not True

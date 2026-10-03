@@ -6,6 +6,10 @@ These pages describe `main`. Released versions remain available through
 
 ## Unreleased
 
+- Add owned sequential `arun_plan` execution with an overall deadline, cleanup-safe
+  cancellation, retained completed artifacts, bounded interrupted-trial events
+  and explicit unstarted records. Add strict standalone plan-execution-v2 JSON,
+  text and JUnit reports while preserving assessment-v1 and sweep-v1 contracts.
 - Version and bound isolated worker messages, validate session identities and
   ordering, retain readiness receipts, and require clean output shutdown before
   returning a completed result. Reserve control capacity under event overload;
