@@ -110,7 +110,9 @@ def test_capabilities_separate_present_absent_undeclared_and_wrapper_support(mon
     assert features["pacing_timer"].wrapper == "supported"
     assert features["pacing_timer"].symbols[0].declared is True
     assert features["pacing_timer"].symbols[0].state == "present"
-    assert features["hard_cancellation"].wrapper == "unsupported"
+    assert features["hard_cancellation"].wrapper == "supported"
+    assert features["hard_cancellation"].runtime == "not_run"
+    assert any("Direct calls" in note for note in features["hard_cancellation"].constraints)
     assert caps.HAS_PROTOCOL_SELECTION is False
     with pytest.raises(AttributeError):
         _ = caps.DOES_NOT_EXIST

@@ -262,8 +262,10 @@ then construct these dataclasses. The library does not require that adapter
 or reproduce Pydantic's model framework. Validate any manually assembled
 result through the artifact writer before durable storage.
 
-Async convenience still uses executor threads, and cancelling an await alone
-leaves its operation running. Basic direct native calls remain non-reentrant.
+In released 0.3.0, async convenience uses executor threads, and cancelling an
+await alone leaves its operation running. Current `main` adds
+[async worker cancellation](running-tests.md#integrate-with-asyncio).
+Basic direct native calls remain non-reentrant.
 Expanded controls, event callbacks and explicit execution timeouts select the
 [isolated Python/CFFI worker](native-controls.md#observe-events-and-bound-a-run).
 This is a separate execution feature from the dataclass migration.

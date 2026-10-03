@@ -155,8 +155,11 @@ Legacy `HAS_*` flags remain available and resolve when accessed. Native-symbol
 flags still collapse lookup/load failures to false; use the report when those
 distinctions matter. Parser-backed worker controls are distinct from dedicated
 setter probes. SCTP and MPTCP still depend on the native build and kernel. Basic
-direct calls remain non-reentrant; cancelling an await alone does not stop
-traffic. An explicit execution timeout selects the isolated worker.
+direct calls remain non-reentrant. Async methods always select the isolated
+worker on current `main`; an explicit execution timeout also selects it for a
+synchronous client. Async cancellation waits for worker cleanup and any active
+callback, and unconfirmed cleanup raises `IperfCleanupError`. This support is
+new after 0.3.0; see [async cancellation](running-tests.md#integrate-with-asyncio).
 
 ## Profiles and native option decisions
 

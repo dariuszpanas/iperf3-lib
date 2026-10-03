@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import platform
 import time
 from collections.abc import Callable
 from dataclasses import asdict, replace
-from functools import partial
+from typing import TYPE_CHECKING
 
 from .config import ClientConfig, Protocol, config_to_dict, requires_worker
 from .events import NativeEvent
@@ -16,6 +15,9 @@ from .exceptions import IperfError, IperfLibraryError, UnsupportedFeatureError
 from .ffi.api import ffi, lib
 from .intent import RateIntent, resolve_rate
 from .result import Diagnostic, ExecutionMetadata, Result, VerifiedSetting, result_from_iperf_json
+
+if TYPE_CHECKING:
+    from ._cancellation import _ExecutionControl
 
 TCP_PROTOCOL_ID = 1
 UDP_PROTOCOL_ID = 2
@@ -108,6 +110,16 @@ class Client:
         on_event: Callable[[NativeEvent], None] | None = None,
     ) -> Result:
         """Run the iperf3 test synchronously and return the result."""
+        return self._run(timeout=timeout, on_event=on_event)
+
+    def _run(
+        self,
+        *,
+        timeout: float | None = None,
+        on_event: Callable[[NativeEvent], None] | None = None,
+        _control: _ExecutionControl | None = None,
+    ) -> Result:
+        """Share admission and result metadata across direct and isolated execution."""
         cfg = replace(self.cfg)
         if self._password is not None and cfg.username is None:
             raise ValueError("password requires username and rsa_public_key_path")
@@ -200,7 +212,7 @@ class Client:
                     )
             return result
 
-        if requires_worker(cfg) or timeout is not None:
+        if _control is not None or requires_worker(cfg) or timeout is not None:
             import os
 
             from ._execution import run_worker
@@ -210,6 +222,7 @@ class Client:
                 password = os.environ.get("IPERF3_PASSWORD")
             if cfg.username is not None and password is None:
                 raise ValueError("authenticated clients require password= or IPERF3_PASSWORD")
+            execution_options = {"_control": _control} if _control is not None else {}
             return finish(
                 run_worker(
                     "client",
@@ -217,6 +230,7 @@ class Client:
                     password=password,
                     timeout=timeout,
                     on_event=on_event,
+                    **execution_options,
                 )
             )
 
@@ -325,10 +339,15 @@ class Client:
         timeout: float | None = None,
         on_event: Callable[[NativeEvent], None] | None = None,
     ) -> Result:
-        """Run the iperf3 test asynchronously and return the result."""
-        loop = asyncio.get_running_loop()
-        # use functools.partial to provide a zero-arg callable so static analyzers
-        # don't complain about unfilled *args parameter on run_in_executor
-        return await loop.run_in_executor(
-            None, partial(self.run, timeout=timeout, on_event=on_event)
+        """Run in an isolated worker, cleaning it up before propagating cancellation.
+
+        A callback already running must return before this await finishes.
+        Worker setup failures raise exceptions; completed native failures retain
+        unsuccessful results. This method uses the built-in isolated execution
+        path rather than delegating to an overridden ``run()`` method.
+        """
+        from ._cancellation import _run_async
+
+        return await _run_async(
+            lambda control: self._run(timeout=timeout, on_event=on_event, _control=control)
         )

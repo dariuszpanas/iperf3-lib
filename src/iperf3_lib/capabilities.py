@@ -226,7 +226,7 @@ _FEATURES: tuple[
         "supported",
         ("iperf_parse_arguments",),
         (
-            "Expanded controls and explicit timeout use a disposable Python process, without an iperf3 executable.",
+            "Async methods, expanded controls and explicit timeout use a disposable Python process, without an iperf3 executable.",
         ),
     ),
     (
@@ -237,10 +237,10 @@ _FEATURES: tuple[
     ),
     (
         "hard_cancellation",
-        "unsupported",
-        (),
+        "supported",
+        ("iperf_parse_arguments",),
         (
-            "Async cancellation does not stop native calls; explicit timeout bounds worker execution separately.",
+            "Cancelling arun/aserve_once stops and reaps the owned worker before propagating cancellation; active callbacks must return. Direct calls and application-owned executor wrappers are not cancellable.",
         ),
     ),
 )

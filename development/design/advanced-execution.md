@@ -28,8 +28,11 @@ impairment, stress, and cancellation have **not** been qualified by that probe.
 ## Existing guarantees remain in force
 
 `Client.run()` returns a complete result, including when a worker delivers live
-events. Async convenience methods use executor threads; cancelling an await
-alone does not stop the operation. Concurrent direct native calls in one process
+events. Async methods now always use isolated workers and propagate cancellation
+after worker cleanup. An active callback must return before the await completes;
+unconfirmed cleanup raises `IperfCleanupError`. This post-0.3.0 change does not
+establish plan cancellation, retained partial artifacts, or parent-death cleanup.
+Concurrent direct native calls in one process
 remain unsupported. A plan's admission estimates do not provide a hard deadline;
 an explicit worker timeout has a separate process-termination contract.
 

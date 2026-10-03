@@ -59,16 +59,25 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-`arun()` moves the operation to an executor thread. Cancelling the awaiting
-task, including through an asyncio timeout, does not terminate that operation.
-Pass `await Client(config).arun(timeout=10)` to select an isolated worker with
-its own execution deadline. A task's cancellation alone is not evidence that
-the native library is idle.
+On current `main`, `arun()` always uses an isolated Python/CFFI worker. Cancelling
+the awaiting task, including through an asyncio timeout, requests worker
+termination and propagates `CancelledError` after confirmed cleanup. Unconfirmed
+cleanup raises `IperfCleanupError`. This behavior is new after 0.3.0.
+Pass `await Client(config).arun(timeout=10)` to set an independent worker deadline.
+Repeated cancellation does not abandon cleanup. A callback already running must
+return before the await finishes; the worker is still stopped independently.
+
+Shutdown sends TERM, waits up to two seconds, then KILL if needed within a
+four-second process cleanup budget. OS process creation and application
+callbacks can extend the time until the Python call returns. If cleanup cannot
+be confirmed, `IperfCleanupError` reports that failure instead of successful
+cancellation. The library retains ownership for later reaping. No partial
+measurement result is manufactured after forced termination.
 
 Serialize basic direct native operations within a process. libiperf's global
 error state and blocking operations are not treated as reentrant. Multiple
 `Client` objects or separate executor threads do not provide isolation.
-Expanded controls, MPTCP, streaming, explicit execution timeouts and event
+Async methods, expanded controls, MPTCP, streaming, explicit execution timeouts and event
 callbacks select the Python/CFFI worker. See [native execution](native-controls.md#observe-events-and-bound-a-run)
 for the path-selection and delivery contract; no `iperf3` subprocess is used.
 
@@ -83,9 +92,18 @@ are raised instead:
 | `TypeError`, `ValueError` from `ClientConfig` | A configuration value or combination is invalid. |
 | `UnsupportedFeatureError` | The wrapper or loaded native library cannot apply a requested feature. |
 | `IperfLibraryError` | Loading, allocation, or native setup verification failed. |
+| `IperfError` raised by a worker | Native setup failed before a completed measurement was available. |
+| `IperfCleanupError` | Worker cleanup could not be confirmed; the original cancellation/failure is retained as its cause. |
 | JSON decoding errors or parser `ValueError` | The returned native JSON could not be decoded or normalized. |
 | `TimeoutError` | The worker execution deadline expired; its process was terminated and reaped. |
 | Callback exception | Delivery stopped; the exception propagates after the active run and worker shutdown. |
+
+Async methods use their built-in isolated implementation rather than invoking
+an override of `run()` or `run_once()`. Setup errors therefore follow worker
+semantics: they raise, whereas some direct-client setup errors produce failed
+results. Wrapping a synchronous method in your own executor does not stop its
+native operation when its await is cancelled. Plan cancellation and cleanup
+after abrupt parent-process death remain unsupported.
 
 Do not use `result.ok` as a performance acceptance decision: a completed test
 can have low throughput or substantial loss. Choose application thresholds with
@@ -121,6 +139,10 @@ lists native bitrate/duration policies, authentication and all other controls.
 same result through an executor thread. Server operations always use an isolated
 Python worker. Native failures are retained in results; setup errors raise.
 An idle exit with no JSON produces an incomplete result.
+Cancelling `aserve_once()` requests worker termination and waits for cleanup.
+The instance can be reused after cleanup and any active callback complete;
+unconfirmed cleanup raises `IperfCleanupError` and keeps it unavailable until
+the worker is reaped. `stop()` retains its cooperative between-test behavior.
 
 For a bounded sequential session:
 

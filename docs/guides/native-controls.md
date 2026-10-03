@@ -224,6 +224,12 @@ An independent watchdog terminates/reaps the worker at its deadline even if a
 Python callback is blocked. The caller still cannot regain control until that
 callback returns. Keep user work short or hand it off to an application-owned queue.
 
+Async methods always use an isolated worker and propagate task cancellation
+after confirmed cleanup; unconfirmed cleanup raises `IperfCleanupError`. A
+callback already running must return before the await finishes. See
+[async cancellation](running-tests.md#integrate-with-asyncio) for cleanup bounds
+and failure behavior; this support is new after 0.3.0.
+
 An explicit `timeout` or `on_event` callback selects the isolated Python/CFFI
 worker even for a basic client. `json_stream=True` also selects that path.
 The worker uses the installed Python package and shared library, not an
@@ -235,8 +241,8 @@ The execution timeout bounds the worker operation. Native
 `connect_timeout_ms`, `receive_timeout_ms`, `send_timeout_ms`, and
 `control_keepalive` affect particular connection states and do not provide the
 same lifetime guarantee. Consult [the API contract](../reference/api.md) for
-timeout, callback-failure and async behavior rather than assuming that an
-arbitrary `asyncio.wait_for` cancels a direct native call.
+timeout, callback-failure and async behavior. An `asyncio.wait_for` around an
+application-owned executor does not cancel a direct native call.
 
 ## SCTP and host-specific settings
 

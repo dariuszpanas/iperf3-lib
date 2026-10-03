@@ -2,20 +2,19 @@
 
 from __future__ import annotations
 
-import asyncio
 import math
 import threading
 from collections.abc import Callable
 from dataclasses import asdict, replace
 from enum import Enum
-from functools import partial
 from typing import TYPE_CHECKING, Any
 
-from .exceptions import IperfError
+from .exceptions import IperfCleanupError, IperfError
 from .result import Result
 from .server_config import ServerConfig
 
 if TYPE_CHECKING:
+    from ._cancellation import _ExecutionControl
     from .events import NativeEvent
 
 
@@ -110,18 +109,37 @@ class Server:
         Native test failures are retained as failed results. Worker setup
         failures raise an exception, and an elapsed timeout raises TimeoutError.
         """
+        return self._run_once(on_event=on_event, timeout=timeout)
+
+    def _run_once(
+        self,
+        *,
+        on_event: Callable[[NativeEvent], None] | None = None,
+        timeout: float | None = None,
+        _control: _ExecutionControl | None = None,
+    ) -> Result:
+        """Retain server ownership until the operation and its worker have ended."""
         _validate_call(on_event, None, timeout)
         if not self._run_lock.acquire(blocking=False):
             raise RuntimeError("this Server already has an active operation")
+        release_control = _control
         try:
+            execution_options = {"_control": _control} if _control is not None else {}
             return _run_worker(
                 self._snapshot(events=on_event is not None),
                 on_event=on_event,
                 max_runs=1,
                 timeout=timeout,
+                **execution_options,
             )
+        except IperfCleanupError as exc:
+            release_control = exc._control
+            raise
         finally:
-            self._run_lock.release()
+            if release_control is None or release_control.cleanup_confirmed:
+                self._run_lock.release()
+            else:
+                release_control.when_reaped(self._run_lock.release)
 
     def serve_forever(
         self,
@@ -147,6 +165,7 @@ class Server:
                 raise ValueError("max_runs must be positive")
         if not self._run_lock.acquire(blocking=False):
             raise RuntimeError("this Server already has an active operation")
+        release_control = None
         try:
             options = self._snapshot(events=on_event is not None)
             if self._stop_event.is_set():
@@ -166,8 +185,14 @@ class Server:
                 and result.execution.status == "failed"
             ):
                 raise IperfError(result.error or "Native server failed")
+        except IperfCleanupError as exc:
+            release_control = exc._control
+            raise
         finally:
-            self._run_lock.release()
+            if release_control is None or release_control.cleanup_confirmed:
+                self._run_lock.release()
+            else:
+                release_control.when_reaped(self._run_lock.release)
 
     async def aserve_once(
         self,
@@ -175,14 +200,17 @@ class Server:
         on_event: Callable[[NativeEvent], None] | None = None,
         timeout: float | None = None,
     ) -> Result:
-        """Await one server result using an executor thread.
+        """Await one isolated server result with cancellation cleanup.
 
-        Cancelling this await does not cancel the executor operation. Set a
-        timeout to bound its worker independently of the awaiting task.
+        Cancellation stops the owned worker before propagating CancelledError.
+        A callback already running must return before cleanup releases this
+        instance for another operation. This uses the built-in isolated path
+        rather than delegating to an overridden ``run_once()`` method.
         """
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(
-            None, partial(self.run_once, on_event=on_event, timeout=timeout)
+        from ._cancellation import _run_async
+
+        return await _run_async(
+            lambda control: self._run_once(on_event=on_event, timeout=timeout, _control=control)
         )
 
     def stop(self) -> None:

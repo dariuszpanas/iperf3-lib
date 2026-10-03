@@ -1,13 +1,18 @@
 """Process lifecycle, bounded event delivery and native ownership regression tests."""
 
+import asyncio
+import concurrent.futures
 import io
 import json
+import os
 import subprocess
 import sys
+import threading
 import time
 from types import SimpleNamespace
 
 import pytest
+import pytest_asyncio
 
 from iperf3_lib import _execution, _worker
 from iperf3_lib.exceptions import IperfLibraryError, UnsupportedFeatureError
@@ -27,13 +32,52 @@ RESULT = {
 }
 
 
-def child(monkeypatch, body):
+@pytest_asyncio.fixture
+async def loop_error_reports():
+    """Capture unsolicited asyncio diagnostics without changing their delivery."""
+    loop = asyncio.get_running_loop()
+    previous = loop.get_exception_handler()
+    reports = []
+    loop.set_exception_handler(lambda loop, context: reports.append(context))
+    try:
+        yield reports
+    finally:
+        loop.set_exception_handler(previous)
+
+
+def async_call(role, **kwargs):
+    """Build a public async call without retaining reloaded client classes."""
+    from iperf3_lib.config import ClientConfig
+    from iperf3_lib.iperf_client import Client
+    from iperf3_lib.iperf_server import Server
+
+    instance = Client(ClientConfig("127.0.0.1")) if role == "client" else Server()
+    operation = instance.arun if role == "client" else instance.aserve_once
+    return instance, operation(**kwargs)
+
+
+async def finish_child_test(task, processes):
+    """Bound failed-test cleanup so a regression cannot leak its test worker."""
+    for process in processes:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=5)
+    if not task.done():
+        task.cancel()
+    try:
+        await asyncio.wait_for(task, timeout=5)
+    except (asyncio.CancelledError, Exception):
+        pass
+
+
+def child(monkeypatch, body, *, read_request=True):
     """Replace only the child program, retaining actual pipe/process behavior."""
     original = subprocess.Popen
     processes = []
     program = (
-        "import json,sys,time\nrequest=json.loads(sys.stdin.readline())\n"
-        f"result={RESULT!r}\n"
+        "import json,sys,time\n"
+        + ("request=json.loads(sys.stdin.readline())\n" if read_request else "")
+        + f"result={RESULT!r}\n"
         "def send(message):\n print(json.dumps(message),flush=True)\n" + body
     )
 
@@ -397,16 +441,16 @@ def test_parent_reader_startup_failure_reaps_child_and_closes_pipes(monkeypatch,
     def fail(*args, **kwargs):
         raise RuntimeError("reader startup unavailable")
 
-    if stage == "construct":
-        monkeypatch.setattr(_execution.threading, "Thread", fail)
-    else:
-
-        def fail_start(*args, **kwargs):
-            thread = original_thread(*args, **kwargs)
+    def create_thread(*args, **kwargs):
+        is_reader = kwargs["target"].__name__ == "read_messages"
+        if is_reader and stage == "construct":
+            fail()
+        thread = original_thread(*args, **kwargs)
+        if is_reader:
             monkeypatch.setattr(thread, "start", fail)
-            return thread
+        return thread
 
-        monkeypatch.setattr(_execution.threading, "Thread", fail_start)
+    monkeypatch.setattr(_execution.threading, "Thread", create_thread)
     try:
         with pytest.raises(RuntimeError, match="startup unavailable"):
             _execution.run_worker("client", {})
@@ -467,11 +511,13 @@ def test_child_creation_failure_preserves_original_error(monkeypatch):
     assert caught.value is failure
 
 
-@pytest.mark.parametrize("stage", ["write", "flush"])
+@pytest.mark.parametrize("stage", ["write", "partial_write"])
 def test_parent_broken_startup_input_still_reaps_child(monkeypatch, stage):
     """Initial pipe failure and a failing close cannot bypass process cleanup."""
     processes = child(monkeypatch, "time.sleep(30)\n")
     original_popen = _execution.subprocess.Popen
+    original_write = _execution.os.write
+    writes = []
 
     class BrokenInput:
         """Wrap the actual subprocess pipe and fail one admitted write operation."""
@@ -485,15 +531,9 @@ def test_parent_broken_startup_input_still_reaps_child(monkeypatch, stage):
             """Report the real pipe's final resource state."""
             return self.stream.closed
 
-        def write(self, value):
-            """Fail writes before data reaches the child's input."""
-            if stage == "write":
-                raise BrokenPipeError("closed child input")
-            return self.stream.write(value)
-
-        def flush(self):
-            """Raise a flush failure independently from writing the request."""
-            raise BrokenPipeError("closed child input")
+        def fileno(self):
+            """Expose the real descriptor used by nonblocking IPC writes."""
+            return self.stream.fileno()
 
         def close(self):
             """Close the real handle before reproducing a buffered pipe close failure."""
@@ -507,11 +547,21 @@ def test_parent_broken_startup_input_still_reaps_child(monkeypatch, stage):
         process.stdin = BrokenInput(process.stdin)
         return process
 
+    def write(descriptor, data):
+        if not processes or descriptor != processes[0].stdin.fileno():
+            return original_write(descriptor, data)
+        writes.append(len(data))
+        if stage == "partial_write" and len(writes) == 1:
+            return original_write(descriptor, data[:1])
+        raise BrokenPipeError("closed child input")
+
     monkeypatch.setattr(_execution.subprocess, "Popen", popen)
+    monkeypatch.setattr(_execution.os, "write", write)
     with pytest.raises(IperfLibraryError, match="input during startup"):
         _execution.run_worker("client", {})
     assert processes[0].poll() is not None
     assert processes[0].stdin.closed and processes[0].stdout.closed
+    assert len(writes) == (2 if stage == "partial_write" else 1)
 
 
 @pytest.mark.parametrize("stage", ["write", "flush"])
@@ -696,3 +746,508 @@ def test_copied_authentication_error_survives_cleared_native_error_state(
     assert result.error == result.raw["error"] == original_error
     assert native.freed == native.allocations and len(native.freed) == 1
     assert all(not thread.is_alive() for thread in threads)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("role", ["client", "server"])
+async def test_async_cancellation_reaps_worker_and_closes_pipes(monkeypatch, role):
+    """A cancelled await returns only after the isolated operation is released."""
+    ready = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    processes = child(
+        monkeypatch,
+        "send({'type':'event','kind':'start','data':{},'sequence':1,'time':10})\ntime.sleep(30)\n",
+    )
+    instance, call = async_call(role, on_event=lambda event: loop.call_soon_threadsafe(ready.set))
+    task = asyncio.create_task(call)
+    try:
+        await asyncio.wait_for(ready.wait(), timeout=5)
+        task.cancel("requested cancellation")
+        with pytest.raises(asyncio.CancelledError, match="requested cancellation"):
+            await asyncio.wait_for(task, timeout=5)
+        assert processes[0].poll() is not None
+        assert processes[0].stdin.closed and processes[0].stdout.closed
+        if role == "server":
+            assert not instance._run_lock.locked()
+    finally:
+        await finish_child_test(task, processes)
+
+
+@pytest.mark.asyncio
+async def test_cancellation_before_executor_admission_never_runs_operation(
+    monkeypatch, loop_error_reports
+):
+    """Cancellation records intent while executor capacity is unavailable."""
+    from iperf3_lib._cancellation import _run_async
+    from iperf3_lib.result import Result
+
+    loop = asyncio.get_running_loop()
+    original = loop.run_in_executor
+    release = threading.Event()
+    submitted = asyncio.Event()
+    calls = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        blocked = pool.submit(release.wait, 5)
+
+        def submit(executor, function, *args):
+            future = original(pool, function, *args)
+            submitted.set()
+            return future
+
+        monkeypatch.setattr(loop, "run_in_executor", submit)
+        task = asyncio.create_task(
+            _run_async(lambda control: calls.append(control) or Result(ok=True))
+        )
+        try:
+            await asyncio.wait_for(submitted.wait(), timeout=2)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await asyncio.wait_for(task, timeout=2)
+            assert not blocked.done()
+        finally:
+            release.set()
+        await asyncio.wait_for(asyncio.wrap_future(pool.submit(lambda: None)), timeout=2)
+    assert calls == []
+    await asyncio.sleep(0)
+    assert loop_error_reports == []
+
+
+@pytest.mark.asyncio
+async def test_cancellation_during_spawn_reaps_late_child(monkeypatch):
+    """A Popen call returning after cancellation cannot orphan its acquired child."""
+    processes = child(monkeypatch, "time.sleep(30)\n")
+    spawn = _execution.subprocess.Popen
+    loop = asyncio.get_running_loop()
+    spawned = asyncio.Event()
+    release = threading.Event()
+
+    def delayed_spawn(*args, **kwargs):
+        process = spawn(*args, **kwargs)
+        loop.call_soon_threadsafe(spawned.set)
+        assert release.wait(5)
+        return process
+
+    monkeypatch.setattr(_execution.subprocess, "Popen", delayed_spawn)
+    _, call = async_call("client")
+    task = asyncio.create_task(call)
+    try:
+        await asyncio.wait_for(spawned.wait(), timeout=5)
+        task.cancel()
+        await asyncio.sleep(0)
+        assert not task.done()
+        release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(task, timeout=5)
+        assert processes[0].poll() is not None
+        assert processes[0].stdin.closed and processes[0].stdout.closed
+    finally:
+        release.set()
+        await finish_child_test(task, processes)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("role", ["client", "server"])
+async def test_repeated_cancellation_stops_worker_during_blocked_callback(
+    monkeypatch, role, loop_error_reports
+):
+    """Callback quiescence may delay the await, but cannot delay stopping native work."""
+    entered = asyncio.Event()
+    release = threading.Event()
+    loop = asyncio.get_running_loop()
+    observed = []
+    processes = child(
+        monkeypatch,
+        "for i in range(2):\n send({'type':'event','kind':'interval','data':{},'sequence':i+1,'time':10})\ntime.sleep(30)\n",
+    )
+
+    def callback(event):
+        observed.append(event.sequence)
+        loop.call_soon_threadsafe(entered.set)
+        assert release.wait(5)
+
+    instance, call = async_call(role, on_event=callback)
+    task = asyncio.create_task(call)
+    try:
+        await asyncio.wait_for(entered.wait(), timeout=5)
+        for message in ("first cancellation", "second cancellation", "third cancellation"):
+            task.cancel(message)
+            await asyncio.sleep(0)
+        await asyncio.wait_for(asyncio.to_thread(processes[0].wait, 3), timeout=4)
+        assert not task.done()
+        assert observed == [1]
+        if role == "server":
+            assert instance._run_lock.locked()
+        release.set()
+        with pytest.raises(asyncio.CancelledError, match="first cancellation"):
+            await asyncio.wait_for(task, timeout=5)
+        assert observed == [1]
+        assert processes[0].stdin.closed and processes[0].stdout.closed
+        if role == "server":
+            assert not instance._run_lock.locked()
+        await asyncio.sleep(0)
+        assert loop_error_reports == []
+    finally:
+        release.set()
+        await finish_child_test(task, processes)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("first_cause", ["cancel", "timeout"])
+async def test_client_cleanup_error_after_cancellation_is_not_reported_to_loop(
+    monkeypatch, first_cause, loop_error_reports
+):
+    """Expected cleanup failures reach the caller once with their original cause."""
+    from iperf3_lib.exceptions import IperfCleanupError
+
+    loop = asyncio.get_running_loop()
+    entered = asyncio.Event()
+    release = threading.Event()
+    cleanup_errors = []
+
+    def fail_cleanup(*args, **kwargs):
+        control = kwargs["_control"]
+        if first_cause == "timeout":
+            control.abort(TimeoutError("initial worker deadline"))
+        loop.call_soon_threadsafe(entered.set)
+        assert release.wait(5)
+        try:
+            control.check()
+        except BaseException as cause:
+            failure = IperfCleanupError("worker cleanup could not finish", control=control)
+            cleanup_errors.append(failure)
+            raise failure from cause
+        pytest.fail("cancellation did not reach worker control")
+
+    monkeypatch.setattr(_execution, "run_worker", fail_cleanup)
+    _, call = async_call("client")
+    task = asyncio.create_task(call)
+    try:
+        await asyncio.wait_for(entered.wait(), timeout=5)
+        for message in ("original cancellation", "repeated cancellation"):
+            task.cancel(message)
+            await asyncio.sleep(0)
+        assert not task.done()
+        release.set()
+        with pytest.raises(IperfCleanupError, match="worker cleanup") as captured:
+            await asyncio.wait_for(task, timeout=5)
+        assert captured.value is cleanup_errors[0]
+        cause = captured.value.__cause__
+        if first_cause == "cancel":
+            assert isinstance(cause, asyncio.CancelledError)
+            assert str(cause) == "original cancellation"
+        else:
+            assert isinstance(cause, TimeoutError)
+            assert str(cause) == "initial worker deadline"
+        await asyncio.sleep(0)
+        assert loop_error_reports == []
+    finally:
+        release.set()
+        await finish_child_test(task, [])
+
+
+@pytest.mark.parametrize("message", ["done", "eof"])
+def test_deadline_during_child_exit_wait_preserves_timeout(monkeypatch, message):
+    """A deadline during terminal protocol handling keeps its public error class."""
+    from iperf3_lib._cancellation import _ExecutionControl
+
+    body = (
+        "send(result)\nsend({'type':'done'})\ntime.sleep(30)\n"
+        if message == "done"
+        else "import os\nos.close(sys.stdout.fileno())\ntime.sleep(30)\n"
+    )
+    processes = child(monkeypatch, body)
+    wait_for_exit = _ExecutionControl.wait_for_exit
+    entered = []
+
+    def expire_at_wait(control, timeout):
+        entered.append(True)
+        control.abort(TimeoutError("deterministic process deadline"))
+        return wait_for_exit(control, timeout)
+
+    monkeypatch.setattr(_ExecutionControl, "wait_for_exit", expire_at_wait)
+    with pytest.raises(TimeoutError, match="process deadline"):
+        _execution.run_worker("client", {})
+    assert entered
+    assert processes[0].poll() is not None
+    assert processes[0].stdin.closed and processes[0].stdout.closed
+
+
+@pytest.mark.parametrize("first", ["cancel", "timeout", "complete"])
+def test_terminal_cause_arbitration_preserves_first_committed_outcome(first):
+    """Completion, cancellation and deadline select one stable operation outcome."""
+    from iperf3_lib._cancellation import _ExecutionControl
+
+    control = _ExecutionControl()
+    cancelled = asyncio.CancelledError("cancelled first")
+    expired = TimeoutError("deadline first")
+    if first == "complete":
+        control.complete()
+        control.request_cancel(cancelled)
+        control.abort(expired)
+        control.check()
+        return
+    expected = cancelled if first == "cancel" else expired
+    if first == "cancel":
+        control.request_cancel(cancelled)
+        control.abort(expired)
+    else:
+        control.abort(expired)
+        control.request_cancel(cancelled)
+    with pytest.raises(type(expected)) as captured:
+        control.complete()
+    assert captured.value is expected
+
+
+@pytest.mark.asyncio
+async def test_cancellation_before_validated_completion_discards_result(monkeypatch):
+    """A received result remains provisional until the worker exit is confirmed."""
+    from iperf3_lib._cancellation import _ExecutionControl
+
+    processes = child(monkeypatch, "send(result)\nsend({'type':'done'})\ntime.sleep(30)\n")
+    loop = asyncio.get_running_loop()
+    entered = asyncio.Event()
+    original = _ExecutionControl.wait_for_exit
+
+    def waiting(control, timeout):
+        loop.call_soon_threadsafe(entered.set)
+        return original(control, timeout)
+
+    monkeypatch.setattr(_ExecutionControl, "wait_for_exit", waiting)
+    _, call = async_call("client")
+    task = asyncio.create_task(call)
+    try:
+        await asyncio.wait_for(entered.wait(), timeout=5)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(task, timeout=5)
+        assert processes[0].poll() is not None
+    finally:
+        await finish_child_test(task, processes)
+
+
+@pytest.mark.asyncio
+async def test_completed_async_operation_is_not_retroactively_cancelled(monkeypatch):
+    """An already delivered successful result is stable under late Task.cancel."""
+    processes = child(monkeypatch, "send(result)\nsend({'type':'done'})\n")
+    _, call = async_call("client")
+    task = asyncio.create_task(call)
+    try:
+        result = await asyncio.wait_for(task, timeout=5)
+        assert result.ok
+        assert not task.cancel()
+        assert task.result() is result
+        assert processes[0].poll() == 0
+    finally:
+        await finish_child_test(task, processes)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("outcome", ["completed", "timeout"])
+async def test_task_cancellation_wins_before_executor_delivers_terminal_outcome(
+    monkeypatch, outcome
+):
+    """A reaped worker's outcome cannot swallow cancellation of its pending await."""
+    processes = child(
+        monkeypatch,
+        "send(result)\nsend({'type':'done'})\n" if outcome == "completed" else "time.sleep(30)\n",
+    )
+    loop = asyncio.get_running_loop()
+    terminal_ready = asyncio.Event()
+    release = threading.Event()
+    outcomes = []
+    run_worker = _execution.run_worker
+
+    def hold_terminal_delivery(*args, **kwargs):
+        try:
+            result = run_worker(*args, **kwargs)
+        except TimeoutError as exc:
+            outcomes.append(exc)
+            raise
+        else:
+            outcomes.append(result)
+            return result
+        finally:
+            # Hold executor delivery after real protocol/deadline handling and
+            # pipe/process cleanup. The event makes cancellation ordering exact.
+            loop.call_soon_threadsafe(terminal_ready.set)
+            assert release.wait(5)
+
+    monkeypatch.setattr(_execution, "run_worker", hold_terminal_delivery)
+    _, call = async_call("client", timeout=0.1 if outcome == "timeout" else None)
+    task = asyncio.create_task(call)
+    try:
+        await asyncio.wait_for(terminal_ready.wait(), timeout=5)
+        assert len(outcomes) == 1
+        if outcome == "completed":
+            assert outcomes[0].ok and processes[0].poll() == 0
+        else:
+            assert isinstance(outcomes[0], TimeoutError)
+            assert processes[0].poll() is not None
+        assert processes[0].stdin.closed and processes[0].stdout.closed
+        assert task.cancel("cancel before executor delivery")
+        await asyncio.sleep(0)
+        assert not task.done()
+        release.set()
+        with pytest.raises(asyncio.CancelledError, match="cancel before executor delivery"):
+            await asyncio.wait_for(task, timeout=5)
+    finally:
+        release.set()
+        await finish_child_test(task, processes)
+
+
+@pytest.mark.parametrize("failure", [False, True])
+def test_cleanup_escalation_retains_ownership_until_exit(monkeypatch, failure):
+    """Failed kill/reap is explicit and cannot release ownership prematurely."""
+    from iperf3_lib._cancellation import _ExecutionControl
+    from iperf3_lib.exceptions import IperfCleanupError
+
+    exited = threading.Event()
+    reaped = threading.Event()
+    calls = []
+
+    class Process:
+        """Deterministic process whose final exit remains under test control."""
+
+        def poll(self):
+            return 0 if exited.is_set() else None
+
+        def terminate(self):
+            calls.append("terminate")
+
+        def kill(self):
+            calls.append("kill")
+            if not failure:
+                exited.set()
+
+        def wait(self, timeout):
+            if exited.wait(min(timeout, 0.01)):
+                return 0
+            raise subprocess.TimeoutExpired("controlled worker", timeout)
+
+    control = _ExecutionControl()
+    process = Process()
+    control.register(process)
+    control.when_reaped(reaped.set)
+    cause = asyncio.CancelledError("cancel requested")
+    control.request_cancel(cause)
+    try:
+        if failure:
+            with pytest.raises(IperfCleanupError, match="ownership is retained") as captured:
+                control.close()
+            assert captured.value.__cause__ is cause
+            assert captured.value._control is control
+            assert not control.cleanup_confirmed
+            assert not reaped.is_set()
+        else:
+            control.close()
+            assert control.cleanup_confirmed and reaped.is_set()
+        assert calls == ["terminate", "kill"]
+    finally:
+        exited.set()
+        assert reaped.wait(2)
+    assert control.cleanup_confirmed
+
+
+@pytest.mark.parametrize("stage", ["construct", "start", "after_start"])
+def test_supervisor_startup_failure_reaps_acquired_process(monkeypatch, stage):
+    """Ownership startup failures retain a cleanup owner even after partial start."""
+    from iperf3_lib import _cancellation
+
+    processes = child(monkeypatch, "time.sleep(30)\n")
+    original_thread = threading.Thread
+
+    def fail():
+        raise RuntimeError("supervisor startup unavailable")
+
+    def create_thread(*args, **kwargs):
+        is_supervisor = kwargs["target"].__name__ == "_supervise"
+        if is_supervisor and stage == "construct":
+            fail()
+        thread = original_thread(*args, **kwargs)
+        if is_supervisor:
+            start = thread.start
+
+            def fail_start():
+                if stage == "after_start":
+                    start()
+                fail()
+
+            monkeypatch.setattr(thread, "start", fail_start)
+        return thread
+
+    monkeypatch.setattr(_cancellation.threading, "Thread", create_thread)
+    try:
+        with pytest.raises(RuntimeError, match="supervisor startup unavailable"):
+            _execution.run_worker("client", {})
+        assert len(processes) == 1 and processes[0].poll() is not None
+        assert processes[0].stdin.closed and processes[0].stdout.closed
+    finally:
+        for process in processes:
+            if process.poll() is None:
+                process.kill()
+                process.wait(timeout=5)
+
+
+@pytest.mark.asyncio
+async def test_cancellation_interrupts_full_startup_input_pipe(monkeypatch):
+    """A worker that never reads its request cannot block cancellation on a full pipe."""
+    from iperf3_lib.config import ClientConfig
+    from iperf3_lib.iperf_client import Client
+
+    processes = child(monkeypatch, "time.sleep(30)\n", read_request=False)
+    loop = asyncio.get_running_loop()
+    blocked = asyncio.Event()
+    write = os.write
+
+    def observe_write(descriptor, data):
+        try:
+            return write(descriptor, data)
+        except BlockingIOError:
+            loop.call_soon_threadsafe(blocked.set)
+            raise
+
+    monkeypatch.setattr(_execution.os, "write", observe_write)
+    task = asyncio.create_task(Client(ClientConfig("127.0.0.1", extra_data="x" * 1_000_000)).arun())
+    try:
+        await asyncio.wait_for(blocked.wait(), timeout=5)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(task, timeout=5)
+        assert processes[0].poll() is not None
+        assert processes[0].stdin.closed and processes[0].stdout.closed
+    finally:
+        await finish_child_test(task, processes)
+
+
+def test_completed_worker_with_retained_stdout_writer_does_not_block_cleanup(monkeypatch):
+    """An extra open writer cannot keep the IPC reader alive after worker completion."""
+    processes = child(monkeypatch, "")
+    original_popen = _execution.subprocess.Popen
+    read_descriptor, retained_writer = os.pipe()
+    reader = os.fdopen(read_descriptor, "r", encoding="utf-8")
+
+    def popen(*args, **kwargs):
+        process = original_popen(*args, **kwargs)
+        process.stdout.close()
+        process.stdout = reader
+        # Keeping this OS pipe's writer open models a descriptor inherited by
+        # another process. EOF cannot unblock a buffered reader during cleanup.
+        os.write(retained_writer, (json.dumps(RESULT) + '\n{"type":"done"}\n').encode())
+        return process
+
+    monkeypatch.setattr(_execution.subprocess, "Popen", popen)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(_execution.run_worker, "client", {})
+        try:
+            result = future.result(timeout=5)
+            assert result.ok
+            assert processes[0].poll() == 0
+            assert processes[0].stdin.closed and reader.closed
+            os.fstat(retained_writer)
+        finally:
+            os.close(retained_writer)
+            for process in processes:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5)
+            reader.close()
