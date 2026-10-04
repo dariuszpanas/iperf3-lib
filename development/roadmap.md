@@ -237,10 +237,14 @@ rates. Do not assume observations are perfectly monotonic. Report requested
 load, achieved sender/receiver rates, loss, and variation as a **tested
 operating range**, not the network's exact physical capacity.
 
-This is a follow-on candidate after 0.3.0. The
+The unreleased implementation follows 0.3.0 and has a separate pure planner,
+sequential batch runner and standalone adaptive-UDP report. The
 [adaptive UDP design](design/advanced-execution.md#adaptive-udp-exploration)
 specifies admission, non-monotonic selection, under-driven senders, and
-inconclusive outcomes. Controlled impaired-link qualification remains open.
+inconclusive outcomes. Its [guide](../docs/guides/adaptive-udp.md) documents
+mandatory confirmation, complete failure retention, observed cooldowns and
+explicit budgets. Controlled impaired-link evidence is required alongside the
+supported native and installed-distribution matrix before issue34 closes.
 
 Both ideas build on trial plans and configuration intent. Run plans
 sequentially under the current execution contract.
@@ -258,9 +262,11 @@ event reconstruction on native 3.19.1 and full native output on 3.21. Explicit t
 terminate and reap the worker and raise `TimeoutError`; they do not manufacture
 a final native summary or claim native finalizer execution.
 
-Basic direct calls remain non-reentrant. Cancelling an async await alone does
-not stop its executor operation. A watchdog stops the child independently of
-synchronous callbacks, but a blocked callback still delays return to the caller.
+Basic direct calls remain non-reentrant. Async cancellation owns worker cleanup;
+sequential and concurrent plans retain completed and partial histories. PR68
+completed issue36's sequential crash/transport evidence qualification. A watchdog
+stops the child independently of synchronous callbacks, but a blocked callback
+still delays return to the caller.
 Server stop remains cooperative between tests, with a fresh native test per iteration.
 
 The

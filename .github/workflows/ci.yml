@@ -149,6 +149,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SOURCE_REVISION"
           mkdir -p lifecycle-evidence
           docker run --rm \
+            --cap-add NET_ADMIN -e IPERF3_ADAPTIVE_IMPAIRMENT=1 \
             -v "${{ github.workspace }}/lifecycle-dist:/lifecycle-dist:ro" \
             -v "${{ github.workspace }}/lifecycle-evidence:/evidence" \
             "iperf3-lib-test:py${{ matrix.python }}-iperf${{ matrix.iperf }}" \

@@ -6,6 +6,9 @@ These pages describe `main`. Released versions remain available through
 
 ## Unreleased
 
+- Add exploratory bounded adaptive UDP experiments with explicit admission
+  limits, confirmation measurements, retained non-monotonic and failed
+  observations, and standalone reports of tested operating points.
 - Preserve bounded observed events when a sequential async trial encounters a
   worker crash, transport failure or another execution exception. Keep completed
   artifacts and unstarted trials in the history, and retain both event and

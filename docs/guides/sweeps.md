@@ -8,6 +8,9 @@ It records every cell, warm-up, measured run, failure and unstarted trial. Cell
 summaries describe receiver measurements; they do not select a winner or estimate
 an optimum network capacity.
 
+For an unreleased experiment that selects and confirms offered UDP rates against
+explicit receiver-loss criteria, see [adaptive UDP experiments](adaptive-udp.md).
+
 ## Admit the entire experiment
 
 ```python

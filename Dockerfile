@@ -14,6 +14,7 @@ RUN apt-get update \
         build-essential \
         ca-certificates \
         curl \
+        iproute2 \
         libffi-dev \
         libsctp-dev \
         libssl-dev \

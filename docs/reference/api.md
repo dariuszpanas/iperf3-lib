@@ -509,3 +509,47 @@ The strict sweep-v1 envelope embeds common plan-result and compatibility payload
 It uses the shared `ReportValidationError` and `UnsupportedReportVersionError`.
 See [bounded sweeps](../guides/sweeps.md) for admission, ordering, qualification,
 method separation and the frozen report contract.
+
+## Adaptive UDP experiments (unreleased)
+
+Import from `iperf3_lib.adaptive`:
+
+```text
+AdaptiveUDPPolicy(min_rate_bps, max_rate_bps, max_distinct_rates,
+                  max_refinement_depth, receiver_loss_percent,
+                  minimum_valid_trials, minimum_sender_fraction,
+                  confirmation_batches=1)
+prepare_adaptive_udp(config, initial_rates, *, policy, budget,
+                     adaptive_policy) -> PreparedAdaptiveUDP
+next_adaptive_batch(prepared, history=()) -> AdaptiveDecision
+summarize_adaptive_udp(prepared, history) -> AdaptiveResult
+```
+
+`AdaptiveBatch` retains a finite `PreparedPlan`, rate selection, depth and reason.
+`AdaptiveBatchResult` pairs it with a complete `PlanResult` and observed preceding
+cooldown. `AdaptiveObservation` keeps requested/native allocation, independent
+sender and receiver measurements, both loss values, setting checks and exclusion
+reasons. `AdaptiveRateSummary` preserves all observations and confirmation state.
+
+Import `run_adaptive_udp(prepared, *, executor=None)` from
+`iperf3_lib.adaptive_execution` for sequential execution. The pure planner and
+runner share whole-experiment admission limits. Initial rate endpoints, explicit
+UDP block size, finite duration and finite active/payload budgets are required.
+`PlanBudget.stop_after_elapsed_seconds` is unsupported in this initial API.
+
+Import from `iperf3_lib.adaptive_reports`:
+
+```text
+report_from_adaptive_udp(result) -> AdaptiveUDPReport
+adaptive_udp_report_to_dict(report) -> dict
+adaptive_udp_report_from_dict(mapping) -> AdaptiveUDPReport
+dumps_adaptive_udp_report(report, *, indent=None) -> str
+loads_adaptive_udp_report(text: str | bytes) -> AdaptiveUDPReport
+render_adaptive_udp_text(report) -> str
+```
+
+The standalone schema-1 report uses kind `iperf3-lib.adaptive-udp` and algorithm
+revision `conservative-tested-rates-v1`. See the [adaptive guide](../guides/adaptive-udp.md)
+for confirmation, non-monotonic observations, inconclusive outcomes and finite
+experiment limits. Its highest eligible rate is a tested point, not a physical
+capacity estimate.

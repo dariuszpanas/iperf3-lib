@@ -58,6 +58,7 @@ RESOURCE_CASES = (
     "crash-transport-udp",
     "parent-death",
 )
+ADAPTIVE_CASES = ("clean-forward", "clean-reverse", "impaired-forward")
 CASE_GROUPS = {
     "cancellation": CASES,
     "worker_lifetime": CASES,
@@ -65,6 +66,7 @@ CASE_GROUPS = {
     "async_plan": PLAN_CASES,
     "concurrent_plan": CONCURRENT_CASES,
     "resource_stress": RESOURCE_CASES,
+    "adaptive_udp": ADAPTIVE_CASES,
 }
 TESTS = {
     "test_cancellation_integration.py": (
@@ -90,6 +92,10 @@ TESTS = {
     "test_resource_stress_integration.py": (
         "test_repeated_native_lifecycles_restore_owned_resources",
         "resource_stress",
+    ),
+    "test_adaptive_integration.py": (
+        "test_native_adaptive_udp_preserves_measured_decisions",
+        "adaptive_udp",
     ),
 }
 HELPERS = ("_native_resource_inventory.py",)
@@ -971,6 +977,272 @@ def _validate_resource_receipt(evidence: dict, runtime: dict, nodeid: str) -> No
         ) from exc
 
 
+def _validate_adaptive_receipt(evidence: dict, runtime: dict, nodeid: str) -> None:
+    """Bind tested UDP decisions to native JSON, owned impairment and measured reuse."""
+    from iperf3_lib.adaptive_reports import loads_adaptive_udp_report
+
+    case = nodeid.rsplit("[", 1)[1].removesuffix("]")
+    impaired = case == "impaired-forward"
+    native_header = "iperf " + runtime["native_version"].removeprefix("iperf ")
+    try:
+        if (
+            evidence["case"] != case
+            or type(evidence["port"]) is not int
+            or not 1024 <= evidence["port"] <= 65535
+            or evidence["listener_released"] is not True
+            or type(evidence["server_returncode"]) is not int
+            or evidence["server_returncode"] not in (-15, 0, 1)
+            or evidence["producer"]
+            != {
+                "package_version": runtime["package_version"],
+                "python_version": runtime["python"],
+                "native_version": runtime["native_version"],
+            }
+            or hashlib.sha256(evidence["report_json"].encode()).hexdigest()
+            != evidence["report_sha256"]
+        ):
+            raise ValueError("adaptive producer, process or persisted report identity differs")
+        result = loads_adaptive_udp_report(evidence["report_json"]).result
+        prepared = result.prepared
+        policy = prepared.adaptive_policy
+        if (
+            prepared.initial_rates != (250_001, 2_000_001)
+            or prepared.config.server != "127.0.0.1"
+            or prepared.config.port != evidence["port"]
+            or prepared.config.protocol != "udp"
+            or prepared.config.reverse != (case == "clean-reverse")
+            or prepared.config.bidirectional
+            or prepared.config.duration != 1
+            or prepared.config.omit != 0
+            or prepared.config.parallel != 2
+            or prepared.config.blksize != 1200
+            or prepared.policy.repetitions != 2
+            or prepared.policy.warmup_runs != 1
+            or prepared.policy.pause_seconds != 0.1
+            or prepared.policy.max_trials != 18
+            or prepared.budget.max_active_seconds != 18
+            or prepared.budget.max_payload_bytes != 8_000_000
+            or prepared.budget.stop_after_elapsed_seconds is not None
+            or policy.min_rate_bps != 250_001
+            or policy.max_rate_bps != 2_000_001
+            or policy.max_distinct_rates != 3
+            or policy.max_refinement_depth != 1
+            or policy.receiver_loss_percent != 5
+            or policy.minimum_valid_trials != 2
+            or policy.minimum_sender_fraction != 0.9
+            or policy.confirmation_batches != 1
+            or result.outcome != "acceptable_tested_rates"
+            or result.decision.batch is not None
+        ):
+            raise ValueError("adaptive report does not describe the selected bounded experiment")
+        records = [record for batch in result.batches for record in batch.execution.trials]
+        observations = {
+            item.trial_id: item for summary in result.summaries for item in summary.observations
+        }
+        if (
+            not records
+            or len(records) > 18
+            or len(evidence["measurements"]) != len(records)
+            or len(observations) != len(records)
+            or not any(record.spec.phase == "warmup" for record in records)
+            or not any(summary.confirmation_batches == 1 for summary in result.summaries)
+        ):
+            raise ValueError(
+                "adaptive receipt lacks complete bounded trial and confirmation history"
+            )
+        for record, measured in zip(records, evidence["measurements"], strict=True):
+            if record.status != "completed" or record.artifact is None:
+                raise ValueError("selected native adaptive trial did not complete")
+            raw = record.artifact.result.raw
+            start = raw["start"]["test_start"]
+            sender, receiver = raw["end"]["sum_sent"], raw["end"]["sum_received"]
+            observation = observations[record.spec.trial_id]
+            if (
+                measured
+                != {
+                    "trial_id": record.spec.trial_id,
+                    "native_start": start,
+                    "sender": sender,
+                    "receiver": receiver,
+                }
+                or raw["start"]["version"] != native_header
+                or start["protocol"] != "UDP"
+                or start["target_bitrate"] != record.spec.resolved_config.rate
+                or start["num_streams"] != 2
+                or start["duration"] != 1
+                or start["omit"] != 0
+                or start["blksize"] != 1200
+                or start["reverse"] != int(case == "clean-reverse")
+                or start["bidir"] != 0
+                or observation.allocated_rate_bps != 2 * start["target_bitrate"]
+                or observation.unused_rate_bps != 1
+                or observation.native_per_stream_bps != start["target_bitrate"]
+                or observation.valid != (record.spec.phase == "measured")
+                or any(
+                    check.state not in ("matched", "native_default")
+                    for check in observation.setting_checks
+                )
+            ):
+                raise ValueError(
+                    "native target, allocation or evidence does not match adaptive trial"
+                )
+            for endpoint, native in (("sender", sender), ("receiver", receiver)):
+                if (
+                    not _positive_integer(native["bytes"])
+                    or not _finite_number(native["seconds"])
+                    or native["seconds"] <= 0
+                    or getattr(observation, f"{endpoint}_bytes") != native["bytes"]
+                    or getattr(observation, f"{endpoint}_seconds") != native["seconds"]
+                    or getattr(observation, f"{endpoint}_bps")
+                    != 8 * native["bytes"] / native["seconds"]
+                ):
+                    raise ValueError("adaptive rates lack positive byte/time observations")
+            if (
+                not _positive_integer(receiver["packets"])
+                or type(receiver["lost_packets"]) is not int
+                or not 0 <= receiver["lost_packets"] <= receiver["packets"]
+                or observation.receiver_packets != receiver["packets"]
+                or observation.receiver_lost_packets != receiver["lost_packets"]
+                or observation.count_loss_percent
+                != 100 * receiver["lost_packets"] / receiver["packets"]
+                or observation.native_loss_percent != receiver["lost_percent"]
+                or observation.sender_bps is None
+                or observation.sender_fraction is None
+                or observation.sender_fraction
+                != observation.sender_bps / observation.requested_rate_bps
+                or observation.sender_fraction < 0.9
+            ):
+                raise ValueError("adaptive loss or achieved offered load lacks native evidence")
+        if impaired:
+            _validate_adaptive_impairment(evidence, result)
+        elif (
+            evidence["impairment"] is not None
+            or result.highest_eligible_bps != 2_000_001
+            or not result.ceiling_censored
+        ):
+            raise ValueError("clean bounded experiment did not establish its tested ceiling")
+        reuse = evidence["reuse_native"]
+        start = reuse["start"]["test_start"]
+        received = reuse["end"]["sum_received"]
+        if (
+            reuse["start"]["version"] != native_header
+            or start["protocol"] != "UDP"
+            or start["target_bitrate"] != 250_000
+            or start["duration"] != 1
+            or start["num_streams"] != 1
+            or start["reverse"] != 0
+            or not _positive_integer(received["bytes"])
+            or not _positive_integer(received["packets"])
+            or not _finite_number(received["seconds"])
+            or received["seconds"] <= 0
+            or received["lost_percent"] > 5
+        ):
+            raise ValueError("adaptive cleanup lacks successful measured endpoint reuse")
+    except (AttributeError, KeyError, TypeError, ValueError, IndexError, OverflowError) as exc:
+        raise ValueError(f"adaptive UDP receipt lacks measured native evidence: {nodeid}") from exc
+
+
+def _validate_adaptive_impairment(evidence: dict, result) -> None:
+    """Require owned UDP-only rate settings, observed drops and restored loopback."""
+    impaired = evidence["impairment"]
+    port = evidence["port"]
+    commands = [
+        ["qdisc", "add", "dev", "lo", "root", "handle", "34:", "prio"],
+        [
+            "qdisc",
+            "add",
+            "dev",
+            "lo",
+            "parent",
+            "34:3",
+            "handle",
+            "343:",
+            "netem",
+            "rate",
+            "1000kbit",
+            "limit",
+            "5",
+        ],
+        [
+            "filter",
+            "add",
+            "dev",
+            "lo",
+            "protocol",
+            "ip",
+            "parent",
+            "34:",
+            "prio",
+            "3",
+            "u32",
+            "match",
+            "ip",
+            "protocol",
+            "17",
+            "0xff",
+            "match",
+            "ip",
+            "dport",
+            str(port),
+            "0xffff",
+            "flowid",
+            "34:3",
+        ],
+    ]
+    if (
+        impaired["device"] != "lo"
+        or type(impaired["rate_bps"]) is not int
+        or impaired["rate_bps"] != 1_000_000
+        or type(impaired["limit_packets"]) is not int
+        or impaired["limit_packets"] != 5
+        or impaired["protocol"] != "udp"
+        or impaired["destination_port"] != port
+        or impaired["commands"] != commands
+        or not impaired["filters"]
+        or not isinstance(impaired["filters_text"], str)
+        or re.search(r"match\s+00110000/00ff0000\s+at\s+8\b", impaired["filters_text"]) is None
+        or re.search(rf"match\s+{port:08x}/0000ffff\s+at\s+20\b", impaired["filters_text"]) is None
+        or not any(
+            item["kind"] == "netem"
+            and item["handle"] == "343:"
+            and type(item["options"]["limit"]) is int
+            and item["options"]["limit"] == 5
+            and type(item["options"]["rate"]["rate"]) is int
+            and item["options"]["rate"]["rate"] == 125_000
+            for item in impaired["configured"]
+        )
+        or not any(
+            item["kind"] == "netem"
+            and item["handle"] == "343:"
+            and _positive_integer(item["drops"])
+            and _positive_integer(item["bytes"])
+            and _positive_integer(item["packets"])
+            and type(item["options"]["limit"]) is int
+            and item["options"]["limit"] == 5
+            and type(item["options"]["rate"]["rate"]) is int
+            and item["options"]["rate"]["rate"] == 125_000
+            for item in impaired["after_traffic"]
+        )
+    ):
+        raise ValueError("configured impairment lacks matching native drop observations")
+    for key in ("before", "after_cleanup"):
+        queue = impaired[key]
+        if len(queue) != 1 or queue[0]["kind"] != "noqueue" or queue[0]["handle"] != "0:":
+            raise ValueError("owned impairment was not restored to its original default")
+    summaries = {summary.rate_bps: summary for summary in result.summaries}
+    lower, upper = summaries[250_001], summaries[2_000_001]
+    if (
+        lower.status != "eligible"
+        or upper.status != "rejected"
+        or result.highest_eligible_bps is None
+        or result.highest_eligible_bps >= 2_000_001
+        or result.ceiling_censored
+        or not any(item.count_loss_percent > 5 for item in upper.observations)
+        or len(summaries) != 3
+    ):
+        raise ValueError("controlled impairment did not establish measured low/high decisions")
+
+
 def validate_results(result: dict) -> None:
     """Require every selected case to pass setup, execution, teardown and evidence checks."""
     expected = expected_tests()
@@ -1002,6 +1274,8 @@ def validate_results(result: dict) -> None:
             _validate_concurrent_receipt(evidence, result, nodeid)
         elif property_name == "resource_stress":
             _validate_resource_receipt(evidence, result, nodeid)
+        elif property_name == "adaptive_udp":
+            _validate_adaptive_receipt(evidence, result, nodeid)
         elif property_name == "cancellation":
             active = "[active-" in nodeid
             if (
