@@ -12,6 +12,7 @@ import sys
 import tarfile
 import textwrap
 import zipfile
+from functools import lru_cache
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -178,6 +179,8 @@ def _passed_results():
             evidence = _concurrent_plan_receipt(nodeid.rsplit("[", 1)[1].removesuffix("]"))
         if key == "resource_stress":
             evidence = _resource_stress_receipt(nodeid.rsplit("[", 1)[1].removesuffix("]"))
+        if key == "adaptive_udp":
+            evidence = _adaptive_receipt(nodeid.rsplit("[", 1)[1].removesuffix("]"))
         if key == "cancellation":
             evidence["reuse_bytes"] = 12
             for index, name in enumerate(("reused_client_worker", "reused_server_worker")):
@@ -211,6 +214,239 @@ def _passed_results():
         "native_version": "iperf 3.21",
         "package_version": "0.3.0",
     }
+
+
+def _adaptive_receipt(case):
+    """Detach synthetic adaptive receipts before each corruption test."""
+    return copy.deepcopy(_adaptive_receipt_cached(case))
+
+
+@lru_cache
+def _adaptive_receipt_cached(case):
+    """Generate explicitly synthetic UDP observations through the public planner."""
+    from sweep_helpers import measured
+
+    from iperf3_lib.adaptive import AdaptiveUDPPolicy, prepare_adaptive_udp
+    from iperf3_lib.adaptive_execution import run_adaptive_udp
+    from iperf3_lib.adaptive_reports import dumps_adaptive_udp_report, report_from_adaptive_udp
+    from iperf3_lib.config import ClientConfig
+    from iperf3_lib.result import result_from_iperf_json
+    from iperf3_lib.trials import PlanBudget, TrialPolicy
+
+    impaired = case == "impaired-forward"
+
+    def execute(spec):
+        result = measured(spec)
+        raw = copy.deepcopy(result.raw)
+        target = spec.resolved_config.rate * 2
+        count = target // 8
+        seconds = count * 8 / target
+        loss = 50 if impaired and target > 1_000_000 else 0
+        raw["end"]["sum_sent"].update(bytes=count, seconds=seconds, bits_per_second=target)
+        raw["end"]["sum_received"].update(
+            bytes=count * (100 - loss) // 100,
+            seconds=seconds,
+            lost_packets=loss * 10,
+            packets=1000,
+            lost_percent=loss,
+        )
+        observed = result_from_iperf_json(raw)
+        observed.extensions = result.extensions
+        return observed
+
+    prepared = prepare_adaptive_udp(
+        ClientConfig(
+            "127.0.0.1",
+            protocol="udp",
+            duration=1,
+            parallel=2,
+            blksize=1200,
+            reverse=case == "clean-reverse",
+        ),
+        (250_001, 2_000_001),
+        policy=TrialPolicy(repetitions=2, warmup_runs=1, pause_seconds=0.1, max_trials=18),
+        budget=PlanBudget(18, 8_000_000),
+        adaptive_policy=AdaptiveUDPPolicy(
+            min_rate_bps=250_001,
+            max_rate_bps=2_000_001,
+            max_distinct_rates=3,
+            max_refinement_depth=1,
+            receiver_loss_percent=5,
+            minimum_valid_trials=2,
+            minimum_sender_fraction=0.9,
+        ),
+    )
+    result = run_adaptive_udp(prepared, executor=execute)
+    persisted = dumps_adaptive_udp_report(report_from_adaptive_udp(result))
+    measurements = []
+    for batch in result.batches:
+        for record in batch.execution.trials:
+            raw = record.artifact.result.raw
+            measurements.append(
+                {
+                    "trial_id": record.spec.trial_id,
+                    "native_start": raw["start"]["test_start"],
+                    "sender": raw["end"]["sum_sent"],
+                    "receiver": raw["end"]["sum_received"],
+                }
+            )
+    reuse = copy.deepcopy(result.batches[0].execution.trials[0].artifact.result.raw)
+    reuse["start"]["test_start"].update(target_bitrate=250_000, num_streams=1, reverse=0)
+    impairment = None
+    if impaired:
+        root = {"kind": "prio", "handle": "34:"}
+        netem = {
+            "kind": "netem",
+            "handle": "343:",
+            "bytes": 12,
+            "packets": 8,
+            "drops": 4,
+            "options": {"limit": 5, "rate": {"rate": 125_000}},
+        }
+        impairment = {
+            "device": "lo",
+            "rate_bps": 1_000_000,
+            "limit_packets": 5,
+            "protocol": "udp",
+            "destination_port": 5201,
+            "before": [{"kind": "noqueue", "handle": "0:"}],
+            "configured": [root, netem],
+            "after_traffic": [root, netem],
+            "after_cleanup": [{"kind": "noqueue", "handle": "0:"}],
+            "filters": [{"kind": "u32", "protocol": "ip"}],
+            "filters_text": "match 00110000/00ff0000 at 8\nmatch 00001451/0000ffff at 20\n",
+            "commands": [
+                ["qdisc", "add", "dev", "lo", "root", "handle", "34:", "prio"],
+                [
+                    "qdisc",
+                    "add",
+                    "dev",
+                    "lo",
+                    "parent",
+                    "34:3",
+                    "handle",
+                    "343:",
+                    "netem",
+                    "rate",
+                    "1000kbit",
+                    "limit",
+                    "5",
+                ],
+                [
+                    "filter",
+                    "add",
+                    "dev",
+                    "lo",
+                    "protocol",
+                    "ip",
+                    "parent",
+                    "34:",
+                    "prio",
+                    "3",
+                    "u32",
+                    "match",
+                    "ip",
+                    "protocol",
+                    "17",
+                    "0xff",
+                    "match",
+                    "ip",
+                    "dport",
+                    "5201",
+                    "0xffff",
+                    "flowid",
+                    "34:3",
+                ],
+            ],
+        }
+    return {
+        "case": case,
+        "port": 5201,
+        "producer": {
+            "package_version": "0.3.0",
+            "python_version": "3.14.2",
+            "native_version": "iperf 3.21",
+        },
+        "server_returncode": -15,
+        "listener_released": True,
+        "reuse_native": reuse,
+        "measurements": measurements,
+        "impairment": impairment,
+        "report_json": persisted,
+        "report_sha256": hashlib.sha256(persisted.encode()).hexdigest(),
+    }
+
+
+@pytest.mark.parametrize("case", qualification.ADAPTIVE_CASES)
+@pytest.mark.parametrize("native_version", ["3.21", "iperf 3.21"])
+def test_adaptive_receipts_require_native_allocation_measurements_and_cleanup(case, native_version):
+    """Clean and impaired decisions retain exact native settings, counts and history."""
+    evidence = _adaptive_receipt(case)
+    evidence["producer"]["native_version"] = native_version
+    qualification._validate_adaptive_receipt(
+        evidence,
+        {"package_version": "0.3.0", "python": "3.14.2", "native_version": native_version},
+        f"test_adaptive_integration.py::test_native_adaptive_udp_preserves_measured_decisions[{case}]",
+    )
+
+
+@pytest.mark.parametrize(
+    ("path", "value"),
+    [
+        (("producer", "native_version"), "iperf 3.19.1"),
+        (("port",), 5202),
+        (("listener_released",), False),
+        (("server_returncode",), None),
+        (("report_sha256",), "0" * 64),
+        (("measurements",), []),
+        (("measurements", 0, "sender", "bytes"), 0),
+        (("measurements", 0, "receiver", "packets"), 0),
+        (("measurements", 0, "native_start", "target_bitrate"), 1),
+        (("impairment", "rate_bps"), 2_000_000),
+        (("impairment", "destination_port"), 5202),
+        (("impairment", "commands"), []),
+        (("impairment", "filters"), []),
+        (("impairment", "filters_text"), "match 00060000/00ff0000 at 8\n"),
+        (("impairment", "configured", 1, "options", "limit"), 50),
+        (("impairment", "configured", 1, "options", "limit"), 5.0),
+        (("impairment", "configured", 1, "options", "rate", "rate"), 250_000),
+        (("impairment", "configured", 1, "options", "rate", "rate"), 125_000.0),
+        (("impairment", "after_traffic", 1, "drops"), 0),
+        (("impairment", "after_traffic", 1, "packets"), False),
+        (("impairment", "after_cleanup"), [{"kind": "netem", "handle": "343:"}]),
+        (("reuse_native", "end", "sum_received", "bytes"), 0),
+        (("reuse_native", "end", "sum_received", "lost_percent"), 50),
+    ],
+)
+def test_adaptive_receipts_reject_missing_or_contradictory_measurements(path, value):
+    """Green test phases cannot replace real native load, loss, impairment or cleanup evidence."""
+    evidence = _adaptive_receipt("impaired-forward")
+    container = evidence
+    for key in path[:-1]:
+        container = container[key]
+    container[path[-1]] = value
+    with pytest.raises(ValueError, match="adaptive UDP receipt"):
+        qualification._validate_adaptive_receipt(
+            evidence,
+            {"package_version": "0.3.0", "python": "3.14.2", "native_version": "iperf 3.21"},
+            "test_adaptive_integration.py::test_native_adaptive_udp_preserves_measured_decisions[impaired-forward]",
+        )
+
+
+def test_adaptive_receipt_rejects_resealed_decision_without_matching_native_trials():
+    """Rehashing an edited conclusion cannot establish a tested acceptable ceiling."""
+    evidence = _adaptive_receipt("impaired-forward")
+    report = json.loads(evidence["report_json"])
+    report["result"]["highest_eligible_bps"] = 2_000_001
+    report["result"]["ceiling_censored"] = True
+    evidence["report_json"] = json.dumps(report)
+    evidence["report_sha256"] = hashlib.sha256(evidence["report_json"].encode()).hexdigest()
+    with pytest.raises(ValueError, match="adaptive UDP receipt"):
+        qualification._validate_adaptive_receipt(
+            evidence,
+            {"package_version": "0.3.0", "python": "3.14.2", "native_version": "iperf 3.21"},
+            "test_adaptive_integration.py::test_native_adaptive_udp_preserves_measured_decisions[impaired-forward]",
+        )
 
 
 def _async_plan_receipt(case):

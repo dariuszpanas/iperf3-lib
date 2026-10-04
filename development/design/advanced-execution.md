@@ -17,9 +17,9 @@ criteria have evidence; implementation and collected tests alone are insufficien
 
 | Proposal | Decision | Evidence needed for complete qualification |
 | --- | --- | --- |
-| [Adaptive UDP #34](https://github.com/dariuszpanas/iperf3-lib/issues/34) | Follow bounded explicit sweeps with a separate, evidence-driven planner. | Deterministic decision tests, bounded native mechanics, and a controlled impaired-link experiment. |
+| [Adaptive UDP #34](https://github.com/dariuszpanas/iperf3-lib/issues/34) | Separate pure finite planner, sequential execution and standalone reports; see the [unreleased guide](../../docs/guides/adaptive-udp.md). | Deterministic decision tests, bounded native mechanics, and a controlled impaired-link experiment. |
 | [Live events #35](https://github.com/dariuszpanas/iperf3-lib/issues/35) | Keep a separate event API and retain the complete-result contract. | Minimum/latest event assembly, bounded delivery, failure/overflow/abandonment tests, and lifecycle qualification. |
-| [Process isolation #36](https://github.com/dariuszpanas/iperf3-lib/issues/36) | A first worker supports #53; qualify broader worker reuse/concurrency separately. | Deadline/cancellation/crash qualification, transport bounds, and measured cleanup across the supported matrix. |
+| [Process isolation #36](https://github.com/dariuszpanas/iperf3-lib/issues/36) | Qualified and merged through PR68. | The [acceptance map](isolated-execution-qualification.md) and issue retain the exact-source installed matrix, bounded transport, partial evidence and resource cleanup qualification. |
 
 Native event shapes have been observed in a small loopback experiment. The
 [observation report](native-event-observations.md) records exactly what was
@@ -50,6 +50,12 @@ defines the current platform and native-version coverage.
 ## Adaptive UDP exploration
 
 ### Admission and evidence
+
+The unreleased implementation is split between `adaptive.py` (pure decisions),
+`adaptive_execution.py` (sequential batches) and `adaptive_reports.py` (standalone
+schema-1 archives). The [user guide](../../docs/guides/adaptive-udp.md) states its
+explicit limitations and public API. The following criteria remain the
+qualification contract for that implementation.
 
 Build on [finite sweeps #33](https://github.com/dariuszpanas/iperf3-lib/issues/33)
 and [trial reports #32](https://github.com/dariuszpanas/iperf3-lib/issues/32).
@@ -86,6 +92,13 @@ valid trials, with every selected receiver-loss value at or below the loss
 threshold and every selected sender/offered fraction at or above its minimum.
 Any more tolerant aggregation must be explicitly chosen and recorded.
 
+The first implementation additionally requires confirmation batches before a
+provisional candidate becomes eligible. A failed confirmation remains in the
+population. Initial grids include both declared endpoints; all batches reserve
+their complete trial/time/payload estimates, including failures and unstarted
+trials. Global elapsed admission limits are explicitly unsupported by this API
+rather than reset for each batch. Observed cooldowns include batch boundaries.
+
 Start with the declared grid. Refine adjacent tested rates with differing
 outcomes using integer midpoints, and repeat promising upper candidates.
 Stop when no new midpoint exists, a configured budget is exhausted, or the
@@ -104,15 +117,15 @@ upper boundary is censored by that ceiling. Other outcomes are
 insufficient. An apparent operating range describes tested conditions;
 interpolation and physical network capacity remain unmeasured.
 
-### Qualification still required
+### Qualification contract
 
 Exercise non-monotonic curves, sender under-delivery, missing/zero packet
 counts, partial failures, exact threshold boundaries, integer-grid exhaustion,
 and all admission limits with controlled observations. Then qualify bounded
 native mechanics on libiperf 3.19.1 and 3.21 and a controlled impaired link
 with recorded rate/loss settings. Clean loopback alone cannot validate the
-loss-threshold algorithm. Explicit finite sweeps remain the planned 0.3.0
-mechanism for these experiments.
+loss-threshold algorithm. Explicit finite sweeps remain the published 0.3.0
+mechanism; adaptive UDP remains unreleased until separately selected and qualified.
 
 ## Typed live events
 

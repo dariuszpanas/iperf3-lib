@@ -25,6 +25,7 @@ nav = [
     { "Repeated trials and assessments" = "guides/trials.md" },
     { "Bounded concurrent plans" = "guides/concurrent-plans.md" },
     { "Bounded parameter sweeps" = "guides/sweeps.md" },
+    { "Adaptive UDP experiments" = "guides/adaptive-udp.md" },
     { "Prometheus output" = "guides/prometheus.md" },
     { "Grafana integration" = "guides/grafana.md" },
   ] },
