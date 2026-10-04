@@ -446,6 +446,32 @@ exceptions but do not reinterpret assessment-v1 or sweep-v1 histories. See
 [async plan evidence](../guides/trials.md#cancel-an-async-plan-and-retain-its-evidence)
 for cancellation, retention limits and compatibility boundaries.
 
+## Bounded concurrent plans (unreleased)
+
+Import `arun_concurrent_plan` from `iperf3_lib.concurrent_trials`:
+
+```text
+arun_concurrent_plan(plan: PreparedPlan, *, policy: ConcurrentExecutionPolicy,
+                    resources: Mapping[str, tuple[str, ...]] | None = None,
+                    timeout=None) -> ConcurrentPlanResult
+```
+
+`iperf3_lib.concurrent_execution` supplies `ConcurrentExecutionPolicy(max_workers,
+max_active_target_bps)`, `ConcurrentTrialRecord`, `ConcurrentPlanResult`,
+`ConcurrentPlanReport`, and `ConcurrentPlanCancelledError`,
+`ConcurrentPlanTimeoutError`, `ConcurrentPlanCleanupError`. The exceptions
+retain `partial_result`; cleanup failures additionally retain `cleanup_errors`.
+
+Import `concurrent_report_from_execution`, `concurrent_report_to_dict`,
+`concurrent_report_from_dict`, `dumps_concurrent_report`, `loads_concurrent_report`,
+`render_concurrent_text`, and `render_concurrent_junit` from
+`iperf3_lib.concurrent_reports`. These use standalone plan-execution schema 3.
+
+See [bounded concurrent plans](../guides/concurrent-plans.md) for rate accounting,
+resource keys, per-cell dependencies, stop behavior and reservation offsets.
+This opt-in mode requires zero pauses and rejects fixed client ports. Existing
+sequential APIs and assessment/sweep report contracts remain unchanged.
+
 ## Parameter sweeps
 
 Import from `iperf3_lib.sweeps`:

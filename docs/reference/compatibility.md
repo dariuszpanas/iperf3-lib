@@ -52,6 +52,7 @@ loaded raises `IperfLibraryError` rather than falling back to another name.
 | Streaming JSON | `json_stream=True` or an event callback selects bounded worker event delivery. |
 | Async convenience | Always isolated; cancellation waits for worker cleanup and any active callback. Unconfirmed cleanup raises `IperfCleanupError`. This behavior is new after 0.3.0. |
 | Concurrent native operations | Basic direct calls remain non-reentrant. Expanded worker calls isolate native state; ordinary client construction alone does not select isolation. |
+| Bounded concurrent plans | Opt-in isolated workers with explicit target-rate/worker ceilings, endpoint and caller-resource exclusions, zero pauses and no fixed client ports. See [concurrent plans](../guides/concurrent-plans.md). |
 | Execution timeout | Explicit `timeout` terminates/reaps the worker before raising; native C finalizers are not promised on forced termination. |
 | Server shutdown | `stop()` is cooperative between iterations; a worker timeout bounds the complete server session. |
 | Parent death | On Linux, a worker bootstrap installs `SIGKILL` on parent death and checks the expected parent before native execution. Other platforms have no corresponding guarantee. See [worker lifetime](../guides/running-tests.md#worker-lifetime-on-linux). |

@@ -1,0 +1,522 @@
+{
+  "execution": {
+    "cleanup_confirmed": false,
+    "completed_at_seconds": 99,
+    "elapsed_seconds": 3,
+    "execution_success": false,
+    "plan": {
+      "budget": {
+        "max_active_seconds": null,
+        "max_payload_bytes": null,
+        "stop_after_elapsed_seconds": null
+      },
+      "estimate": {
+        "active_seconds": 4,
+        "estimated_payload_bits": 3200,
+        "estimated_payload_bytes": 400,
+        "runs": [
+          {
+            "active_seconds": 1,
+            "estimated_payload_bits": 800,
+            "rate": {
+              "active_directions": [
+                "client_to_server"
+              ],
+              "aggregate_bps_all_directions": 800,
+              "aggregate_bps_per_direction": 800,
+              "native_per_stream_bps": 800,
+              "source": "legacy",
+              "unused_bps_per_direction": 0
+            }
+          },
+          {
+            "active_seconds": 1,
+            "estimated_payload_bits": 800,
+            "rate": {
+              "active_directions": [
+                "client_to_server"
+              ],
+              "aggregate_bps_all_directions": 800,
+              "aggregate_bps_per_direction": 800,
+              "native_per_stream_bps": 800,
+              "source": "legacy",
+              "unused_bps_per_direction": 0
+            }
+          },
+          {
+            "active_seconds": 1,
+            "estimated_payload_bits": 800,
+            "rate": {
+              "active_directions": [
+                "client_to_server"
+              ],
+              "aggregate_bps_all_directions": 800,
+              "aggregate_bps_per_direction": 800,
+              "native_per_stream_bps": 800,
+              "source": "legacy",
+              "unused_bps_per_direction": 0
+            }
+          },
+          {
+            "active_seconds": 1,
+            "estimated_payload_bits": 800,
+            "rate": {
+              "active_directions": [
+                "client_to_server"
+              ],
+              "aggregate_bps_all_directions": 800,
+              "aggregate_bps_per_direction": 800,
+              "native_per_stream_bps": 800,
+              "source": "legacy",
+              "unused_bps_per_direction": 0
+            }
+          }
+        ]
+      },
+      "order_seed": null,
+      "planned_pause_seconds": 0,
+      "policy": {
+        "max_trials": 1000,
+        "pause_seconds": 0,
+        "repetitions": 2,
+        "stop_on_error": true,
+        "warmup_runs": 0
+      },
+      "trials": [
+        {
+          "cell_id": "a",
+          "config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 1,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 800,
+            "reverse": false,
+            "server": "A.example",
+            "tos": null
+          },
+          "phase": "measured",
+          "rate_intent": null,
+          "repetition": 0,
+          "resolved_config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 1,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 800,
+            "reverse": false,
+            "server": "A.example",
+            "tos": null
+          },
+          "trial_id": "a-0"
+        },
+        {
+          "cell_id": "a",
+          "config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 1,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 800,
+            "reverse": false,
+            "server": "A.example",
+            "tos": null
+          },
+          "phase": "measured",
+          "rate_intent": null,
+          "repetition": 1,
+          "resolved_config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 1,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 800,
+            "reverse": false,
+            "server": "A.example",
+            "tos": null
+          },
+          "trial_id": "a-1"
+        },
+        {
+          "cell_id": "b",
+          "config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 1,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 800,
+            "reverse": false,
+            "server": "B.example",
+            "tos": null
+          },
+          "phase": "measured",
+          "rate_intent": null,
+          "repetition": 0,
+          "resolved_config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 1,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 800,
+            "reverse": false,
+            "server": "B.example",
+            "tos": null
+          },
+          "trial_id": "b-0"
+        },
+        {
+          "cell_id": "b",
+          "config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 1,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 800,
+            "reverse": false,
+            "server": "B.example",
+            "tos": null
+          },
+          "phase": "measured",
+          "rate_intent": null,
+          "repetition": 1,
+          "resolved_config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 1,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 800,
+            "reverse": false,
+            "server": "B.example",
+            "tos": null
+          },
+          "trial_id": "b-1"
+        }
+      ]
+    },
+    "policy": {
+      "max_active_target_bps": 1600,
+      "max_workers": 2
+    },
+    "resources": {
+      "a": [
+        "rack-a"
+      ]
+    },
+    "started_at_seconds": 100,
+    "stop_reason": "stop_on_error",
+    "stopped_offset_seconds": 1.1,
+    "termination_offset_seconds": 1.5,
+    "termination_reason": "cleanup_failed",
+    "timeout_seconds": null,
+    "trials": [
+      {
+        "admission_index": 1,
+        "admitted_offset_seconds": 0,
+        "artifact": null,
+        "cleanup_confirmed": true,
+        "completed_at_seconds": 101,
+        "diagnostics": [],
+        "elapsed_seconds": 1,
+        "events_dropped": 0,
+        "events_observed": 0,
+        "exception": {
+          "message": "stopped",
+          "type_name": "example.Interrupted"
+        },
+        "finished_offset_seconds": 1,
+        "partial_events": [],
+        "reason": null,
+        "released_offset_seconds": 1,
+        "resource_keys": [
+          "endpoint:[\"a.example\",5201]",
+          "user:rack-a"
+        ],
+        "returned_result_evidence": null,
+        "spec": {
+          "cell_id": "a",
+          "config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 1,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 800,
+            "reverse": false,
+            "server": "A.example",
+            "tos": null
+          },
+          "phase": "measured",
+          "rate_intent": null,
+          "repetition": 0,
+          "resolved_config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 1,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 800,
+            "reverse": false,
+            "server": "A.example",
+            "tos": null
+          },
+          "trial_id": "a-0"
+        },
+        "started_at_seconds": 100,
+        "status": "exception",
+        "target_bps": 800
+      },
+      {
+        "admission_index": null,
+        "admitted_offset_seconds": null,
+        "artifact": null,
+        "cleanup_confirmed": true,
+        "completed_at_seconds": null,
+        "diagnostics": [],
+        "elapsed_seconds": null,
+        "events_dropped": 0,
+        "events_observed": 0,
+        "exception": null,
+        "finished_offset_seconds": null,
+        "partial_events": [],
+        "reason": "stop_on_error",
+        "released_offset_seconds": null,
+        "resource_keys": [
+          "endpoint:[\"a.example\",5201]",
+          "user:rack-a"
+        ],
+        "returned_result_evidence": null,
+        "spec": {
+          "cell_id": "a",
+          "config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 1,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 800,
+            "reverse": false,
+            "server": "A.example",
+            "tos": null
+          },
+          "phase": "measured",
+          "rate_intent": null,
+          "repetition": 1,
+          "resolved_config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 1,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 800,
+            "reverse": false,
+            "server": "A.example",
+            "tos": null
+          },
+          "trial_id": "a-1"
+        },
+        "started_at_seconds": null,
+        "status": "not_run",
+        "target_bps": 800
+      },
+      {
+        "admission_index": 2,
+        "admitted_offset_seconds": 0.5,
+        "artifact": null,
+        "cleanup_confirmed": false,
+        "completed_at_seconds": 102,
+        "diagnostics": [],
+        "elapsed_seconds": 1.5,
+        "events_dropped": 0,
+        "events_observed": 1,
+        "exception": {
+          "message": "stopped",
+          "type_name": "example.Interrupted"
+        },
+        "finished_offset_seconds": 2,
+        "partial_events": [
+          {
+            "data": {
+              "bytes": 20
+            },
+            "kind": "interval",
+            "received_at_seconds": 101,
+            "sequence": 1
+          }
+        ],
+        "reason": "cleanup_failed",
+        "released_offset_seconds": null,
+        "resource_keys": [
+          "endpoint:[\"b.example\",5201]"
+        ],
+        "returned_result_evidence": null,
+        "spec": {
+          "cell_id": "b",
+          "config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 1,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 800,
+            "reverse": false,
+            "server": "B.example",
+            "tos": null
+          },
+          "phase": "measured",
+          "rate_intent": null,
+          "repetition": 0,
+          "resolved_config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 1,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 800,
+            "reverse": false,
+            "server": "B.example",
+            "tos": null
+          },
+          "trial_id": "b-0"
+        },
+        "started_at_seconds": 100.5,
+        "status": "cleanup_failed",
+        "target_bps": 800
+      },
+      {
+        "admission_index": null,
+        "admitted_offset_seconds": null,
+        "artifact": null,
+        "cleanup_confirmed": true,
+        "completed_at_seconds": null,
+        "diagnostics": [],
+        "elapsed_seconds": null,
+        "events_dropped": 0,
+        "events_observed": 0,
+        "exception": null,
+        "finished_offset_seconds": null,
+        "partial_events": [],
+        "reason": "stop_on_error",
+        "released_offset_seconds": null,
+        "resource_keys": [
+          "endpoint:[\"b.example\",5201]"
+        ],
+        "returned_result_evidence": null,
+        "spec": {
+          "cell_id": "b",
+          "config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 1,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 800,
+            "reverse": false,
+            "server": "B.example",
+            "tos": null
+          },
+          "phase": "measured",
+          "rate_intent": null,
+          "repetition": 1,
+          "resolved_config": {
+            "bidirectional": false,
+            "blksize": null,
+            "duration": 1,
+            "json_stream": false,
+            "mptcp": false,
+            "omit": 0,
+            "parallel": 1,
+            "port": 5201,
+            "protocol": "tcp",
+            "rate": 800,
+            "reverse": false,
+            "server": "B.example",
+            "tos": null
+          },
+          "trial_id": "b-1"
+        },
+        "started_at_seconds": null,
+        "status": "not_run",
+        "target_bps": 800
+      }
+    ]
+  },
+  "execution_mode": "bounded-concurrent-owned",
+  "extensions": {
+    "example.synthetic": true
+  },
+  "kind": "iperf3-lib.plan-execution",
+  "pause_semantics": "zero-only",
+  "producer": {
+    "name": "example.fixture",
+    "version": "3"
+  },
+  "schema_version": 3
+}

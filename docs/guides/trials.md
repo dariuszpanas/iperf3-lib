@@ -8,6 +8,8 @@ incomplete, and unstarted runs so the report describes the entire experiment.
 `run_plan` is synchronous and sequential; each trial calls `Client.run()` once.
 The unreleased `arun_plan` API adds owned sequential async execution and retained
 partial results after cancellation. Neither runner retries trials.
+For independent cells, [bounded concurrent plans](concurrent-plans.md) provide
+explicit worker/rate admission limits and resource exclusions.
 
 ## Admit a plan before generating traffic
 
@@ -129,8 +131,9 @@ interrupted plan, including interruption between completed trials.
 
 The existing assessment-v1 and sweep-v1 models and codecs remain unchanged and
 do not accept async execution histories. Completed artifacts can be analyzed
-individually. Concurrent plans, bounded concurrent scheduling and async sweep
-assessment remain follow-up work in [issue #36](https://github.com/dariuszpanas/iperf3-lib/issues/36).
+individually. [Concurrent plans](concurrent-plans.md) use a separate schema-v3
+history; async sweep assessment remains follow-up work in
+[issue #36](https://github.com/dariuszpanas/iperf3-lib/issues/36).
 Ownership applies to this invocation's workers; it does not coordinate other
 callers or make libiperf's process-global state reentrant.
 

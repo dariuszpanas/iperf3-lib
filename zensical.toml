@@ -23,6 +23,7 @@ nav = [
     { "Portable result artifacts" = "guides/artifacts.md" },
     { "Analyzing measurements" = "guides/analysis.md" },
     { "Repeated trials and assessments" = "guides/trials.md" },
+    { "Bounded concurrent plans" = "guides/concurrent-plans.md" },
     { "Bounded parameter sweeps" = "guides/sweeps.md" },
     { "Prometheus output" = "guides/prometheus.md" },
     { "Grafana integration" = "guides/grafana.md" },

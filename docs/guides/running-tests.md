@@ -102,8 +102,10 @@ Async methods use their built-in isolated implementation rather than invoking
 an override of `run()` or `run_once()`. Setup errors therefore follow worker
 semantics: they raise, whereas some direct-client setup errors produce failed
 results. Wrapping a synchronous method in your own executor does not stop its
-native operation when its await is cancelled. Plan cancellation remains
-unsupported.
+native operation when its await is cancelled. The owned
+[sequential async plan](trials.md#cancel-an-async-plan-and-retain-its-evidence) and
+[bounded concurrent plan](concurrent-plans.md) APIs propagate cancellation to
+their admitted workers and retain partial execution histories.
 
 Do not use `result.ok` as a performance acceptance decision: a completed test
 can have low throughput or substantial loss. Choose application thresholds with
