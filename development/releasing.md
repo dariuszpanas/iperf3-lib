@@ -41,7 +41,10 @@ A successful rehearsal contains:
   landing and changelog pages.
 - A `release-bundle` artifact with those distributions and
   `release-evidence/manifest.json`. The manifest records source revision,
-  version, build Python, filenames, sizes, and SHA-256 hashes.
+  version, build Python, filenames, sizes, and SHA-256 hashes. A separate
+  `release-evidence/lifecycle-manifest.json` seals the same distributions,
+  package contents and qualification harness; both manifest hashes come from
+  the build job.
 - The full Python 3.12–3.14 × libiperf 3.19.1/3.21 native matrix, including
   lifecycle regressions, from the exact source revision.
 - Installed wheel **and** sdist qualification in every matrix cell. These use
@@ -50,15 +53,22 @@ A successful rehearsal contains:
 - Retained `native-evidence-py*-iperf*` receipts showing native TCP, reverse,
   bidirectional, UDP, and SCTP runs, reporting roles, directional observations,
   configuration checks, and missing/zero/error-result semantics.
-- A successful aggregate **Release qualification** job. Artifacts and evidence
+- Retained `lifecycle-evidence-py*-iperf*` receipts and logs for the expanded
+  49-case installed suite, using that same release wheel and sdist.
+- A successful aggregate **Release qualification** job that checks the full
+  receipt inventory and retained evidence against both manifests. Its
+  `release-qualification` artifact contains `qualification.json` with source
+  identity, manifest and receipt hashes, and the verified case inventory.
+  Artifacts and evidence
   are retained for 30 days; download them for a longer-lived release record.
 
 The installed smoke runs bounded, rate-limited loopback benchmarks. Each
 format's smoke has a 120-second process deadline in the qualification
-container. This test harness does not change the library's documented
+container. Each distribution's expanded lifecycle test process has a separate
+600-second deadline. This test harness does not change the library's documented
 cancellation or concurrency behavior.
 
-## Installed lifecycle checks in CI
+## Installed lifecycle checks
 
 Current CI also qualifies operation cancellation, Linux parent-death cleanup,
 the private worker transport, plans, adaptive UDP and typed live events
@@ -79,14 +89,32 @@ setup/call/teardown phases; a selected skip fails qualification. See the
 [isolated execution map](design/isolated-execution-qualification.md) for the
 retained measurements and cleanup requirements.
 
-These CI distributions are separate from the release workflow's retained
-bundle and smoke receipts below. Before publishing 0.4.0, the expanded
-qualification must also cover the exact wheel and sdist selected for release;
-green CI on independently built artifacts is not that evidence.
+The release workflow runs this same harness against its retained release
+bundle, in addition to the smoke receipts below. It builds no replacement
+archives. The lifecycle manifest lives outside `dist/`, whose release inventory
+remains exactly one wheel and one sdist. Controlled UDP impairment runs inside
+the qualification container with `NET_ADMIN`; no host network changes are
+required.
+
+For the current six Python/native combinations, the release gate requires
+**12 smoke receipts and 12 lifecycle receipts**, with **588 lifecycle cases and
+1764 passed phases**. `scripts/verify_release_qualification.py` requires the
+exact expected cell/format directories, binds their identities to both
+manifests, checks retained semantic evidence, and rejects missing, extra,
+failed or skipped cases. It does not load libiperf or rerun benchmarks.
+Lifecycle logs are retained and hashed; they do not replace structured phase
+and measurement evidence. Installed package byte checks run in the sealed
+native harness and are bound to its receipt; the aggregate checker cannot
+inspect an already removed environment.
+
+Both package publication jobs depend on this gate and continue to consume
+only the retained distributions. The GitHub Release also attaches the two
+manifests and verified qualification index. A successful branch rehearsal is
+candidate evidence, not permission to publish or proof for a later revision.
 
 ## Inspect installed receipt v2
 
-The 0.3.0 qualification contract requires **12 successful receipt-v2 files**:
+The smoke contract introduced for 0.3.0 requires **12 successful receipt-v2 files**:
 one installed wheel and one installed sdist for each Python 3.12–3.14 and
 libiperf 3.19.1/3.21 combination. Each receipt must retain:
 
@@ -109,7 +137,8 @@ Internal consistency alone does not establish that external identity.
 Historical receipt-v1 files remain evidence for their original revisions. They
 do not satisfy the expanded 0.3.0 contract. A successful earlier rehearsal also
 does not qualify a later source revision. Keep the final candidate's manifest,
-all 12 receipts and aggregate workflow result together before publication.
+all smoke and lifecycle receipts, both manifests, the qualification index and
+aggregate workflow result together before publication.
 
 ## Prepare the release candidate
 

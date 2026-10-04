@@ -35,6 +35,7 @@ jobs:
       revision: ${{ steps.release-version.outputs.revision }}
       mode: ${{ steps.release-version.outputs.mode }}
       manifest-sha256: ${{ steps.artifacts.outputs.manifest-sha256 }}
+      lifecycle-manifest-sha256: ${{ steps.lifecycle-manifest.outputs.manifest-sha256 }}
     steps:
       - name: Check out exact event revision and branch history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -80,6 +81,14 @@ jobs:
           uv run --frozen --dev python -m scripts.release_artifacts inspect \
             --version "$EXPECTED_VERSION" --revision "$EXPECTED_REVISION" \
             --check-public-links --github-output "$GITHUB_OUTPUT"
+      - name: Seal lifecycle qualification against the retained release distributions
+        id: lifecycle-manifest
+        env:
+          EXPECTED_REVISION: ${{ steps.release-version.outputs.revision }}
+        run: |
+          uv run --frozen --dev python scripts/qualify_lifecycle.py manifest \
+            --distributions dist --manifest release-evidence/lifecycle-manifest.json \
+            --revision "$EXPECTED_REVISION" --github-output "$GITHUB_OUTPUT"
       - name: Upload retained distributions and identity manifest
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -88,6 +97,7 @@ jobs:
             dist/*.whl
             dist/*.tar.gz
             release-evidence/manifest.json
+            release-evidence/lifecycle-manifest.json
           if-no-files-found: error
           retention-days: 30
 
@@ -95,7 +105,7 @@ jobs:
     name: native + installed artifacts (Python ${{ matrix.python }}, libiperf ${{ matrix.iperf }})
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -196,23 +206,96 @@ jobs:
           path: native-evidence/*.json
           if-no-files-found: warn
           retention-days: 30
+      - name: Qualify installed lifecycle from the same release distributions
+        env:
+          EXPECTED_REVISION: ${{ needs.build.outputs.revision }}
+          LIFECYCLE_MANIFEST_SHA256: ${{ needs.build.outputs.lifecycle-manifest-sha256 }}
+          PYTHON_VERSION: ${{ matrix.python }}
+          IPERF3_VERSION: ${{ matrix.iperf }}
+        run: |
+          mkdir -p lifecycle-evidence
+          docker run --rm \
+            --cap-add NET_ADMIN -e IPERF3_ADAPTIVE_IMPAIRMENT=1 \
+            -v "${{ github.workspace }}/dist:/release-dist:ro" \
+            -v "${{ github.workspace }}/release-evidence:/release-evidence:ro" \
+            -v "${{ github.workspace }}/lifecycle-evidence:/evidence" \
+            iperf3-lib-release:local \
+            python -I /app/scripts/qualify_lifecycle.py qualify \
+            --source /app --distributions /release-dist \
+            --manifest /release-evidence/lifecycle-manifest.json \
+            --revision "$EXPECTED_REVISION" --manifest-sha256 "$LIFECYCLE_MANIFEST_SHA256" \
+            --python "$PYTHON_VERSION" --native "$IPERF3_VERSION" --output /evidence
+      - name: Retain installed lifecycle receipts and logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: lifecycle-evidence-py${{ matrix.python }}-iperf${{ matrix.iperf }}
+          path: lifecycle-evidence/*
+          if-no-files-found: warn
+          retention-days: 30
 
   qualified:
     name: Release qualification
     needs: [build, native]
     if: always()
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - name: Require source, artifact, and every native qualification job
         env:
           BUILD_RESULT: ${{ needs.build.result }}
           NATIVE_RESULT: ${{ needs.native.result }}
-          REVISION: ${{ needs.build.outputs.revision }}
         run: |
           test "$BUILD_RESULT" = success
           test "$NATIVE_RESULT" = success
-          echo "Qualified revision: $REVISION" >> "$GITHUB_STEP_SUMMARY"
+      - name: Check out the exact qualification verifier
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.build.outputs.revision }}
+          persist-credentials: false
+      - name: Install qualification verifier dependencies
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: "3.12"
+      - name: Download retained release bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-bundle
+      - name: Download all installed smoke receipts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: native-evidence-py*
+          path: retained/smoke
+      - name: Download all installed lifecycle receipts and logs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: lifecycle-evidence-py*
+          path: retained/lifecycle
+      - name: Verify the exact release receipt inventory and retained evidence
+        env:
+          EXPECTED_REVISION: ${{ needs.build.outputs.revision }}
+          EXPECTED_VERSION: ${{ needs.build.outputs.version }}
+          MANIFEST_SHA256: ${{ needs.build.outputs.manifest-sha256 }}
+          LIFECYCLE_MANIFEST_SHA256: ${{ needs.build.outputs.lifecycle-manifest-sha256 }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_REVISION"
+          uv run --frozen --dev python -m scripts.verify_release_qualification \
+            --source . --distributions dist \
+            --release-manifest release-evidence/manifest.json \
+            --release-manifest-sha256 "$MANIFEST_SHA256" \
+            --lifecycle-manifest release-evidence/lifecycle-manifest.json \
+            --lifecycle-manifest-sha256 "$LIFECYCLE_MANIFEST_SHA256" \
+            --revision "$EXPECTED_REVISION" --version "$EXPECTED_VERSION" \
+            --smoke-root retained/smoke --lifecycle-root retained/lifecycle \
+            --output release-evidence/qualification.json
+          echo "Qualified revision: $EXPECTED_REVISION" >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain the verified release qualification index
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-qualification
+          path: release-evidence/qualification.json
+          if-no-files-found: error
+          retention-days: 30
 
   publish-testpypi:
     name: Publish retained distributions to TestPyPI
@@ -357,6 +440,11 @@ jobs:
               if actual != data["files"][name]:
                   raise SystemExit(f"Release artifact changed: {name}")
           PY
+      - name: Download verified qualification index
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-qualification
+          path: release-evidence
       - name: Create GitHub release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
@@ -364,6 +452,8 @@ jobs:
             dist/*.whl
             dist/*.tar.gz
             release-evidence/manifest.json
+            release-evidence/lifecycle-manifest.json
+            release-evidence/qualification.json
           fail_on_unmatched_files: true
           generate_release_notes: true
           draft: false

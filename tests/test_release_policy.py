@@ -560,3 +560,88 @@ def test_publication_verifiers_are_identical_and_detect_tampering(
     )
     assert result.returncode != 0
     assert b"identity mismatch" in result.stderr
+
+
+def test_release_gate_requires_exact_artifact_lifecycle_receipts(release_workflow: str) -> None:
+    """Publishing must await semantic receipt verification for the one retained pair."""
+    import itertools
+
+    import yaml
+
+    from scripts.verify_release_qualification import EXPECTED_MATRIX
+
+    jobs = yaml.safe_load(release_workflow)["jobs"]
+    matrix = jobs["native"]["strategy"]["matrix"]
+    assert set(itertools.product(matrix["python"], matrix["iperf"])) == set(EXPECTED_MATRIX)
+    assert release_workflow.count("run: uv build --no-sources") == 1
+    build_steps = jobs["build"]["steps"]
+    seal = next(step for step in build_steps if step.get("id") == "lifecycle-manifest")
+    assert "--distributions dist --manifest release-evidence/lifecycle-manifest.json" in seal["run"]
+    assert jobs["build"]["outputs"]["lifecycle-manifest-sha256"] == (
+        "${{ steps.lifecycle-manifest.outputs.manifest-sha256 }}"
+    )
+    bundle = next(
+        step for step in build_steps if step.get("with", {}).get("name") == "release-bundle"
+    )
+    assert "release-evidence/lifecycle-manifest.json" in bundle["with"]["path"].splitlines()
+    native = jobs["native"]
+    run = next(
+        step["run"]
+        for step in native["steps"]
+        if "scripts/qualify_lifecycle.py qualify" in step.get("run", "")
+    )
+    for required in (
+        "--cap-add NET_ADMIN -e IPERF3_ADAPTIVE_IMPAIRMENT=1",
+        "--source /app --distributions /release-dist",
+        "--manifest /release-evidence/lifecycle-manifest.json",
+        '--manifest-sha256 "$LIFECYCLE_MANIFEST_SHA256"',
+        "${{ github.workspace }}/dist:/release-dist:ro",
+    ):
+        assert required in run
+    lifecycle_upload = next(
+        step
+        for step in native["steps"]
+        if step.get("with", {}).get("name", "").startswith("lifecycle-evidence-py")
+    )
+    assert lifecycle_upload["if"] == "always()"
+    assert lifecycle_upload["with"]["path"] == "lifecycle-evidence/*"
+    gate = jobs["qualified"]
+    assert set(gate["needs"]) == {"build", "native"}
+    verification = next(
+        step
+        for step in gate["steps"]
+        if "scripts.verify_release_qualification" in step.get("run", "")
+    )
+    assert verification["env"]["LIFECYCLE_MANIFEST_SHA256"] == (
+        "${{ needs.build.outputs.lifecycle-manifest-sha256 }}"
+    )
+    for required in (
+        'test "$(git rev-parse HEAD)" = "$EXPECTED_REVISION"',
+        '--release-manifest-sha256 "$MANIFEST_SHA256"',
+        '--lifecycle-manifest-sha256 "$LIFECYCLE_MANIFEST_SHA256"',
+        '--revision "$EXPECTED_REVISION" --version "$EXPECTED_VERSION"',
+        "--smoke-root retained/smoke --lifecycle-root retained/lifecycle",
+    ):
+        assert required in verification["run"]
+    downloads = {
+        step["with"]["pattern"]: step["with"]
+        for step in gate["steps"]
+        if "pattern" in step.get("with", {})
+    }
+    assert set(downloads) == {"native-evidence-py*", "lifecycle-evidence-py*"}
+    assert downloads["native-evidence-py*"]["path"] == "retained/smoke"
+    assert downloads["lifecycle-evidence-py*"]["path"] == "retained/lifecycle"
+    assert all(not settings.get("merge-multiple", False) for settings in downloads.values())
+    for job in ("publish-pypi", "publish-testpypi"):
+        assert "qualified" in jobs[job]["needs"]
+    release_steps = jobs["github-release"]["steps"]
+    index = next(
+        step
+        for step in release_steps
+        if step.get("with", {}).get("name") == "release-qualification"
+    )
+    assert index["with"]["path"] == "release-evidence"
+    publication = next(
+        step for step in release_steps if "action-gh-release@" in step.get("uses", "")
+    )
+    assert "release-evidence/qualification.json" in publication["with"]["files"].splitlines()

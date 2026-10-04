@@ -57,10 +57,79 @@ def test_lifecycle_manifest_requires_source_and_both_retained_distributions(seal
     assert set(manifest["package_sha256"]) == {"__init__.py", "py.typed"}
 
 
+def test_external_manifest_preserves_the_exact_distribution_pair(sealed_pair, tmp_path):
+    """Release qualification can seal existing files without adding anything to dist."""
+    source, distributions, expected = sealed_pair
+    (distributions / "manifest.json").unlink()
+    originals = {path.name: path.read_bytes() for path in distributions.iterdir()}
+    path = tmp_path / "release-evidence/lifecycle-manifest.json"
+    actual = qualification.write_manifest(source, distributions, REVISION, manifest_path=path)
+    assert actual == expected
+    assert (
+        qualification.verify_manifest(source, distributions, REVISION, manifest_path=path)
+        == expected
+    )
+    assert {item.name: item.read_bytes() for item in distributions.iterdir()} == originals
+    assert json.loads(path.read_text()) == expected
+
+
+def test_external_manifest_cannot_overwrite_a_retained_distribution(sealed_pair):
+    """An erroneous output path must never replace already qualified archive bytes."""
+    source, distributions, manifest = sealed_pair
+    (distributions / "manifest.json").unlink()
+    archive = distributions / manifest["distributions"][0]["filename"]
+    original = archive.read_bytes()
+    with pytest.raises(ValueError, match="cannot replace a distribution"):
+        qualification.write_manifest(source, distributions, REVISION, manifest_path=archive)
+    assert archive.read_bytes() == original
+
+
+@pytest.mark.parametrize("external", [False, True])
+def test_manifest_cli_publishes_the_hash_of_the_selected_file(
+    sealed_pair, tmp_path, monkeypatch, external
+):
+    """The workflow output identifies the same manifest the CLI wrote."""
+    source, distributions, expected = sealed_pair
+    (distributions / "manifest.json").unlink()
+    path = tmp_path / "evidence/lifecycle.json" if external else distributions / "manifest.json"
+    output = tmp_path / "github-output"
+    argv = [
+        "qualify_lifecycle.py",
+        "manifest",
+        "--source",
+        str(source),
+        "--distributions",
+        str(distributions),
+        "--revision",
+        REVISION,
+        "--github-output",
+        str(output),
+    ]
+    if external:
+        argv.extend(("--manifest", str(path)))
+    monkeypatch.setattr(sys, "argv", argv)
+    monkeypatch.setattr(
+        qualification.subprocess,
+        "check_output",
+        lambda command, **kwargs: REVISION if command[1] == "rev-parse" else "",
+    )
+    monkeypatch.setattr(qualification.subprocess, "run", lambda *args, **kwargs: None)
+    assert qualification.main() == 0
+    assert json.loads(path.read_text()) == expected
+    assert output.read_text() == f"manifest-sha256={qualification.digest(path)}\n"
+    if external:
+        assert not (distributions / "manifest.json").exists()
+
+
 @pytest.mark.parametrize("change", ["revision", "harness", "source", "archive", "missing-format"])
-def test_lifecycle_manifest_rejects_stale_or_substituted_inputs(sealed_pair, change):
+@pytest.mark.parametrize("external", [False, True])
+def test_lifecycle_manifest_rejects_stale_or_substituted_inputs(sealed_pair, change, external):
     """A green receipt cannot be attached to another checkout, harness or distribution."""
     source, distributions, manifest = sealed_pair
+    manifest_path = distributions / "manifest.json"
+    if external:
+        manifest_path = source.parent / "external-manifest.json"
+        (distributions / "manifest.json").rename(manifest_path)
     revision = REVISION
     if change == "revision":
         revision = "b" * 40
@@ -72,9 +141,86 @@ def test_lifecycle_manifest_rejects_stale_or_substituted_inputs(sealed_pair, cha
         (distributions / manifest["distributions"][0]["filename"]).write_bytes(b"substituted")
     else:
         manifest["distributions"].pop()
-        (distributions / "manifest.json").write_text(json.dumps(manifest))
+        manifest_path.write_text(json.dumps(manifest))
     with pytest.raises(ValueError):
-        qualification.verify_manifest(source, distributions, revision)
+        qualification.verify_manifest(
+            source, distributions, revision, manifest_path=manifest_path if external else None
+        )
+
+
+@pytest.mark.parametrize("external", [False, True])
+def test_qualify_binds_the_selected_manifest_hash_before_running(
+    sealed_pair, tmp_path, monkeypatch, external
+):
+    """A changed external manifest cannot bypass the independent build-output hash."""
+    source, distributions, _ = sealed_pair
+    path = distributions / "manifest.json"
+    if external:
+        path = tmp_path / "release-manifest.json"
+        (distributions / "manifest.json").rename(path)
+    checksum = qualification.digest(path)
+    path.write_text(path.read_text() + "\n")
+    monkeypatch.setattr(
+        qualification, "pinned_requirements", lambda: pytest.fail("qualification already started")
+    )
+    with pytest.raises(ValueError, match="build job's retained identity"):
+        qualification.qualify(
+            SimpleNamespace(
+                source=source,
+                distributions=distributions,
+                revision=REVISION,
+                manifest=path if external else None,
+                manifest_sha256=checksum,
+            )
+        )
+
+
+@pytest.mark.parametrize("external", [False, True])
+def test_qualify_passes_selected_manifest_to_both_isolated_children(
+    sealed_pair, tmp_path, monkeypatch, external
+):
+    """Both formats use the same independently verified manifest outside the checkout."""
+    source, distributions, _ = sealed_pair
+    path = distributions / "manifest.json"
+    if external:
+        path = tmp_path / "release-manifest.json"
+        (distributions / "manifest.json").rename(path)
+    checksum = qualification.digest(path)
+    output = tmp_path / "receipts"
+    calls = []
+    monkeypatch.setattr(qualification, "pinned_requirements", list)
+
+    def run(command, **kwargs):
+        if "--manifest" in command:
+            calls.append(command)
+            assert command[command.index("--manifest") + 1] == str(path.resolve())
+            assert not kwargs["cwd"].is_relative_to(source)
+            result = _passed_results()
+            result.update(status="passed", dependency_pins=[])
+            Path(command[command.index("--output") + 1]).write_text(json.dumps(result))
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(qualification.subprocess, "run", run)
+    qualification.qualify(
+        SimpleNamespace(
+            source=source,
+            distributions=distributions,
+            revision=REVISION,
+            manifest=path if external else None,
+            manifest_sha256=checksum,
+            output=output,
+            python="3.14",
+            native="3.21",
+        )
+    )
+    assert len(calls) == 2
+    for kind in ("wheel", "sdist"):
+        receipt = json.loads((output / f"{kind}.json").read_text())
+        assert receipt["status"] == "passed"
+        assert receipt["manifest_sha256"] == checksum
+        assert receipt["distribution"]["kind"] == kind
+    if external:
+        assert {item.suffix for item in distributions.iterdir()} == {".whl", ".gz"}
 
 
 def test_lifecycle_manifest_rejects_resealed_wrong_package_bytes(sealed_pair):
