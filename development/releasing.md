@@ -12,6 +12,41 @@ maps are linked from the [advanced execution design](design/advanced-execution.m
 Historical release receipts do not qualify these additions. Release notes and
 capability claims must follow evidence for the combined candidate.
 
+## Python 3.15 preview and final activation
+
+The separate `python-preview.yml` workflow tests **3.15.0rc3**, without publication
+permissions. It layers a pinned uv 0.12.23 and managed RC3 interpreter over the
+ordinary Python 3.14 native image. Tests and installed environments explicitly
+select `/opt/preview-venv/bin/python`; the base image's Python is not preview
+evidence. `scripts/python_preview.py` checks the actual interpreter and native
+getter before recording runtime identity, frozen dependencies and lock hash.
+
+Run a selected candidate manually with:
+
+```bash
+gh workflow run python-preview.yml --ref main
+```
+
+The workflow runs non-native checks before native integration, then the existing
+installed lifecycle and smoke harnesses on one sealed wheel/sdist pair. Both
+libiperf 3.19.1 and 3.21 must pass. Download `python-preview-distributions` and
+both `python-preview-rc3-iperf*` artifacts, together with job logs, for a durable
+record. Expect **four lifecycle receipts, 196 selected cases and 588 passed
+phases**, plus **four smoke receipts**. Runtime JSON and image inspection retain
+the resolved interpreter, dependency and container identities. These preview
+receipts are separate from the stable release qualification index.
+
+Issue [#63](https://github.com/dariuszpanas/iperf3-lib/issues/63) remains open until
+final Python and its official Docker image are available and qualified. At final
+activation, verify the actual interpreter and image digest, add 3.15 to stable
+CI, release and aggregate matrices, and update classifiers, capability reports,
+and current compatibility documentation. Preserve Python `>=3.12` and existing
+native endpoints. The eight-cell release gate must then require **16 smoke and
+16 lifecycle receipts, 784 selected cases and 2352 passed phases**. Rerun the
+complete non-publishing release rehearsal on the final 0.4.0 candidate; RC3
+success cannot substitute for that evidence. The current release verifier
+deliberately rejects prerelease interpreter versions.
+
 ## Rehearse without publishing
 
 The default manual mode of the

@@ -9,14 +9,16 @@ context rather than certify the current release candidate.
 
 The current development scope adds owned async and bounded concurrent plans,
 adaptive UDP experiments, and typed live-event consumption. Issues
-[#36](https://github.com/dariuszpanas/iperf3-lib/issues/36) and
-[#34](https://github.com/dariuszpanas/iperf3-lib/issues/34) are complete with
+[#36](https://github.com/dariuszpanas/iperf3-lib/issues/36),
+[#34](https://github.com/dariuszpanas/iperf3-lib/issues/34), and
+[#35](https://github.com/dariuszpanas/iperf3-lib/issues/35) are complete with
 retained exact-source native and installed-package qualification. The
-[live-event contract](../docs/guides/live-events.md) is tracked in
-[#35](https://github.com/dariuszpanas/iperf3-lib/issues/35).
+[live-event guide](../docs/guides/live-events.md) describes the owned stream contract.
 
 Python 3.15 support and qualification are tracked in
-[#63](https://github.com/dariuszpanas/iperf3-lib/issues/63). Final 0.4.0 release
+[#63](https://github.com/dariuszpanas/iperf3-lib/issues/63). A separate RC3 preview
+lane prepares compatibility work while final-runtime qualification remains open.
+Final 0.4.0 release
 preparation must qualify the combined source, retained wheel and sdist,
 documentation, and Grafana integration. The `Unreleased` changelog is a
 development record; it does not establish that these features are published.

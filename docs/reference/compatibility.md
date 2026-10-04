@@ -13,6 +13,11 @@ The package declares Python `>=3.12`; the versions listed above are the
 current tested matrix. macOS and FreeBSD are unverified by this project.
 Windows DLL loading is best-effort and has no native CI coverage.
 
+Python 3.15.0rc3 has a separate preview workflow against both native endpoints.
+Preview receipts record the actual candidate interpreter and installed artifacts;
+they do not extend the stable support matrix above. Final Python 3.15 support
+and the planned 0.4.0 release require fresh qualification on the final runtime.
+
 Installing the Python package does not install or upgrade libiperf. Follow the
 [upstream iperf releases](https://github.com/esnet/iperf/releases) for native
 release information. For local development, Docker provides the repository's
