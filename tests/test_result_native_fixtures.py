@@ -1,4 +1,4 @@
-"""Normalize captured minimum/latest libiperf JSON from both reporting endpoints."""
+"""Normalize captured current and historical libiperf JSON from both reporting endpoints."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import pytest
 from iperf3_lib.result import result_from_iperf_json
 
 FIXTURES = Path(__file__).parent / "fixtures" / "native"
-VERSIONS = ("3.19.1", "3.21")
+VERSIONS = ("3.19.1", "3.21", "3.22")
 SCENARIOS = (
     "tcp-forward",
     "tcp-reverse",

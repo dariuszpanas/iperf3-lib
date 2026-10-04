@@ -177,7 +177,9 @@ def _check_version(role: str, options: dict[str, Any], version: tuple[int, ...] 
             raise UnsupportedFeatureError(f"{name} requires libiperf 3.21 or newer")
     if role == "client" and options.get("use_pkcs1_padding"):
         if version is None or version >= (3, 21, 0):
-            raise UnsupportedFeatureError("libiperf 3.21 accepts PKCS1 padding only in server mode")
+            raise UnsupportedFeatureError(
+                "libiperf 3.21 or newer accepts PKCS1 padding only in server mode"
+            )
     for name in ("fq_rate_bps", "bitrate_limit_bps"):
         value = options.get(name)
         if value is not None and value > 2**53 - 1:

@@ -121,7 +121,7 @@ empty prefix. Earlier completed artifacts remain available in either case.
 Internal event collection enables `json_stream=True` for each native client.
 Artifacts retain the original caller config in their rate-intent extension and
 the effective streaming config in execution metadata. Libiperf 3.19.1 streaming
-results are reconstructed from events; 3.21 can supply the complete terminal
+results are reconstructed from events; 3.21 and 3.22 can supply the complete terminal
 JSON. Interrupted and exceptional trials retain a detached prefix of at most 64 events, 1 MiB
 total and 64 KiB per event, including framing bytes. `events_observed` counts
 callbacks delivered to this collector; `events_dropped` counts retention drops.

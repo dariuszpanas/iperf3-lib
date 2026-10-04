@@ -95,13 +95,15 @@ def test_worker_count_termination_is_native_and_bounded(iperf3_server, name, nat
 
 
 @pytest.mark.parametrize("gsro", [False, True])
-def test_worker_udp_controls_have_native_evidence(iperf3_server, gsro):
+@pytest.mark.parametrize("blksize", [256, 1200])
+def test_worker_udp_controls_have_native_evidence(iperf3_server, gsro, blksize):
     """UDP counter/DF settings and version-gated offload configuration run locally."""
+    # 256-byte datagrams exercise the small-payload GSO segment cap fixed in 3.22.
     version = ffi.string(lib.iperf_get_iperf_version()).decode()
     options: dict[str, Any] = {
         "protocol": "udp",
         "address_family": "ipv4",
-        "blksize": 1200,
+        "blksize": blksize,
         "rate": 1_000_000,
         "udp_counters_64bit": True,
         "dont_fragment": True,
@@ -113,9 +115,10 @@ def test_worker_udp_controls_have_native_evidence(iperf3_server, gsro):
             Client(ClientConfig(server=host, port=port, duration=1, **options)).run(timeout=15)
         return
     result = _run(iperf3_server, **options)
-    _receipts(result, {"udp_counters_64bit": True, "dont_fragment": True, "blksize": 1200})
+    _receipts(result, {"udp_counters_64bit": True, "dont_fragment": True, "blksize": blksize})
     start = result.raw["start"]["test_start"]
     assert start["protocol"] == "UDP"
+    assert start["blksize"] == blksize
     assert start["target_bitrate"] == 1_000_000
     if gsro:
         assert start["gso"] == 1 and start["gro"] == 1

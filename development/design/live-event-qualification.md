@@ -27,7 +27,7 @@ not relax saved artifact or IPC decoding.
 
 `scripts/qualify_lifecycle.py` builds and seals one wheel/sdist pair once, then
 qualifies both distributions outside the source checkout on Python 3.12–3.14
-and libiperf 3.19.1/3.21. The live-event cases are added to the existing
+and libiperf 3.19.1/3.22. The live-event cases are added to the existing
 cancellation, transport, plan, resource, and adaptive cases: **49 selected
 cases per distribution**, with setup/call/teardown required to pass. Across
 the twelve installed receipts this is 588 cases and 1764 phases. A selected

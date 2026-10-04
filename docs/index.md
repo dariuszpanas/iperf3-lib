@@ -11,7 +11,7 @@ compare results, and run finite sequential experiments from Python.
 [Get started](getting-started.md){ .md-button .md-button--primary }
 [Read the API](reference/api.md){ .md-button }
 
-<p class="project-facts">Python 3.12–3.14 · Linux tested · libiperf 3.19.1 / 3.21 · MIT license</p>
+<p class="project-facts">Python 3.12–3.14 · Linux tested · libiperf 3.19.1 / 3.22 · MIT license</p>
 
 ## Choose your next step
 

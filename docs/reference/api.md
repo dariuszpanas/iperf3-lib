@@ -80,8 +80,8 @@ Both transport event queues are bounded at 256 events and 8 MiB, with a 1 MiB
 per-event limit. Sequence gaps and the result extension
 `iperf3_lib.event_delivery` record `emitted`, `dropped`, `queue_capacity`,
 `queue_bytes`, and `event_bytes`.
-Result capture is independent of dropped live delivery. Native 3.21 streaming
-enables full final output. On 3.19.1, `raw` is explicitly labelled
+Result capture is independent of dropped live delivery. Streaming on native
+3.21 and 3.22 enables full final output. On 3.19.1, `raw` is explicitly labelled
 `reconstructed_events`, with original event envelopes retained separately;
 reconstruction does not claim fields absent from those native events.
 The reconstruction marker is

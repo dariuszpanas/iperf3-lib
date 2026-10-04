@@ -39,7 +39,7 @@ def test_preview_binds_both_formats_to_one_build_and_explicit_interpreter(
     jobs = preview_workflow["jobs"]
     native = jobs["native"]
     assert native["needs"] == "build"
-    assert native["strategy"]["matrix"] == {"iperf": ["3.19.1", "3.21"]}
+    assert native["strategy"]["matrix"] == {"iperf": ["3.19.1", "3.22"]}
     steps = native["steps"]
     runs = [step["run"] for step in steps if "run" in step]
     combined = "\n".join(runs)

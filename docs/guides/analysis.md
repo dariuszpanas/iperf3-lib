@@ -207,12 +207,12 @@ become unavailable with explicit availability evidence. See the native
 [TCP getter units](https://github.com/esnet/iperf/blob/3.21/src/tcp_info.c#L135-L231)
 and [summary sampling](https://github.com/esnet/iperf/blob/3.21/src/iperf_api.c#L3527-L3634).
 
-Normalization is qualified against Linux output from libiperf 3.19.1 and 3.21.
+Normalization is qualified against Linux output from libiperf 3.19.1, 3.21 and 3.22.
 TCP information belongs to the local socket. Only attributable local sender
 observations are normalized; remote sender entries can contain local receiver
 TCP values or placeholders. Unknown producers, platforms or contradictory sender
 provenance retain raw evidence and explicit uncertainty. The retained fixtures
-cover both versions and both reporting endpoints.
+cover all three versions and both reporting endpoints.
 
 CPU values describe the iperf process, retaining endpoint identity and local/remote
 provenance. Total/user/system percentages can exceed 100% because process CPU

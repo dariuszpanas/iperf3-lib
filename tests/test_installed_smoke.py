@@ -147,12 +147,12 @@ def installed_receipt(monkeypatch):
     return receipt, calls, ports
 
 
-@pytest.mark.parametrize("version", ["3.19.1", "3.21"])
+@pytest.mark.parametrize("version", ["3.19.1", "3.21", "3.22"])
 @pytest.mark.parametrize(
     "profile", ["tcp-forward", "tcp-reverse", "tcp-bidirectional", "udp", "sctp-forward"]
 )
 def test_native_fixture_analysis_transport_and_rate_receipts(version, profile):
-    """Qualify actual recorded measurement units and native setting receipts on both versions."""
+    """Qualify measured units and native setting receipts for every captured producer."""
     result, config = native_result(version, profile)
     analysis = smoke.qualify_analysis(result)
     assert len(analysis["summary"]) == 2 * len(result.flows)
@@ -326,9 +326,9 @@ def test_native_defaults_must_match_admitted_smoke_configuration(key, value):
         smoke.verify_native_provenance(result, config)
 
 
-@pytest.mark.parametrize("version", ["3.19.1", "3.21"])
+@pytest.mark.parametrize("version", ["3.19.1", "3.21", "3.22"])
 def test_native_json_and_abi_version_formats_are_matched_without_rewriting(version):
-    """Both qualified producers retain the iperf prefix absent from the ABI getter."""
+    """Captured producers retain the iperf prefix absent from the ABI getter."""
     result, _ = native_result(version=version)
     assert smoke.native_version_matches(result.execution.native_version, version)
     assert result.execution.native_version == f"iperf {version}"

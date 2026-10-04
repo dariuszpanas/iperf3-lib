@@ -9,6 +9,10 @@ These pages describe `main`. Released versions remain available through
 Upgrading from 0.3.0? Read the [unreleased migration guide](guides/migration-0.4.md)
 for async behavior changes, application customizations, and saved-report readers.
 
+- Move the default/latest libiperf endpoint from 3.21 to 3.22, retaining the
+  3.19.1 minimum and historical native fixtures. Qualify 3.22 result evidence
+  without changing report schemas; the native release includes upstream
+  security and cleanup fixes.
 - Add a separate Python 3.15.0rc3 preview lane with explicit interpreter selection,
   both native endpoints, and retained installed wheel/sdist evidence. Stable
   Python support remains 3.12–3.14 pending final-runtime qualification.

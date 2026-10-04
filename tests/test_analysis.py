@@ -767,7 +767,7 @@ def test_aggregate_intent_cannot_hide_a_wrong_effective_rate(counts):
     assert any(item.code == "comparison.rate_intent_conflict" for item in result.diagnostics)
 
 
-@pytest.mark.parametrize("version", ["3.19.1", "3.21"])
+@pytest.mark.parametrize("version", ["3.19.1", "3.21", "3.22"])
 def test_public_compatibility_on_real_native_client_fixtures(version):
     """Captured native config supplies duration, block size, TOS and endpoint evidence."""
     import json

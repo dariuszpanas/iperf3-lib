@@ -159,3 +159,31 @@ has not been established. Raw values and protocol/version pointers remain as
 evidence. Wrong types are rejected; unrelated negative measurements are rejected.
 Synthetic tests cover additional signed values without claiming they appeared
 in these captures.
+
+## libiperf 3.22 capture expansion
+
+Twenty additional endpoint documents were captured on 2026-10-04 from clean
+source `91879463bcf7be888e1c6c068d9f2f730510812a`, using the unchanged
+`capture.py` above with libiperf 3.22 and CPython 3.14.8 on Linux x86_64. The
+official versioned release archive was verified by the Dockerfile's upstream
+SHA-256 check. The loaded native version getter returned `3.22`; every captured
+document identifies `iperf 3.22`, and no run returned a native error.
+
+The capture image was `iperf3-lib-test:libiperf-322-base`, with Docker-inspected
+image identity
+`sha256:6b63c9d3a54ba7d35c4c3f20176614945397062586eb369804f482fc0b7214f7`.
+The container used `--network none`, one CPU, 256 MiB of memory, and a
+120-second outer deadline. All ten scenarios ran with the same duration,
+parallelism, per-stream rate, UDP block size, and warm-up settings described
+above. Client and server documents are retained separately in `3.22/`.
+The existing forty documents in `3.19.1/` and `3.21/` remain unchanged.
+
+The tagged [3.22 TCP getters](https://github.com/esnet/iperf/blob/3.22/src/tcp_info.c)
+and [SCTP implementation](https://github.com/esnet/iperf/blob/3.22/src/iperf_sctp.c)
+are byte-identical to 3.21. The relevant
+[JSON summary, interval, exchange, and collection functions](https://github.com/esnet/iperf/blob/3.22/src/iperf_api.c)
+and [CPU calculation](https://github.com/esnet/iperf/blob/3.22/src/iperf_util.c)
+are also unchanged. Consequently the qualified Linux TCP/CPU units and SCTP
+retransmission-unavailability rules above also apply to 3.22. Regression tests
+compare the new native values and evidence pointers directly, while retaining
+coverage for both earlier producers and unknown-version/platform handling.

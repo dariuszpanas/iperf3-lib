@@ -318,7 +318,7 @@ def result_from_iperf_json(
             # placeholders, exchanged -1 sentinels, and uninitialized interval data.
             if isinstance(value, bool) or not isinstance(value, int):
                 raise ValueError("iperf JSON SCTP retransmits must be an integer")
-            known_unsupported = start.get("version") in ("iperf 3.19.1", "iperf 3.21")
+            known_unsupported = start.get("version") in ("iperf 3.19.1", "iperf 3.21", "iperf 3.22")
             state = "unsupported" if known_unsupported else "unknown"
             path = f"{canonical_path}/retransmits"
             evidence = [
@@ -401,7 +401,7 @@ def result_from_iperf_json(
 
     has_end_measurements = False
     qualified_native = (
-        start.get("version") in ("iperf 3.19.1", "iperf 3.21")
+        start.get("version") in ("iperf 3.19.1", "iperf 3.21", "iperf 3.22")
         and isinstance(start.get("system_info"), str)
         and start["system_info"].startswith("Linux ")
     )
@@ -457,7 +457,7 @@ def result_from_iperf_json(
             if value == -1:
                 state = (
                     "unsupported"
-                    if start.get("version") in ("iperf 3.19.1", "iperf 3.21")
+                    if start.get("version") in ("iperf 3.19.1", "iperf 3.21", "iperf 3.22")
                     else "unknown"
                 )
                 path = f"{canonical_path}/tcp/{field_name}"

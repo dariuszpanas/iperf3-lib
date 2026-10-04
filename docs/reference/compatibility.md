@@ -5,7 +5,7 @@
 | Component | Project coverage |
 | --- | --- |
 | Python | 3.12, 3.13, 3.14. |
-| libiperf | 3.19.1 minimum; 3.21 default. CI tests both endpoints. |
+| libiperf | 3.19.1 minimum; 3.22 default. CI tests both endpoints. |
 | Operating system | Linux. |
 | Protocols | TCP, UDP, SCTP; SCTP also requires operating-system and native-library support. |
 
@@ -72,7 +72,7 @@ Native 3.21 adds GSRO and server maximum-duration controls absent from 3.19.1.
 
 ## Authentication compatibility
 
-Use libiperf 3.21 for authenticated benchmarks. The tested 3.19.1/OpenSSL 3.5.7
+Use libiperf 3.22 for authenticated benchmarks. The tested 3.19.1/OpenSSL 3.5.7
 combination rejects valid credentials with an authentication failure and
 `output buffer too small`. The failure also occurs with the upstream CLI.
 
@@ -83,11 +83,17 @@ initializes that length to the allocated buffer size. Treat authenticated
 operation with that 3.19.1/OpenSSL build as a known native limitation.
 Other native builds may differ.
 
+The [3.22 release](https://github.com/esnet/iperf/releases/tag/3.22) also fixes
+server use-after-free, authentication memory errors, invalid test parameters,
+and a UDP loop condition. It is the current recommended native release;
+retaining 3.19.1 in CI preserves minimum-version compatibility. Installing or
+upgrading the Python package does not apply these native fixes.
+
 The wrapper preserves native authentication access and a failed `Result`;
 it does not reject every 3.19.1 build or replace the native cryptographic
 implementation.
-Client `use_pkcs1_padding=True` is rejected with 3.21 because that native flag
-is server-only; leave it at its default for a 3.21 client.
+Client `use_pkcs1_padding=True` is rejected with 3.21+ because that native flag
+is server-only; leave it at its default for a 3.22 client.
 
 ## Troubleshooting
 

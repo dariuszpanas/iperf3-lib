@@ -429,7 +429,7 @@ def test_multiple_explicit_confirmations_are_bounded_and_retained():
     assert len(result.summaries[-1].observations) == 6
 
 
-@pytest.mark.parametrize("version", ["3.19.1", "3.21"])
+@pytest.mark.parametrize("version", ["3.19.1", "3.21", "3.22"])
 @pytest.mark.parametrize("reverse", [False, True])
 def test_real_udp_fixture_extraction_preserves_separate_endpoint_measurements(version, reverse):
     """Normalized archived native observations remain usable without a live library."""

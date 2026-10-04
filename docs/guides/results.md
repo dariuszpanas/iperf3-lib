@@ -9,7 +9,7 @@ covers a subset of native output; preserve `raw` when you need measurements
 outside that subset.
 
 Ordinary JSON capture preserves the parsed native document. Streaming capture
-requests full final JSON on libiperf 3.21. On 3.19.1, the worker reconstructs
+requests full final JSON on libiperf 3.21 and 3.22. On 3.19.1, the worker reconstructs
 `raw` from native event envelopes and records
 `result.extensions["iperf3_lib.native_json"]` with
 `representation="reconstructed_events"` and the original `events` list.

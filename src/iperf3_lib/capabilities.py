@@ -74,7 +74,7 @@ class CapabilityReport:
     current_python: str
     tested_platforms: tuple[str, ...] = ("Linux",)
     tested_python_versions: tuple[str, ...] = ("3.12", "3.13", "3.14")
-    tested_native_versions: tuple[str, ...] = ("3.19.1", "3.21")
+    tested_native_versions: tuple[str, ...] = ("3.19.1", "3.22")
 
 
 _FEATURES: tuple[
@@ -132,7 +132,7 @@ _FEATURES: tuple[
         "supported",
         ("iperf_set_test_json_stream", "iperf_set_test_json_stream_full_output"),
         (
-            "Bounded NativeEvent delivery; 3.21 retains full JSON, earlier versions label reconstruction from events.",
+            "Bounded NativeEvent delivery; 3.21 and 3.22 retain full JSON, earlier versions label reconstruction from events.",
         ),
     ),
     (
@@ -213,13 +213,15 @@ _FEATURES: tuple[
         "server_policies",
         "supported",
         ("iperf_parse_arguments",),
-        ("ServerConfig policies use isolated parsing; max duration requires libiperf 3.21.",),
+        (
+            "ServerConfig policies use isolated parsing; max duration requires libiperf 3.21 or newer.",
+        ),
     ),
     (
         "gsro",
         "supported",
         ("iperf_parse_arguments",),
-        ("UDP-only, libiperf 3.21 and native build/kernel support required.",),
+        ("UDP-only, libiperf 3.21 or newer and native build/kernel support required.",),
     ),
     (
         "isolated_execution",

@@ -123,7 +123,7 @@ interpolation and physical network capacity remain unmeasured.
 Exercise non-monotonic curves, sender under-delivery, missing/zero packet
 counts, partial failures, exact threshold boundaries, integer-grid exhaustion,
 and all admission limits with controlled observations. Then qualify bounded
-native mechanics on libiperf 3.19.1 and 3.21 and a controlled impaired link
+native mechanics on libiperf 3.19.1 and 3.22 and a controlled impaired link
 with recorded rate/loss settings. Clean loopback alone cannot validate the
 loss-threshold algorithm. Explicit finite sweeps remain the published 0.3.0
 mechanism; adaptive UDP remains unreleased until separately selected and qualified.
@@ -158,7 +158,7 @@ The [native observation report](native-event-observations.md) shows that
 streaming mode. That endpoint reconstructs from bounded retained envelopes;
 missing or malformed input makes a reconstructed result unsuccessful and
 incomplete even when an end fragment exists. An original native error remains
-a failure. On 3.21, an independently retained valid complete document can
+a failure. On 3.21 and 3.22, an independently retained valid complete document can
 recover final evidence despite lost progress. Combined serialized evidence
 counts against the retention allowance. Neither representation changes the
 existing result artifact schema or `iperf3_lib.native_json` extension shape.

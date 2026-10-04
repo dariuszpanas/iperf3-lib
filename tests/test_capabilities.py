@@ -56,7 +56,7 @@ def test_import_and_offline_report_do_not_load_native(monkeypatch):
     assert native.lookups == []
     assert report.library.state == "unprobed"
     assert report.execution.status == "not_provided"
-    assert report.tested_native_versions == ("3.19.1", "3.21")
+    assert report.tested_native_versions == ("3.19.1", "3.22")
     assert report.tested_platforms == ("Linux",)
     assert all(feature.runtime == "not_run" for feature in report.features)
     assert all(

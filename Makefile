@@ -2,7 +2,7 @@
 
 UV ?= uv
 PYTHON_BASE ?= python:3.12-slim
-IPERF3_VERSION ?= 3.21
+IPERF3_VERSION ?= 3.22
 DOCKER_IMAGE ?= iperf3-lib-test:local
 REVISION ?= HEAD
 RANGE ?= origin/main...HEAD

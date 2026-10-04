@@ -6,7 +6,7 @@ FROM ${PYTHON_BASE}
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG IPERF3_VERSION=3.21
+ARG IPERF3_VERSION=3.22
 
 # Build libiperf from an official release. libsctp-dev enables SCTP support.
 RUN apt-get update \

@@ -89,7 +89,7 @@ def record_runtime(revision: str, native: str, lock: Path) -> dict:
     """Capture actual runtime evidence only after checking the exact candidate."""
     if re.fullmatch(r"[0-9a-f]{40}", revision) is None:
         raise ValueError("source revision must be a full lowercase Git SHA")
-    if native not in {"3.19.1", "3.21"}:
+    if native not in {"3.19.1", "3.22"}:
         raise ValueError("preview requires a supported native endpoint")
     runtime = _runtime()
     check_runtime(runtime)
@@ -117,7 +117,7 @@ def main(argv: list[str] | None = None) -> int:
     """Write provenance for a verified preview runtime, or fail before native tests."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--revision", required=True)
-    parser.add_argument("--native", required=True, choices=("3.19.1", "3.21"))
+    parser.add_argument("--native", required=True, choices=("3.19.1", "3.22"))
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     try:

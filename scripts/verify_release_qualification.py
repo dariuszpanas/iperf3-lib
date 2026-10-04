@@ -17,7 +17,7 @@ from scripts.smoke_release import validate_smoke_receipt
 from scripts.validate_release import project_version
 
 PYTHON_VERSIONS = ("3.12", "3.13", "3.14")
-NATIVE_VERSIONS = ("3.19.1", "3.21")
+NATIVE_VERSIONS = ("3.19.1", "3.22")
 DISTRIBUTION_KINDS = ("wheel", "sdist")
 EXPECTED_MATRIX = tuple(
     (python, native) for python in PYTHON_VERSIONS for native in NATIVE_VERSIONS
