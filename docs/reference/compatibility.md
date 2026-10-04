@@ -13,10 +13,17 @@ The package declares Python `>=3.12`; the versions listed above are the
 current tested matrix. macOS and FreeBSD are unverified by this project.
 Windows DLL loading is best-effort and has no native CI coverage.
 
-Python 3.15.0rc3 has a separate preview workflow against both native endpoints.
-Preview receipts record the actual candidate interpreter and installed artifacts;
-they do not extend the stable support matrix above. Final Python 3.15 support
-and the planned 0.4.0 release require fresh qualification on the final runtime.
+Package metadata declares **Python 3.15 readiness** based on successful
+standard-GIL Python 3.15.0rc3 qualification against both native endpoints,
+including installed wheel and sdist checks. The package uses one `py3-none-any`
+wheel across Python versions; `Requires-Python: >=3.12` already permits 3.15.
+The classifier records readiness for PyPI discovery; runtime compatibility also
+depends on CFFI and the native library.
+
+The separate RC3 preview workflow retains the actual interpreter and artifact
+evidence. Stable CI and release qualification remain on Python 3.12–3.14 until
+the final Python 3.15 interpreter and official Docker image are available.
+Final-runtime qualification for the planned 0.4.0 release will follow then.
 
 Installing the Python package does not install or upgrade libiperf. Follow the
 [upstream iperf releases](https://github.com/esnet/iperf/releases) for native
