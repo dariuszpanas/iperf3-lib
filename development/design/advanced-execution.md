@@ -8,11 +8,12 @@ by implementation or by the historical native-event probe alone. The [roadmap](.
 [release-scope issue #26](https://github.com/dariuszpanas/iperf3-lib/issues/26)
 track the overall release decision.
 
-The experiment layer uses finite, sequential trials and explicit parameter
-sweeps. Basic clients retain the direct CFFI path; expanded controls and explicit
-worker requests use isolated Python/CFFI execution. The proposals below retain
-their broader qualification requirements. Their issues remain open until the
-individual criteria have evidence.
+The experiment layer retains finite sequential trials and parameter sweeps,
+with separate owned async plans and opt-in bounded concurrent execution. Basic
+clients retain the direct CFFI path; expanded controls and explicit worker
+requests use isolated Python/CFFI execution. The proposals below retain their
+qualification requirements. Their issues remain open until the individual
+criteria have evidence; implementation and collected tests alone are insufficient.
 
 | Proposal | Decision | Evidence needed for complete qualification |
 | --- | --- | --- |
@@ -30,8 +31,10 @@ impairment, stress, and cancellation have **not** been qualified by that probe.
 `Client.run()` returns a complete result, including when a worker delivers live
 events. Async methods now always use isolated workers and propagate cancellation
 after worker cleanup. An active callback must return before the await completes;
-unconfirmed cleanup raises `IperfCleanupError`. This post-0.3.0 change does not
-establish plan cancellation or retained partial artifacts. Linux workers now
+unconfirmed cleanup raises `IperfCleanupError`. Owned async plans also retain
+completed artifacts and bounded diagnostic partial events after cancellation;
+partial events are not complete native artifacts. Sequential histories use
+schema 2 and concurrent reservation histories use schema 3. Linux workers now
 install a parent-death signal before native execution; see the
 [worker lifetime contract](../../docs/guides/running-tests.md#worker-lifetime-on-linux)
 for bootstrap, creating-thread and descendant boundaries.
@@ -210,14 +213,45 @@ one native operation at a time. Applications must also account for contention
 at the destination server. Concurrent measurements change the experiment;
 their comparability with sequential baselines requires an explicit policy.
 
+The concurrent API requires a positive worker limit and a finite aggregate
+target-rate cap across all streams and directions. Reservations cover queueing,
+startup, traffic and cleanup. Canonical endpoint exclusions and caller resource
+keys serialize conflicts; per-cell dependencies preserve warm-up/repetition order.
+The cap concerns admitted targets, not observed wire traffic or independent
+invocations. Unlimited rates, fixed client ports and nonzero concurrent pauses
+are explicitly rejected in this contract.
+
+The [comparison methodology](../../docs/guides/concurrent-plans.md#compare-experiments-with-a-declared-contention-policy)
+uses descriptive analysis by default. Applications making an inference must
+retain a declared cohort/contention method, matched concurrent baseline and
+measured overlap evidence. Native-setting compatibility alone does not establish
+matching peer traffic; unknown contention makes the comparison inconclusive.
+Existing v1 assessment/sweep consumers reject v2/v3 execution histories.
+
 ### Deadlines, cancellation, and cleanup
 
 Use monotonic parent deadlines covering startup, connection, transfer, IPC,
-and shutdown. Soft shutdown stops new admissions and requests orderly
-completion; no arbitrary in-flight libiperf cancellation hook is qualified.
-After a grace period, terminate, then kill if necessary, and reap the owned
-worker. Once forced termination starts, a late success frame cannot replace
-the parent's terminal decision.
+and shutdown. The chosen shutdown contract has **zero natural-completion grace**
+for cancellation, deadline expiry and unconfirmed cleanup. It requests cancellation
+of all owned children, then each process owner sends TERM, waits up to two seconds,
+and escalates to KILL within a four-second cleanup-attempt budget. Repeated
+cancellation cannot shorten cleanup. No arbitrary in-flight libiperf cancellation
+hook is qualified. Once forced termination starts, a late success frame cannot
+replace the parent's terminal decision.
+
+`stop_on_error` and the elapsed admission budget are admission-only decisions,
+not shutdown requests: new trials stop, while admitted workers finish naturally.
+The optional overall timeout remains active during this drain and forces shutdown
+when reached. Without that timeout, a stalled native call can prolong the drain
+indefinitely. This distinction preserves sequential admission semantics without
+silently treating a between-trial budget as cancellation. The current contract
+does not expose a configurable nonzero natural-completion grace period.
+
+Cleanup budgets do not bound Python return in the presence of process-creation
+delays, active application callbacks or unconfirmed reaping. Cleanup failures
+retain original owners and take outward precedence. Concurrent reports retain
+both the first admission-stop decision and the first hard-termination decision,
+including a hard deadline that occurs after an admission-only stop.
 
 Forced termination produces an incomplete execution outcome with preserved
 available evidence. It cannot fabricate a native summary or an exactly-once
@@ -253,6 +287,8 @@ Test startup/import/native-load failure, malformed/oversized frames, crashes
 before and after allocation, stalled connection/run, user cancellation,
 deadline races, parent death, truncated output, saturation, repeated workers,
 and worker/traffic admission limits. Measure worker/socket/orphan cleanup.
+The [qualification map](isolated-execution-qualification.md) defines the required
+contract evidence, repeated resource inventories and exact-candidate audit.
 Qualify installed wheels and sdists across Python 3.12–3.14 and both native
 endpoints. This proposal keeps Python/CFFI as the execution backend; it does
 not use the iperf3 CLI to execute application benchmarks.

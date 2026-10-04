@@ -6,6 +6,11 @@ These pages describe `main`. Released versions remain available through
 
 ## Unreleased
 
+- Add opt-in bounded concurrent plans with worker and aggregate target-rate
+  admission limits, endpoint and caller-resource exclusion, per-cell ordering,
+  and cleanup-safe multi-worker cancellation. Standalone schema-v3 reports retain
+  reservation and overlap histories. This mode requires zero pauses and rejects
+  fixed client ports; sequential APIs and v1/v2 reports remain unchanged.
 - Add owned sequential `arun_plan` execution with an overall deadline, cleanup-safe
   cancellation, retained completed artifacts, bounded interrupted-trial events
   and explicit unstarted records. Add strict standalone plan-execution-v2 JSON,

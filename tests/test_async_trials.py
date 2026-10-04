@@ -80,20 +80,45 @@ async def no_loop_errors():
 @pytest.mark.asyncio
 async def test_async_plan_runs_warmup_then_repetitions_without_overlap(monkeypatch, client_type):
     """Each native child task completes before the next trial is admitted."""
+    from iperf3_lib import async_trials
+
     children = []
     active = 0
+    clock = [0.0]
+    positions = []
+    pauses = []
+    real_sleep = asyncio.sleep
+
+    async def sleep(seconds):
+        if seconds > 0:
+            assert active == 0
+            assert children[-1].done()
+            positions.append(("pause", len(children)))
+            pauses.append(seconds)
+        await real_sleep(0)
+        if seconds > 0:
+            clock[0] += seconds
 
     async def execute(self, **kwargs):
         nonlocal active
         active += 1
         assert active == 1
         children.append(asyncio.current_task())
-        await asyncio.sleep(0)
+        positions.append(("start", len(children)))
+        await real_sleep(0)
         active -= 1
+        positions.append(("finish", len(children)))
         return _completed()
 
-    monkeypatch.setattr(client_type, "arun", execute)
-    result = await _run(_plan(repetitions=2, warmup_runs=1, pause_seconds=0.001))
+    with monkeypatch.context() as scoped:
+        scoped.setattr(client_type, "arun", execute)
+        scoped.setattr(
+            async_trials,
+            "time",
+            SimpleNamespace(time=async_trials.time.time, monotonic=lambda: clock[0]),
+        )
+        scoped.setattr(async_trials.asyncio, "sleep", sleep)
+        result = await _run(_plan(repetitions=2, warmup_runs=1, pause_seconds=0.001))
     assert result.execution_success
     assert result.cleanup_confirmed
     assert [record.spec.phase for record in result.trials] == ["warmup", "measured", "measured"]
@@ -101,11 +126,19 @@ async def test_async_plan_runs_warmup_then_repetitions_without_overlap(monkeypat
     assert all(record.artifact is not None for record in result.trials)
     assert len(set(children)) == 3
     assert all(task.done() for task in children)
-    assert result.observed_pause_seconds > 0
-    assert (
-        sum(record.elapsed_seconds for record in result.trials) + result.observed_pause_seconds
-        <= result.elapsed_seconds + 0.001
-    )
+    assert positions == [
+        ("start", 1),
+        ("finish", 1),
+        ("pause", 1),
+        ("start", 2),
+        ("finish", 2),
+        ("pause", 2),
+        ("start", 3),
+        ("finish", 3),
+    ]
+    assert pauses == [0.001, 0.001]
+    assert result.observed_pause_seconds == result.elapsed_seconds == sum(pauses)
+    assert [record.elapsed_seconds for record in result.trials] == [0.0] * 3
 
 
 @pytest.mark.asyncio
