@@ -812,7 +812,7 @@ def test_terminal_zero_counts_are_valid_measurement_evidence(field):
     assert result.execution is not None and result.execution.status == "completed"
 
 
-@pytest.mark.parametrize("version", ["iperf 3.19.1", "iperf 3.21"])
+@pytest.mark.parametrize("version", ["iperf 3.19.1", "iperf 3.21", "iperf 3.22"])
 @pytest.mark.parametrize("value", [-2, -1, 0, 3684054920433006592])
 def test_verified_sctp_retransmissions_are_unsupported_with_explicit_evidence(version, value):
     """Keep native sentinel, zero and uninitialized SCTP values solely in raw evidence."""
@@ -850,13 +850,14 @@ def test_verified_sctp_retransmissions_are_unsupported_with_explicit_evidence(ve
         )
 
 
+@pytest.mark.parametrize("version", ["iperf 3.19.1", "iperf 3.21", "iperf 3.22"])
 @pytest.mark.parametrize(
-    ("version", "protocol", "value"),
+    ("protocol", "value"),
     [
-        ("iperf 3.21", "SCTP", True),
-        ("iperf 3.21", "SCTP", 0.0),
-        ("iperf 3.21", "SCTP", float("inf")),
-        ("iperf 3.21", "TCP", -1),
+        ("SCTP", True),
+        ("SCTP", 0.0),
+        ("SCTP", float("inf")),
+        ("TCP", -1),
     ],
 )
 def test_sctp_unsupported_rule_does_not_accept_unrelated_invalid_values(version, protocol, value):
@@ -870,11 +871,12 @@ def test_sctp_unsupported_rule_does_not_accept_unrelated_invalid_values(version,
         )
 
 
-def test_unsupported_retransmissions_alone_do_not_establish_completed_execution():
+@pytest.mark.parametrize("version", ["iperf 3.19.1", "iperf 3.21", "iperf 3.22"])
+def test_unsupported_retransmissions_alone_do_not_establish_completed_execution(version):
     """An emitted unsupported field supplies no terminal measurement evidence."""
     result = result_from_iperf_json(
         {
-            "start": {"version": "iperf 3.21", "test_start": {"protocol": "SCTP"}},
+            "start": {"version": version, "test_start": {"protocol": "SCTP"}},
             "end": {"sum_sent": {"retransmits": 0, "seconds": 1}},
         }
     )
@@ -883,7 +885,7 @@ def test_unsupported_retransmissions_alone_do_not_establish_completed_execution(
     assert result.execution is not None and result.execution.status == "incomplete"
 
 
-@pytest.mark.parametrize("version", [None, "iperf unknown", "iperf 3.22"])
+@pytest.mark.parametrize("version", [None, "iperf unknown", "iperf 99.0"])
 @pytest.mark.parametrize("value", [-2, 0, 7])
 def test_unqualified_sctp_producer_keeps_retransmission_availability_unknown(version, value):
     """An unqualified producer cannot establish retransmission support or a real measurement."""

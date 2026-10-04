@@ -142,7 +142,7 @@ guarantee achieved rates or hard wire-traffic ceilings.
 
 `dont_fragment` applies to IPv4 UDP; automatic family selection becomes IPv4 and
 explicit IPv6 is rejected. `gsro=True` requests UDP GSO/GRO and requires
-libiperf 3.21; do not assume that both peers or their kernels can use offload.
+libiperf 3.21+; do not assume that both peers or their kernels can use offload.
 Keep offload and payload settings consistent when comparing trials.
 
 For numeric DSCP with zero ECN bits, convert explicitly:
@@ -209,8 +209,8 @@ callbacks short; sequence gaps and
 `result.extensions["iperf3_lib.event_delivery"]` report delivery loss through
 `emitted`, `dropped`, `queue_capacity`, `queue_bytes`, and `event_bytes`.
 A complete result remains the basis
-for artifacts and final analysis; callbacks do not replace it. Native 3.21
-streaming also enables its full-output facility. Native 3.19.1 has no such
+for artifacts and final analysis; callbacks do not replace it. Streaming on
+native 3.21 and 3.22 also enables the full-output facility. Native 3.19.1 has no such
 facility: the wrapper explicitly labels `raw` as `reconstructed_events` and
 retains the original event envelopes. Fields absent from those envelopes cannot
 be represented as a complete original native document.
@@ -222,7 +222,8 @@ Full native-document capture needs no reconstruction extension. Native capture
 and retained reconstruction have separate bounds and quality metadata under
 `iperf3_lib.event_capture`. Lost delivery of already captured progress does not
 invalidate a complete result. Lost reconstruction input on 3.19.1 makes the
-result incomplete; a valid independent 3.21 document can recover final evidence.
+result incomplete; a valid independent 3.21 or 3.22 document can recover final
+evidence.
 See [capture quality](live-events.md#slow-consumers-and-capture-quality).
 
 The private worker protocol limits each request or result frame to 16 MiB of
@@ -291,11 +292,11 @@ and are not included in artifacts; username and key path remain request
 metadata, while key contents are absent. Do not put reusable credentials in
 `extra_data`, artifact extensions, labels or event handlers. See the complete
 [configuration contract](../reference/configuration.md) before enabling it.
-Client `use_pkcs1_padding=True` is rejected with libiperf 3.21, whose legacy
+Client `use_pkcs1_padding=True` is rejected with libiperf 3.21+, whose legacy
 padding flag is server-only. The flag is accepted for clients with libiperf
 3.19.1; matching authentication support is still required at both endpoints.
 The tested 3.19.1/OpenSSL 3 build fails authentication even with valid
-credentials because of an upstream encryption bug. Use the qualified 3.21
+credentials because of an upstream encryption bug. Use the qualified 3.22
 build for authenticated benchmarks; see the
 [native authentication limitation](../reference/compatibility.md#authentication-compatibility)
 for the reproduced behavior and build-specific scope.

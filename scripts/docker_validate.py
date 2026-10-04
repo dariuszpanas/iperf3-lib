@@ -427,7 +427,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--staging-root", type=Path)
     parser.add_argument("--image", default="iperf3-lib-test:local")
     parser.add_argument("--python-base", default="python:3.12-slim")
-    parser.add_argument("--iperf-version", default="3.21")
+    parser.add_argument("--iperf-version", default="3.22")
     parser.add_argument("--dockerfile", default="Dockerfile")
     parser.add_argument("--build-arg", action="append", default=[])
     try:

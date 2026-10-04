@@ -1,7 +1,7 @@
 # Native option coverage
 
 This reference maps the option names accepted by the tagged **iperf3 3.19.1**
-and **3.21** command-line parsers to the Python API. Use it alongside the
+and **3.22** command-line parsers to the Python API. Use it alongside the
 [configuration reference](configuration.md) and [native-control recipes](../guides/native-controls.md).
 It includes deprecated aliases and options enabled only in particular native
 builds. Parser presence is not a claim that an operating system can apply an option.
@@ -21,8 +21,8 @@ network behavior are different evidence. See
 [capability reporting](../guides/configuration-intent.md#inspect-capability-evidence)
 and [execution limits](compatibility.md#feature-boundaries).
 
-The tables account for **70 long-option names in 3.19.1 and 73 in 3.21**.
-The three additional names are marked **3.21**. Short aliases are shown where
+The tables account for **70 long-option names in 3.19.1 and 73 in 3.21 and 3.22**.
+The three additional names are marked **3.21+**. Short aliases are shown where
 defined. This inventory follows the tagged parser, help, and headers rather
 than assuming that the manual lists every option.
 
@@ -83,7 +83,7 @@ Native CLI suffix parsing is not the Python configuration contract.
 | `-L`, `--flowlabel` | `flow_label` with `address_family="ipv6"` | TCP only; native/platform-dependent IPv6 flow label. |
 | `--udp-counters-64bit` | `udp_counters_64bit=True` | UDP only; both peers must support the packet format. |
 | `--dont-fragment` | `dont_fragment=True` | IPv4 UDP; not a general path-MTU discovery API. |
-| `--gsro` **3.21** | `gsro=True` | UDP GSO/GRO request; peer and operating-system support still apply. |
+| `--gsro` **3.21+** | `gsro=True` | UDP GSO/GRO request; peer and operating-system support still apply. |
 | `-Z`, `--zerocopy` | `zerocopy=True` | TCP only; native zero-copy send path where available. |
 | `--skip-rx-copy` | `skip_rx_copy=True` | TCP/UDP receive-copy avoidance where the native build supports it; rejected for SCTP. |
 | `-F`, `--file` | `payload_file` | Local source/sink file according to role and traffic direction; not a file-transfer integrity facility. |
@@ -103,13 +103,13 @@ Native CLI suffix parsing is not the Python configuration contract.
 | `-1`, `--one-off` | `Server.run_once()` | One server result; a persistent Python loop is a separate API. |
 | `--idle-timeout` | `ServerConfig.idle_timeout_seconds` | Distinguish waiting for a client from the whole-session worker timeout. |
 | `--server-bitrate-limit` | `ServerConfig.bitrate_limit_bps`, `bitrate_limit_interval_seconds` | Native aggregate-rate rejection/measurement policy, distinct from a client pacing target. |
-| `--server-max-duration` **3.21** | `ServerConfig.max_duration_seconds` | Server admission policy; not a substitute for worker cleanup on timeout. |
+| `--server-max-duration` **3.21+** | `ServerConfig.max_duration_seconds` | Server admission policy; not a substitute for worker cleanup on timeout. |
 | `--username` | Client `username` | Used with explicit authentication configuration. |
 | `--rsa-public-key-path` | Client `rsa_public_key_path` | Requires a native authentication build and a matching server key. |
 | `--rsa-private-key-path` | `ServerConfig.rsa_private_key_path` | Server authentication; do not put private-key contents in result metadata. |
 | `--authorized-users-path` | `ServerConfig.authorized_users_path` | Native-format credentials file. |
 | `--time-skew-threshold` | `ServerConfig.time_skew_threshold_seconds` | Permitted client/server clock difference. |
-| `--use-pkcs1-padding` | `use_pkcs1_padding` | Explicit legacy authentication compatibility. Client use is rejected with libiperf 3.21, where the flag is server-only. |
+| `--use-pkcs1-padding` | `use_pkcs1_padding` | Explicit legacy authentication compatibility. Client use is rejected with libiperf 3.21+, where the flag is server-only. |
 
 The server field names and complete validation contract are listed in
 [Server configuration](configuration.md#server-configuration).
@@ -122,7 +122,7 @@ The server field names and complete validation contract are listed in
 | `--get-server-output` | `get_server_output=True` | Preserve remote output in native JSON; the server determines its format. |
 | `--extra-data` | `extra_data` | Native JSON metadata. Application artifact metadata belongs separately in namespaced `result.extensions`. |
 | `--json-stream` | `json_stream=True`; `Client.run(on_event=...)` | Typed parent-side event delivery from an isolated worker; see the [execution guide](../guides/native-controls.md#observe-events-and-bound-a-run). |
-| `--json-stream-full-output` **3.21** | Worker result-capture implementation | Enabled internally for streaming on 3.21. On 3.19.1, the result is explicitly reconstructed from retained native event envelopes. |
+| `--json-stream-full-output` **3.21+** | Worker result-capture implementation | Enabled internally for streaming on 3.21+. On 3.19.1, the result is explicitly reconstructed from retained native event envelopes. |
 | `-T`, `--title` | `title` | Native output title; not an artifact identifier or metric label policy. |
 | `-f`, `--format` | Format numeric Python results in the application | Measurement units stay explicit; no CLI display-unit passthrough. |
 | `-V`, `--verbose` | Inspect retained native JSON and diagnostics | No CLI verbosity passthrough. |
@@ -157,10 +157,14 @@ Authoritative inventories:
   [help](https://github.com/esnet/iperf/blob/3.21/src/iperf_locale.c),
   [public header](https://github.com/esnet/iperf/blob/3.21/src/iperf_api.h),
   [manual](https://github.com/esnet/iperf/blob/3.21/src/iperf3.1).
+- [3.22 parser](https://github.com/esnet/iperf/blob/3.22/src/iperf_api.c),
+  [help](https://github.com/esnet/iperf/blob/3.22/src/iperf_locale.c),
+  [public header](https://github.com/esnet/iperf/blob/3.22/src/iperf_api.h),
+  [manual](https://github.com/esnet/iperf/blob/3.22/src/iperf3.1).
 
 Protocol restrictions also follow the actual
 [TCP](https://github.com/esnet/iperf/blob/3.21/src/iperf_tcp.c),
 [UDP](https://github.com/esnet/iperf/blob/3.21/src/iperf_udp.c), and
 [SCTP](https://github.com/esnet/iperf/blob/3.21/src/iperf_sctp.c)
-implementations, with the corresponding 3.19.1 implementations checked too.
+implementations, with the corresponding 3.19.1 and 3.22 implementations checked too.
 A stored option does not establish that a protocol uses it.

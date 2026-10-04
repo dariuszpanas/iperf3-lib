@@ -28,6 +28,7 @@ def _live_receipt_json(case, *, native_version="iperf 3.21"):
     """Build coherent synthetic ownership around retained native shape fixtures."""
     producer = {**PRODUCER, "native_version": native_version}
     version = native_version.removeprefix("iperf ")
+    full_output = version in {"3.21", "3.22"}
     mode = (
         "native-error"
         if case == "native-error"
@@ -66,13 +67,13 @@ def _live_receipt_json(case, *, native_version="iperf 3.21"):
         result.extensions["iperf3_lib.worker"] = worker
         capture = {
             "schema_version": 1,
-            "callbacks": len(raw.get("intervals", [])) + 2 + (version == "3.21"),
-            "copied": len(raw.get("intervals", [])) + 2 + (version == "3.21"),
+            "callbacks": len(raw.get("intervals", [])) + 2 + full_output,
+            "copied": len(raw.get("intervals", [])) + 2 + full_output,
             "capture_dropped": 0,
             "malformed": 0,
             "retention_dropped": 0,
-            "complete_document": version == "3.21",
-            "complete_document_source": "callback" if version == "3.21" else None,
+            "complete_document": full_output,
+            "complete_document_source": "callback" if full_output else None,
             "getter_error": None,
             "diagnostics": [],
             "reconstruction_complete": True,
@@ -114,7 +115,7 @@ def _live_receipt_json(case, *, native_version="iperf 3.21"):
         payloads += [("interval", value) for value in raw.get("intervals", [])]
         payloads += [("native_error", raw["error"])] if "error" in raw else []
         payloads += [("native_end", raw.get("end", {}))]
-        if version == "3.21":
+        if full_output:
             payloads += [("native_document", raw)]
         cancelled = not reuse and case == f"close-{role}"
         if cancelled:
@@ -237,7 +238,7 @@ def check(receipt):
 
 
 @pytest.mark.parametrize("case", qualification.LIVE_EVENT_CASES)
-@pytest.mark.parametrize("version", ["iperf 3.19.1", "iperf 3.21"])
+@pytest.mark.parametrize("version", ["iperf 3.19.1", "iperf 3.21", "iperf 3.22"])
 def test_native_event_receipts_cover_every_mode_role_and_representation(case, version):
     """Both native representations must preserve actual shape and ownership evidence."""
     check(live_receipt(case, native_version=version))

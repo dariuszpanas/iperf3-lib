@@ -17,7 +17,9 @@ results to Prometheus.
 
 Follow the [installation and first-run guide](https://dariuszpanas.github.io/iperf3-lib/getting-started.html)
 to install the Python package and native library, start a server, and run a
-benchmark. The Python package does not bundle libiperf.
+benchmark. The Python package does not bundle libiperf. Current native
+qualification covers libiperf **3.19.1** and **3.22** on Linux; see the
+[compatibility reference](https://dariuszpanas.github.io/iperf3-lib/reference/compatibility.html).
 
 Documentation follows `main`. The installation guide explains how to choose
 between a published package and a source revision; consult the

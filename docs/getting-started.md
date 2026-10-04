@@ -46,7 +46,7 @@ Contributors should use the repository's development environment instead; see
 
 The package requires Python 3.12 or newer and does not bundle `libiperf`.
 Linux with Python 3.12–3.14 is covered by this project's CI. The native version
-matrix covers libiperf 3.19.1 and 3.21; see the
+matrix covers libiperf 3.19.1 and 3.22; see the
 [compatibility reference](reference/compatibility.md).
 
 Install a supported iperf3 version using your operating system's packages or

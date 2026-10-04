@@ -29,7 +29,7 @@ gh workflow run python-preview.yml --ref main
 
 The workflow runs non-native checks before native integration, then the existing
 installed lifecycle and smoke harnesses on one sealed wheel/sdist pair. Both
-libiperf 3.19.1 and 3.21 must pass. Download `python-preview-distributions` and
+libiperf 3.19.1 and 3.22 must pass. Download `python-preview-distributions` and
 both `python-preview-rc3-iperf*` artifacts, together with job logs, for a durable
 record. Expect **four lifecycle receipts, 196 selected cases and 588 passed
 phases**, plus **four smoke receipts**. Runtime JSON and image inspection retain
@@ -80,7 +80,7 @@ A successful rehearsal contains:
   `release-evidence/lifecycle-manifest.json` seals the same distributions,
   package contents and qualification harness; both manifest hashes come from
   the build job.
-- The full Python 3.12–3.14 × libiperf 3.19.1/3.21 native matrix, including
+- The full Python 3.12–3.14 × libiperf 3.19.1/3.22 native matrix, including
   lifecycle regressions, from the exact source revision.
 - Installed wheel **and** sdist qualification in every matrix cell. These use
   fresh environments and isolated interpreters outside the checkout;
@@ -151,7 +151,7 @@ candidate evidence, not permission to publish or proof for a later revision.
 
 The smoke contract introduced for 0.3.0 requires **12 successful receipt-v2 files**:
 one installed wheel and one installed sdist for each Python 3.12–3.14 and
-libiperf 3.19.1/3.21 combination. Each receipt must retain:
+libiperf 3.19.1/3.22 combination. Each receipt must retain:
 
 | Evidence | Required checks |
 | --- | --- |

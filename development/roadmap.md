@@ -278,7 +278,7 @@ The first public callback API and isolated Python/CFFI worker are part of
 [#53](https://github.com/dariuszpanas/iperf3-lib/issues/53). Typed native events
 are delivered outside the C callback, with bounded queues and dropped-event
 counts. Result evidence is retained independently of delivery loss, with explicit
-event reconstruction on native 3.19.1 and full native output on 3.21. Explicit timeouts
+event reconstruction on native 3.19.1 and full native output on 3.21 and 3.22. Explicit timeouts
 terminate and reap the worker and raise `TimeoutError`; they do not manufacture
 a final native summary or claim native finalizer execution.
 

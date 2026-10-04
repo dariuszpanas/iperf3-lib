@@ -14,7 +14,7 @@ Use the exact candidate commit, retained distributions and current Actions resul
 | IPC bounds | Versioned frames, identities/order, bounded queues/control capacity and terminal/EOF/exit validation. Native capture is outside wire/queue bounds. | Malformed, oversized, replayed/truncated and saturated channel tests, including interruption during incomplete output. |
 | Worker lifetime/crashes | Linux bootstrap protects the native worker from parent death; init or a dedicated subreaper owns later reaping. | Idle/active TCP/UDP parent-death tests, startup races and native crashes with measured endpoint reuse. Protection begins at bootstrap. |
 | Resource accounting/stress | Supported workers create no application subprocesses. Repeated normal/error/forced-exit paths release owned processes, descriptors and listeners. | PID/start-time identities, all-thread child observations, warmed supervisor FD/child inventories, pre-reaping return evidence and positive reuse. Parent-death reaping is measured separately. |
-| Installed matrix | Both retained wheel and sdist execute the same contracts on supported Linux. | Python 3.12–3.14 × libiperf 3.19.1/3.21: twelve complete installed receipts tied to exact source/archive hashes, with no selected skip. |
+| Installed matrix | Both retained wheel and sdist execute the same contracts on supported Linux. | Python 3.12–3.14 × libiperf 3.19.1/3.22: twelve complete installed receipts tied to exact source/archive hashes, with no selected skip. |
 
 ## Test entry points
 

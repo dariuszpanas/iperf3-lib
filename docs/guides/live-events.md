@@ -144,7 +144,7 @@ eight samples of 256 characters. These are separate limits: an 8 MiB complete
 document can supply the final result while being too large for live delivery.
 
 Native JSON parsing rejects nonfinite values and duplicate fields, with one
-compatibility exception observed in libiperf 3.19.1 and 3.21: a native start
+compatibility exception in libiperf 3.19.1, 3.21 and 3.22: a native start
 record can repeat `target_bitrate` exactly twice with the same nonnegative
 integer value. Capture retains that value once. Conflicting values, other
 duplicate fields, and further repetitions remain invalid. Saved artifact and
@@ -155,7 +155,7 @@ captured progress. A slow consumer can miss intervals while the independent
 final result remains complete. Check capture and delivery diagnostics before
 treating a progress sequence as a complete history.
 
-Native 3.21 supplies an independent complete document when full streaming
+Native 3.21 and 3.22 supply an independent complete document when full streaming
 output is available. A retained valid document can recover final evidence
 despite earlier progress loss. Native 3.19.1 requires reconstruction from
 retained event envelopes. Missing or malformed reconstruction input produces

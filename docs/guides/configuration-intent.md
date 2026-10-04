@@ -174,9 +174,9 @@ direction budgets are deferred because the current native configuration has
 one shared per-stream rate.
 
 The [native option inventory](../reference/native-options.md) now accounts for
-every tagged parser option in 3.19.1 and 3.21. Expanded controls are exposed
-through typed configuration and an isolated Python/CFFI worker; the worker uses
-the public native parser where no dedicated setter exists. There is no raw CLI
+every tagged parser option in 3.19.1 and 3.22, retaining the 3.21 inventory.
+Expanded controls are exposed through typed configuration and an isolated
+Python/CFFI worker; the worker uses the public native parser where no dedicated setter exists. There is no raw CLI
 argument passthrough or `iperf3` executable requirement.
 
 | Option | Interpretation and evidence boundary |

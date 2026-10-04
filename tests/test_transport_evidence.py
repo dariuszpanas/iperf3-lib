@@ -52,7 +52,7 @@ def _assert_fields(model, native, mapping, prefix):
     "fixture", sorted(NATIVE.glob("*/*.json")), ids=lambda item: f"{item.parent.name}-{item.stem}"
 )
 def test_native_tcp_and_cpu_evidence_matches_local_endpoint_and_units(fixture):
-    """Both native versions and both endpoint roles preserve exact qualified values."""
+    """All retained native versions and both endpoint roles preserve exact qualified values."""
     raw = json.loads(fixture.read_text(encoding="utf-8"))
     original = copy.deepcopy(raw)
     result = result_from_iperf_json(raw)
@@ -105,7 +105,7 @@ def test_native_tcp_and_cpu_evidence_matches_local_endpoint_and_units(fixture):
     assert loads_artifact(dumps_artifact(artifact_from_result(result))).result == result
 
 
-@pytest.mark.parametrize("version", ["3.19.1", "3.21"])
+@pytest.mark.parametrize("version", ["3.19.1", "3.21", "3.22"])
 def test_bidirectional_remote_sender_tcp_numbers_are_not_promoted(version):
     """Local receiver TCP_INFO can be positive under native remote-sender end objects."""
     raw = _raw(version, "tcp-bidirectional")
@@ -162,9 +162,10 @@ def test_invalid_native_tcp_numbers_reject(field, value):
 
 
 @pytest.mark.parametrize("field,canonical", [(key, name) for name, key in INTERVAL_FIELDS.items()])
-def test_native_tcp_unavailable_sentinel_is_never_zero(field, canonical):
+@pytest.mark.parametrize("version", ["3.19.1", "3.21", "3.22"])
+def test_native_tcp_unavailable_sentinel_is_never_zero(field, canonical, version):
     """Source-defined -1 getters retain unsupported evidence on qualified producers."""
-    raw = _raw()
+    raw = _raw(version)
     raw["intervals"][0]["streams"][0][field] = -1
     result = result_from_iperf_json(raw)
     index, interval = next(
@@ -227,9 +228,10 @@ def test_missing_tcp_cpu_fields_stay_absent_without_fabricated_zeros():
 
 
 @pytest.mark.parametrize("platform", [None, "Darwin unknown", "Windows unknown"])
-def test_unqualified_platform_retains_raw_tcp_and_cpu(platform):
+@pytest.mark.parametrize("version", ["3.19.1", "3.21", "3.22"])
+def test_unqualified_platform_retains_raw_tcp_and_cpu(platform, version):
     """Native version alone cannot establish the tested Linux field interpretation."""
-    raw = _raw()
+    raw = _raw(version)
     raw["start"]["system_info"] = platform
     result = result_from_iperf_json(raw)
     assert all(interval.tcp is None for interval in result.intervals)

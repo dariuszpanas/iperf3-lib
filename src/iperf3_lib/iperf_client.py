@@ -153,7 +153,7 @@ class Client:
             ):
                 result.diagnostics.append(
                     Diagnostic(
-                        "libiperf 3.19.1 with OpenSSL 3 can reject valid authentication credentials due to a native encryption bug; authentication is qualified with libiperf 3.21.",
+                        "libiperf 3.19.1 with OpenSSL 3 can reject valid authentication credentials due to a native encryption bug; authentication is qualified with libiperf 3.22.",
                         "warning",
                         code="execution.native_authentication_compatibility",
                     )

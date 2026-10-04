@@ -58,20 +58,21 @@ def test_wrong_runtime_fails_before_native_import(monkeypatch, runtime, tmp_path
 
     monkeypatch.setattr(preview, "_native_version", unexpected_native)
     with pytest.raises(ValueError):
-        preview.record_runtime("a" * 40, "3.21", tmp_path / "missing-lock")
+        preview.record_runtime("a" * 40, "3.22", tmp_path / "missing-lock")
 
 
-def test_receipt_preserves_actual_evidence(monkeypatch, runtime, tmp_path):
+@pytest.mark.parametrize("native", ["3.19.1", "3.22"])
+def test_receipt_preserves_actual_evidence(monkeypatch, runtime, tmp_path, native):
     """Record getter, lock bytes and full interpreter identity after exact checks."""
     lock = tmp_path / "uv.lock"
     lock.write_bytes(b"frozen-lock\n")
     original = deepcopy(runtime)
     monkeypatch.setattr(preview, "_runtime", lambda: runtime)
-    monkeypatch.setattr(preview, "_native_version", lambda: "iperf 3.21")
+    monkeypatch.setattr(preview, "_native_version", lambda: f"iperf {native}")
     monkeypatch.setattr(preview.importlib.metadata, "version", lambda _: "0.3.0")
     monkeypatch.setattr(preview, "_dependencies", lambda: {"cffi": "2.1.1"})
-    receipt = preview.record_runtime("a" * 40, "3.21", lock)
-    assert receipt["native_version"] == "iperf 3.21"
+    receipt = preview.record_runtime("a" * 40, native, lock)
+    assert receipt["native_version"] == f"iperf {native}"
     assert receipt["lock_sha256"] == hashlib.sha256(lock.read_bytes()).hexdigest()
     assert receipt["source_revision"] == "a" * 40
     assert receipt["dependencies"] == {"cffi": "2.1.1"}
@@ -79,12 +80,23 @@ def test_receipt_preserves_actual_evidence(monkeypatch, runtime, tmp_path):
     assert runtime == original
 
 
-@pytest.mark.parametrize("native", ["iperf 3.19.1", "3.20", ""])
+@pytest.mark.parametrize("native", ["iperf 3.19.1", "iperf 3.21", "3.20", ""])
 def test_native_getter_must_match(monkeypatch, runtime, tmp_path, native):
     """A selected image tag cannot substitute for observed native identity."""
     monkeypatch.setattr(preview, "_runtime", lambda: runtime)
     monkeypatch.setattr(preview, "_native_version", lambda: native)
     with pytest.raises(ValueError, match="native getter"):
+        preview.record_runtime("a" * 40, "3.22", tmp_path / "missing-lock")
+
+
+def test_previous_endpoint_cannot_substitute_for_current_matrix(monkeypatch, tmp_path):
+    """Historical 3.21 evidence is not a receipt for the current latest endpoint."""
+
+    def unexpected_probe():
+        pytest.fail("native endpoint must be validated first")
+
+    monkeypatch.setattr(preview, "_runtime", unexpected_probe)
+    with pytest.raises(ValueError, match="supported native endpoint"):
         preview.record_runtime("a" * 40, "3.21", tmp_path / "missing-lock")
 
 
@@ -98,7 +110,7 @@ def test_cli_writes_only_a_valid_receipt(monkeypatch, tmp_path):
         raise ValueError("wrong runtime")
 
     monkeypatch.setattr(preview, "record_runtime", reject)
-    arguments = ["--revision", "a" * 40, "--native", "3.21", "--output", str(output)]
+    arguments = ["--revision", "a" * 40, "--native", "3.22", "--output", str(output)]
     assert preview.main(arguments) == 1
     assert not output.exists()
     monkeypatch.setattr(preview, "record_runtime", lambda *_: {"status": "preview"})
@@ -115,7 +127,7 @@ def test_revision_must_be_exact_before_runtime_probe(monkeypatch, tmp_path, revi
 
     monkeypatch.setattr(preview, "_runtime", unexpected_probe)
     with pytest.raises(ValueError, match="source revision"):
-        preview.record_runtime(revision, "3.21", tmp_path / "missing-lock")
+        preview.record_runtime(revision, "3.22", tmp_path / "missing-lock")
 
 
 def test_local_staging_can_build_preview_layer(tmp_path):
@@ -128,7 +140,7 @@ def test_local_staging_can_build_preview_layer(tmp_path):
         tmp_path,
         image="iperf3-lib-preview:local",
         python_base="python:3.14-slim",
-        iperf_version="3.21",
+        iperf_version="3.22",
         dockerfile="Dockerfile.preview",
         build_args=["NATIVE_IMAGE=iperf3-lib-preview-base:local"],
     )

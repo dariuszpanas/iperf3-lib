@@ -1,7 +1,7 @@
 # Contributing
 
 Thanks for improving `iperf3-lib`. Changes should preserve the supported
-Python 3.12-3.14 and libiperf 3.19.1/3.21 matrix.
+Python 3.12-3.14 and libiperf 3.19.1/3.22 matrix.
 
 ## Development setup
 
@@ -60,7 +60,7 @@ The underlying commands are:
 
 ```bash
 uv run --frozen python scripts/docker_validate.py stage
-uv run --frozen python scripts/docker_validate.py test --python-base python:3.14-slim --iperf-version 3.21
+uv run --frozen python scripts/docker_validate.py test --python-base python:3.14-slim --iperf-version 3.22
 uv run --frozen python scripts/docker_validate.py build --dockerfile examples/observability/Dockerfile --image iperf3-lib-observability:dev
 ```
 

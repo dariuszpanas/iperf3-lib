@@ -105,7 +105,7 @@ records explicit absent, unsupported, malformed, or unknown states using
 canonical JSON Pointer paths. Missing native fields alone do not prove that a
 feature is unsupported.
 
-On the qualified libiperf 3.19.1 and 3.21 producers, SCTP retransmission
+On the qualified libiperf 3.19.1, 3.21 and 3.22 producers, SCTP retransmission
 fields are unavailable: native output can contain values without retransmission
 measurement support, including nonnegative values. The normalized field is null
 with unsupported-state evidence; the original value remains in `raw`. For other
@@ -115,8 +115,8 @@ normalized field remains null until that producer is qualified.
 Diagnostics carry stable `code`, `severity`, optional canonical `path`, and
 native/canonical `evidence_paths`. Captured native data stays in `raw`, including
 partial and failed-run evidence. Ordinary JSON capture preserves the parsed
-native document. Native 3.21 streaming requests full final JSON; 3.19.1 instead
-records an explicit reconstruction from event envelopes. In that case,
+native document. Streaming on native 3.21 and 3.22 requests full final JSON;
+3.19.1 instead records an explicit reconstruction from event envelopes. In that case,
 `extensions["iperf3_lib.native_json"]` retains
 `{"representation": "reconstructed_events", "events": [...]}`, and the
 `execution.reconstructed_json` diagnostic points to

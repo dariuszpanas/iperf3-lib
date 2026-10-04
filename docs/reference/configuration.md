@@ -110,7 +110,7 @@ empty tuple default for `sctp_bind_addresses`.
 | `skip_rx_copy` | Request native TCP/UDP receive-copy avoidance; rejected for SCTP. |
 | `udp_counters_64bit` | Use UDP 64-bit packet counters. |
 | `dont_fragment` | Request IPv4 UDP don't-fragment behavior. |
-| `gsro` | UDP GSO/GRO request; requires native 3.21. |
+| `gsro` | UDP GSO/GRO request; requires native 3.21+. |
 | `flow_label` | IPv6 TCP flow label, 1–1,048,575; requires TCP and `address_family="ipv6"`. |
 | `sctp_streams` | SCTP stream count, 1–65,535. |
 | `sctp_bind_addresses` | Tuple of nonempty NUL-free SCTP address strings. |
@@ -139,7 +139,7 @@ These fields default to `None`, except `use_pkcs1_padding=False`.
 | `control_keepalive` | `(idle, interval, count)` tuple for TCP control-connection keepalive. Idle and interval use seconds; zeros keep kernel defaults. |
 | `username` | Native authentication username; supplied with `rsa_public_key_path`. |
 | `rsa_public_key_path` | Native authentication public-key file; supplied with `username`. |
-| `use_pkcs1_padding` | Explicit legacy authentication-padding compatibility; requires authentication. Client use is rejected with libiperf 3.21, where this flag is server-only. |
+| `use_pkcs1_padding` | Explicit legacy authentication-padding compatibility; requires authentication. Client use is rejected with libiperf 3.21+, where this flag is server-only. |
 
 Pass the password separately to `Client(config, password=...)` or use
 `IPERF3_PASSWORD`. Passwords are absent from configuration snapshots and artifacts.
@@ -147,7 +147,7 @@ Username and key path remain request metadata; key contents are not retained.
 Native authentication requires an appropriate libiperf/OpenSSL build.
 The tested 3.19.1/OpenSSL 3 build rejects valid credentials due to a
 [native authentication limitation](compatibility.md#authentication-compatibility);
-authenticated operation is qualified with libiperf 3.21.
+authenticated operation is qualified with libiperf 3.22.
 
 These native timers do not replace `Client.run(timeout=...)`. The execution
 timeout selects the isolated worker, includes startup, and terminates/reaps that
@@ -194,7 +194,7 @@ for `config.port` and `config.bind_address`.
 | `send_timeout_ms` | `None` | Unacknowledged TCP-data timeout, 0–86,400,000 milliseconds. |
 | `bitrate_limit_bps` | `None` | Server aggregate-rate limit, 0–`2**53 - 1`; zero disables the limit. |
 | `bitrate_limit_interval_seconds` | `None` | Averaging interval; zero or 0.1–60 seconds; requires a bitrate limit. |
-| `max_duration_seconds` | `None` | Server duration policy, 0–86,400 seconds; requires native 3.21. |
+| `max_duration_seconds` | `None` | Server duration policy, 0–86,400 seconds; requires native 3.21+. |
 | `affinity` | `None` | Native worker CPU selection. |
 | `rsa_private_key_path` | `None` | Native private-key file; requires authorized-users configuration. |
 | `authorized_users_path` | `None` | Native credentials file; requires the private-key path. |

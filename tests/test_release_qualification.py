@@ -265,7 +265,7 @@ def test_matrix_inventory_rejects_missing_extra_or_swapped_receipts(matrix, faul
     elif fault == "extra-file":
         matrix.change(matrix.smoke / "duplicate.json", (matrix.smoke / "wheel.json").read_bytes())
     elif fault == "extra-cell":
-        matrix.directory(matrix.args["smoke_root"] / "native-evidence-py3.15-iperf3.21")
+        matrix.directory(matrix.args["smoke_root"] / "native-evidence-py3.15-iperf3.22")
     elif fault == "swapped-kind":
         matrix.change(matrix.smoke / "wheel.json", (matrix.smoke / "sdist.json").read_bytes())
     else:

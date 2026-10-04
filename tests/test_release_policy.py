@@ -352,7 +352,7 @@ def _recorded_native_run(version="3.21", profile="tcp-forward"):
     return result, config
 
 
-@pytest.mark.parametrize("version", ["3.19.1", "3.21"])
+@pytest.mark.parametrize("version", ["3.19.1", "3.21", "3.22"])
 @pytest.mark.parametrize(
     "profile", ["tcp-forward", "tcp-reverse", "tcp-bidirectional", "udp", "sctp-forward"]
 )
@@ -515,7 +515,7 @@ def test_workflow_has_safe_dispatch_exact_revision_and_full_matrix(release_workf
     assert "default: qualify" in workflow
     assert "ref: ${{ needs.build.outputs.revision }}" in workflow
     assert 'python: ["3.12", "3.13", "3.14"]' in workflow
-    assert 'iperf: ["3.19.1", "3.21"]' in workflow
+    assert 'iperf: ["3.19.1", "3.22"]' in workflow
     assert "pytest -vv --cov=iperf3_lib" in workflow
     assert "for kind in wheel sdist" in workflow
     assert '"$venv/bin/python" -I /app/scripts/smoke_release.py' in workflow
