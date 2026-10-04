@@ -39,6 +39,10 @@ PLAN_CASES = (
     "active-deadline-udp",
     "completed-tcp",
     "stop-on-error-udp",
+    "active-worker-crash-tcp",
+    "active-worker-crash-udp",
+    "active-transport-failure-tcp",
+    "active-transport-failure-udp",
 )
 CONCURRENT_CASES = (
     "overlap-rate-cap-tcp",
@@ -284,13 +288,18 @@ def _validate_plan_receipt(evidence: dict, result: dict, nodeid: str) -> None:
     from iperf3_lib.plan_reports import loads_plan_report
 
     case = nodeid.rsplit("[", 1)[1].removesuffix("]")
-    statuses, stop, admitted = {
-        "active-cancel-tcp": (["completed", "cancelled", "not_run"], "cancelled", 2),
-        "pause-cancel-tcp": (["completed", "not_run", "not_run"], "cancelled", 1),
-        "active-deadline-udp": (["completed", "timed_out", "not_run"], "timeout", 2),
-        "completed-tcp": (["completed", "completed", "completed"], None, 3),
-        "stop-on-error-udp": (["completed", "failed", "not_run"], "stop_on_error", 2),
-    }[case]
+    fault_case = case.startswith(("active-worker-crash-", "active-transport-failure-"))
+    statuses, stop, admitted = (
+        (["completed", "exception", "not_run"], "stop_on_error", 2)
+        if fault_case
+        else {
+            "active-cancel-tcp": (["completed", "cancelled", "not_run"], "cancelled", 2),
+            "pause-cancel-tcp": (["completed", "not_run", "not_run"], "cancelled", 1),
+            "active-deadline-udp": (["completed", "timed_out", "not_run"], "timeout", 2),
+            "completed-tcp": (["completed", "completed", "completed"], None, 3),
+            "stop-on-error-udp": (["completed", "failed", "not_run"], "stop_on_error", 2),
+        }[case]
+    )
     protocol = case.rsplit("-", 1)[1]
     active = case.startswith("active-")
     try:
@@ -358,6 +367,11 @@ def _validate_plan_receipt(evidence: dict, result: dict, nodeid: str) -> None:
         ):
             raise ValueError("completed native measurement or provenance differs from report")
         workers = [evidence[name] for name in ("completed_worker", "reuse_worker")]
+        if fault_case:
+            _validate_plan_fault(evidence, execution)
+            workers.append(evidence["fault"]["worker"])
+        elif evidence.get("fault") is not None:
+            raise ValueError("non-fault plan has unexpected worker fault evidence")
         for worker in workers:
             if (
                 type(worker["protocol_version"]) is not int
@@ -377,7 +391,10 @@ def _validate_plan_receipt(evidence: dict, result: dict, nodeid: str) -> None:
                 or not isinstance(worker["producer"]["library_selector"], dict)
             ):
                 raise ValueError("native worker producer differs from installed runtime")
-        if any(workers[0][key] == workers[1][key] for key in ("pid", "request_id", "worker_id")):
+        if any(
+            len({worker[key] for worker in workers}) != len(workers)
+            for key in ("pid", "request_id", "worker_id")
+        ):
             raise ValueError("reuse did not identify a distinct worker")
         retained = 0
         for trial in execution.trials:
@@ -398,6 +415,80 @@ def _validate_plan_receipt(evidence: dict, result: dict, nodeid: str) -> None:
         raise ValueError(
             f"async plan receipt lacks measured partial-history evidence: {nodeid}"
         ) from exc
+
+
+def _validate_plan_fault(evidence: dict, execution) -> None:
+    """Bind a real active-worker fault to copied observations and its final cleanup."""
+    fault = evidence["fault"]
+    crash = evidence["case"].startswith("active-worker-crash-")
+    if set(fault) != {
+        "kind",
+        "worker",
+        "before",
+        "measurements_before_fault",
+        "returncode",
+        "identity_absent_after",
+        "pipe_closed",
+        "measurements",
+    }:
+        raise ValueError("incomplete active-worker fault evidence")
+    birth = _resource_inventory(fault["before"])
+    trial = execution.trials[1]
+    if (
+        fault["kind"] != ("sigkill" if crash else "stdout-close")
+        or fault["identity_absent_after"] is not True
+        or fault["pipe_closed"] is not True
+        or type(fault["returncode"]) is not int
+        or fault["returncode"] not in ((-9,) if crash else (-15, -9, 1))
+        or birth[0] != fault["worker"]["pid"]
+        or not fault["before"]["socket_fds"]
+        or trial.status != "exception"
+        or trial.artifact is not None
+        or trial.exception is None
+        or trial.exception.type_name != "iperf3_lib._ipc.IPCError"
+    ):
+        raise ValueError("worker fault lacks actual native identity, exception or cleanup")
+    observations, before = fault["measurements"], fault["measurements_before_fault"]
+    if (
+        not isinstance(observations, list)
+        or not observations
+        or not isinstance(before, list)
+        or not before
+        or before != observations[: len(before)]
+    ):
+        raise ValueError("worker fault did not follow observed positive native traffic")
+    previous = 0
+    for observation in observations:
+        if (
+            set(observation) != {"sequence", "received_at_seconds", "bytes"}
+            or not _positive_integer(observation["sequence"])
+            or observation["sequence"] <= previous
+            or not _positive_integer(observation["bytes"])
+            or not _finite_number(observation["received_at_seconds"])
+            or not trial.started_at_seconds
+            <= observation["received_at_seconds"]
+            <= trial.completed_at_seconds
+        ):
+            raise ValueError("invalid native observation for faulted worker")
+        previous = observation["sequence"]
+    retained = []
+    for event in trial.partial_events:
+        if event.kind == "interval" and isinstance(event.data, dict):
+            summary = event.data.get("sum")
+            if isinstance(summary, dict) and summary.get("bytes", 0) > 0:
+                retained.append(
+                    {
+                        "sequence": event.sequence,
+                        "received_at_seconds": event.received_at_seconds,
+                        "bytes": summary["bytes"],
+                    }
+                )
+    if (
+        not retained
+        or any(item not in observations for item in retained)
+        or not any(item in retained for item in before)
+    ):
+        raise ValueError("faulted trial did not preserve its observed pre-fault interval evidence")
 
 
 def _concurrent_worker(worker: dict, runtime: dict) -> None:

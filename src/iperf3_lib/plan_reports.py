@@ -20,6 +20,7 @@ from .trials import _json_evidence, prepare_plan
 
 _MODELS = {PlanExecutionReport, PlanExecutionResult, PlanTrialRecord, ArtifactProducer, NativeEvent}
 _INTERRUPTED = {"cancelled", "timed_out", "cleanup_failed"}
+_PARTIAL_EVENTS = _INTERRUPTED | {"exception"}
 _NATIVE = {"completed", "failed", "incomplete"}
 _STATUSES = (*sorted(_NATIVE), "exception", "cancelled", "timed_out", "cleanup_failed", "not_run")
 _NAMESPACE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9][A-Za-z0-9_-]*)+")
@@ -96,9 +97,9 @@ def _events(record: PlanTrialRecord, path: str) -> None:
         _fail(path, "event delivery counts must be nonnegative")
     if record.events_observed != len(record.partial_events) + record.events_dropped:
         _fail(path, "observed events must equal retained events plus retention drops")
-    if record.status not in _INTERRUPTED:
+    if record.status not in _PARTIAL_EVENTS:
         if record.partial_events or record.events_observed or record.events_dropped:
-            _fail(path, "only interrupted trials retain partial event evidence")
+            _fail(path, "only exception or interrupted trials retain partial event evidence")
         return
     if len(record.partial_events) > 64:
         _fail(f"{path}/partial_events", "partial event retention exceeds 64 events")
@@ -352,13 +353,18 @@ def render_plan_junit(report: PlanExecutionReport) -> str:
             ET.SubElement(case, "error", type=record.status, message=_xml_text(message))
         if record.artifact is not None:
             ET.SubElement(case, "system-out").text = _xml_text(dumps_artifact(record.artifact))
-        elif record.partial_events:
+        elif record.events_observed:
             events = [
                 _model(NativeEvent, event, "", encoding=True) for event in record.partial_events
             ]
-            ET.SubElement(case, "system-out").text = _xml_text(
-                json.dumps({"partial_events": events}, sort_keys=True)
-            )
+            evidence: dict[str, Any] = {
+                "partial_events": events,
+                "events_observed": record.events_observed,
+                "events_dropped": record.events_dropped,
+            }
+            if record.returned_result_evidence is not None:
+                evidence["returned_result_evidence"] = record.returned_result_evidence
+            ET.SubElement(case, "system-out").text = _xml_text(json.dumps(evidence, sort_keys=True))
         elif record.returned_result_evidence is not None:
             ET.SubElement(case, "system-out").text = _xml_text(
                 json.dumps(record.returned_result_evidence, sort_keys=True)

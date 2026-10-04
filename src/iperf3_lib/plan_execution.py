@@ -15,7 +15,7 @@ from .trials import PreparedPlan, TrialException, TrialSpec
 
 @dataclass(frozen=True)
 class PlanTrialRecord:
-    """One declared trial, including interruption and bounded copied event evidence."""
+    """Declared trial with bounded event diagnostics for exceptions and interruption."""
 
     spec: TrialSpec
     status: Literal[

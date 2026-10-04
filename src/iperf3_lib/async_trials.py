@@ -223,7 +223,12 @@ class _Run:
             error_record = _exception(error)
             if isinstance(result, Result):
                 evidence, diagnostics = _retain_unencodable_result(result)
-        partial = status in ("cancelled", "timed_out", "cleanup_failed")
+        # Worker or transport failure can follow delivered intervals without a
+        # final artifact; preserve those diagnostics independently of the result.
+        partial = status in ("exception", "cancelled", "timed_out", "cleanup_failed")
+        with events.lock:
+            partial_events = tuple(events.events) if partial else ()
+            observed = events.observed if partial else 0
         self.records.append(
             PlanTrialRecord(
                 spec=spec,
@@ -237,9 +242,9 @@ class _Run:
                 returned_result_evidence=evidence,
                 diagnostics=diagnostics,
                 cleanup_confirmed=cleanup_confirmed,
-                partial_events=tuple(events.events) if partial else (),
-                events_observed=events.observed if partial else 0,
-                events_dropped=events.observed - len(events.events) if partial else 0,
+                partial_events=partial_events,
+                events_observed=observed,
+                events_dropped=observed - len(partial_events),
             )
         )
         if status != "completed" and self.plan.policy.stop_on_error:
@@ -290,7 +295,8 @@ async def arun_plan(plan: PreparedPlan, *, timeout: float | None = None) -> Plan
     cleanup can extend beyond it. The existing elapsed budget only stops admission.
 
     Internal event collection enables native JSON streaming and retains at most
-    64 events / 1 MiB for an interrupted trial (64 KiB per event, framed bytes).
+    64 events / 1 MiB for an exception or interrupted trial (64 KiB per event,
+    framed bytes).
     Counts describe delivered callbacks and retention drops, not native event loss.
     Completed trials keep canonical artifacts; partial events are not results or
     performance samples. This function owns only this invocation's workers and

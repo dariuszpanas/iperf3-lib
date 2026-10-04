@@ -7,7 +7,8 @@ A trial plan runs a finite, declared sequence. It keeps warm-up, failed,
 incomplete, and unstarted runs so the report describes the entire experiment.
 `run_plan` is synchronous and sequential; each trial calls `Client.run()` once.
 The unreleased `arun_plan` API adds owned sequential async execution and retained
-partial results after cancellation. Neither runner retries trials.
+diagnostic evidence after cancellation, worker crashes and transport failures.
+Neither runner retries trials.
 For independent cells, [bounded concurrent plans](concurrent-plans.md) provide
 explicit worker/rate admission limits and resource exclusions.
 
@@ -110,11 +111,17 @@ by the child is preserved even if cancellation arrives before the plan receives 
 `execution_success` requires all trials completed, confirmed cleanup and no stop
 reason. Pauses run globally from one trial's completion to the next trial's start.
 
+A worker crash or transport failure produces an `exception` record with the
+original error and any events already delivered to the plan. With
+`stop_on_error=True`, subsequent trials remain `not_run`; otherwise execution
+can continue after confirmed cleanup. A failure before event delivery has an
+empty prefix. Earlier completed artifacts remain available in either case.
+
 Internal event collection enables `json_stream=True` for each native client.
 Artifacts retain the original caller config in their rate-intent extension and
 the effective streaming config in execution metadata. Libiperf 3.19.1 streaming
 results are reconstructed from events; 3.21 can supply the complete terminal
-JSON. Interrupted trials retain a detached prefix of at most 64 events, 1 MiB
+JSON. Interrupted and exceptional trials retain a detached prefix of at most 64 events, 1 MiB
 total and 64 KiB per event, including framing bytes. `events_observed` counts
 callbacks delivered to this collector; `events_dropped` counts retention drops.
 Neither measures native or transport event loss. Partial events are diagnostic
@@ -129,11 +136,19 @@ loading libiperf. `render_plan_text` and `render_plan_junit` describe execution;
 they make no performance assessment. JUnit always retains an error for an
 interrupted plan, including interruption between completed trials.
 
+The schema-v2 field set and sequential pause semantics are unchanged. Existing
+v2 archives keep the same interpretation and round-trip representation. The
+reader now accepts bounded event evidence on `exception` records as well as
+cancelled, timed-out and cleanup-failed records. Earlier strict v2 readers reject
+the new exception-with-events records; upgrade the reader before consuming those
+reports. Writers do not discard evidence to make an archive acceptable to an
+older reader. JSON and JUnit preserve both event diagnostics and any retained
+unencodable-result evidence when both are available.
+
 The existing assessment-v1 and sweep-v1 models and codecs remain unchanged and
 do not accept async execution histories. Completed artifacts can be analyzed
 individually. [Concurrent plans](concurrent-plans.md) use a separate schema-v3
-history; async sweep assessment remains follow-up work in
-[issue #36](https://github.com/dariuszpanas/iperf3-lib/issues/36).
+history. Async sweep assessment is outside these execution APIs.
 Ownership applies to this invocation's workers; it does not coordinate other
 callers or make libiperf's process-global state reentrant.
 
