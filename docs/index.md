@@ -13,6 +13,21 @@ compare results, and run finite sequential experiments from Python.
 
 <p class="project-facts">Python 3.12–3.14 · Linux tested · libiperf 3.19.1 / 3.22 · MIT license</p>
 
+## Put the benchmark logic in your application
+
+Calling `iperf3` from a script is straightforward. As your workflow grows,
+`iperf3-lib` supplies the surrounding Python API: validated configuration,
+normalized measurements, repeated trials, baseline assessments, saved artifacts,
+and monitoring output. Reuse those contracts across applications instead of
+maintaining separate command builders, result interpreters, and reporting code.
+
+The library uses the same native measurement engine as the CLI. Its advantage
+is the integration and analysis around each test. Existing subprocess or
+Ansible workflows can also import completed native JSON for analysis without
+replacing their runner.
+
+[Compare Python, CLI, and Ansible workflows](guides/choosing-an-integration.md)
+
 ## Choose your next step
 
 <div class="grid cards" markdown>
