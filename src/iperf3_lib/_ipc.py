@@ -29,7 +29,9 @@ _STRING_CHUNK = 4096
 _HEADER = struct.Struct("!I")
 _NONCE = re.compile(r"[0-9a-f]{32}\Z")
 _SURROGATE = re.compile(r"[\ud800-\udfff]")
-_TYPES = frozenset({"request", "continue", "ready", "event", "result", "error", "terminal"})
+_TYPES = frozenset(
+    {"request", "continue", "ready", "event", "live_event", "result", "error", "terminal"}
+)
 _METADATA = frozenset(
     {"protocol_version", "request_id", "worker_id", "transport_sequence", "run_index"}
 )
@@ -129,7 +131,7 @@ def encode_frame(message: dict[str, Any], *, max_bytes: int = MAX_FRAME_BYTES) -
         raise IPCError("Worker messages must be JSON objects")
     if type(max_bytes) is not int or not 0 < max_bytes <= MAX_FRAME_BYTES:
         raise ValueError("max_bytes must be within the positive protocol frame limit")
-    if message.get("type") == "event":
+    if message.get("type") in {"event", "live_event"}:
         max_bytes = min(max_bytes, MAX_EVENT_BYTES)
     _check_json(message, max_bytes)
     body = bytearray()
@@ -173,7 +175,7 @@ def _decode(body: bytes | bytearray) -> dict[str, Any]:
         )
         if type(message) is not dict:
             raise IPCError("Worker messages must be JSON objects")
-        if message.get("type") == "event" and len(body) > MAX_EVENT_BYTES:
+        if message.get("type") in {"event", "live_event"} and len(body) > MAX_EVENT_BYTES:
             raise IPCError("Worker event exceeds its byte limit")
         _check_json(message, MAX_FRAME_BYTES)
         return message

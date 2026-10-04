@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import json
 import platform
 import time
 from collections.abc import Callable
 from dataclasses import asdict, replace
 from typing import TYPE_CHECKING
 
+from ._event_capture import BoundedDocumentCapture
 from .config import ClientConfig, Protocol, config_to_dict, requires_worker
 from .events import NativeEvent
 from .exceptions import IperfError, IperfLibraryError, UnsupportedFeatureError
@@ -18,6 +18,8 @@ from .result import Diagnostic, ExecutionMetadata, Result, VerifiedSetting, resu
 
 if TYPE_CHECKING:
     from ._cancellation import _ExecutionControl
+    from ._event_stream import EventStream
+    from .events import LiveEvent
 
 TCP_PROTOCOL_ID = 1
 UDP_PROTOCOL_ID = 2
@@ -63,7 +65,7 @@ def _maybe_set(setter_name: str, t, value: int) -> bool:
     return False
 
 
-def _install_json_callback(t) -> tuple[list[str], object | None]:
+def _install_json_callback(t) -> tuple[BoundedDocumentCapture, object | None]:
     """Install libiperf's JSON callback when both the library and FFI support it.
 
     Minimal Python test doubles commonly omit ``ffi.callback``. In that case,
@@ -72,18 +74,13 @@ def _install_json_callback(t) -> tuple[list[str], object | None]:
     """
     setter = _try_set("iperf_set_test_json_callback")
     callback_factory = getattr(ffi, "callback", None)
+    capture = BoundedDocumentCapture(ffi)
     if setter is None or callback_factory is None:
-        return [], None
+        return capture, None
 
-    payloads: list[str] = []
-
-    def receive_json(_test, payload) -> None:
-        if payload != ffi.NULL:
-            payloads.append(ffi.string(payload).decode())
-
-    callback = callback_factory("void(iperf_test *, char *)", receive_json)
+    callback = callback_factory("void(iperf_test *, char *)", capture.capture)
     setter(t, callback)
-    return payloads, callback
+    return capture, callback
 
 
 class Client:
@@ -118,14 +115,15 @@ class Client:
         timeout: float | None = None,
         on_event: Callable[[NativeEvent], None] | None = None,
         _control: _ExecutionControl | None = None,
+        _on_live_event: Callable[[LiveEvent], None] | None = None,
     ) -> Result:
         """Share admission and result metadata across direct and isolated execution."""
         cfg = replace(self.cfg)
         if self._password is not None and cfg.username is None:
             raise ValueError("password requires username and rsa_public_key_path")
         caller_config = config_to_dict(cfg)
-        if on_event is not None:
-            if not callable(on_event):
+        if on_event is not None or _on_live_event is not None:
+            if on_event is not None and not callable(on_event):
                 raise TypeError("on_event must be callable")
             cfg = replace(cfg, json_stream=True)
         admitted_intent = replace(self.rate_intent) if self.rate_intent is not None else None
@@ -223,6 +221,8 @@ class Client:
             if cfg.username is not None and password is None:
                 raise ValueError("authenticated clients require password= or IPERF3_PASSWORD")
             execution_options = {"_control": _control} if _control is not None else {}
+            if _on_live_event is not None:
+                execution_options["_on_live_event"] = _on_live_event
             return finish(
                 run_worker(
                     "client",
@@ -293,7 +293,7 @@ class Client:
                 # some extremely old libs may lack JSON setter; we rely on JSON for parsing
                 raise UnsupportedFeatureError("This libiperf lacks JSON output support")
 
-            callback_payloads, callback = _install_json_callback(t)
+            capture, callback = _install_json_callback(t)
             native_error = None
             try:
                 _check(lib.iperf_run_client(t))
@@ -303,15 +303,24 @@ class Client:
             # Keep the cdata callback alive through iperf_run_client().
             _ = callback
 
-            json_text: str | None = callback_payloads[-1] if callback_payloads else None
-            if json_text is None:
+            capture.finalize()
+            native_error = native_error or capture.native_error
+            json_bytes = capture.payload if capture.error is None else None
+            if json_bytes is None:
                 cjson = lib.iperf_get_test_json_output_string(t)
-                if cjson != ffi.NULL:
-                    json_text = ffi.string(cjson).decode()
+                json_bytes = capture.read(cjson)
 
-            if json_text is not None:
-                raw = json.loads(json_text)
+            if json_bytes is not None:
+                raw = capture.parse_document(json_bytes)
                 result = result_from_iperf_json(raw, reporting_role="client")
+                if capture.error is not None:
+                    result.diagnostics.append(
+                        Diagnostic(
+                            f"{capture.error}; final JSON was recovered from the bounded getter.",
+                            "warning",
+                            code="execution.capture_recovered",
+                        )
+                    )
                 if native_error is not None:
                     result.ok = False
                     result.error = native_error
@@ -324,7 +333,7 @@ class Client:
             return finish(
                 Result(
                     ok=False,
-                    error=native_error or "No JSON returned by libiperf",
+                    error=native_error or capture.error or "No JSON returned by libiperf",
                     execution=ExecutionMetadata(status="failed" if native_error else "incomplete"),
                 )
             )
@@ -332,6 +341,26 @@ class Client:
             return finish(Result(ok=False, error=str(e)))
         finally:
             lib.iperf_free_test(t)
+
+    def events(self, *, timeout: float | None = None) -> EventStream:
+        """Create an owned live-event context with a complete result on completion.
+
+        Configuration is detached on context entry. Exiting the context stops
+        unfinished work and waits for cleanup, including after an early break.
+        """
+        from ._event_stream import EventStream
+
+        def admit():
+            client = Client(
+                replace(self.cfg),
+                rate_intent=replace(self.rate_intent) if self.rate_intent is not None else None,
+                password=self._password,
+            )
+            return lambda control, sink: client._run(
+                timeout=timeout, _control=control, _on_live_event=sink
+            )
+
+        return EventStream(admit)
 
     async def arun(
         self,

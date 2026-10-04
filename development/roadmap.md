@@ -5,6 +5,24 @@ This is retained planning background from the 0.3.0 development cycle.
 for current scope and completion status; the tables below preserve the planning
 context rather than certify the current release candidate.
 
+## Next release: 0.4.0
+
+The current development scope adds owned async and bounded concurrent plans,
+adaptive UDP experiments, and typed live-event consumption. Issues
+[#36](https://github.com/dariuszpanas/iperf3-lib/issues/36) and
+[#34](https://github.com/dariuszpanas/iperf3-lib/issues/34) are complete with
+retained exact-source native and installed-package qualification. The
+[live-event contract](../docs/guides/live-events.md) is tracked in
+[#35](https://github.com/dariuszpanas/iperf3-lib/issues/35).
+
+Python 3.15 support and qualification are tracked in
+[#63](https://github.com/dariuszpanas/iperf3-lib/issues/63). Final 0.4.0 release
+preparation must qualify the combined source, retained wheel and sdist,
+documentation, and Grafana integration. The `Unreleased` changelog is a
+development record; it does not establish that these features are published.
+
+## Historical 0.3.0 planning
+
 The project direction is a programmable network benchmarking and analysis
 library powered by libiperf. Native code generates traffic and measurements;
 the Python layer makes the results easier to interpret, compare, automate,

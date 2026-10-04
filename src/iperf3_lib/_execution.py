@@ -17,7 +17,8 @@ from typing import Any, Literal
 
 from . import _ipc
 from ._cancellation import _ExecutionControl
-from .events import NativeEvent
+from ._live_event_types import LiveProjector, make_delivery_gap_event
+from .events import LiveEvent, NativeEvent, WorkerStatePayload
 from .exceptions import IperfError, IperfLibraryError, UnsupportedFeatureError
 from .result import Diagnostic, ExecutionMetadata, Result, result_from_iperf_json
 
@@ -25,7 +26,9 @@ from .result import Diagnostic, ExecutionMetadata, Result, result_from_iperf_jso
 class _Responses:
     """Validate the worker state machine before admitting callbacks or results."""
 
-    def __init__(self, session: _ipc.Session, role: str, pid: int) -> None:
+    def __init__(
+        self, session: _ipc.Session, role: str, pid: int, *, live_events: bool = False
+    ) -> None:
         self.session, self.role, self.pid = session, role, pid
         self.run = 1
         self.runs = 0
@@ -33,6 +36,10 @@ class _Responses:
         self.producer: dict[str, Any] | None = None
         self.failed = False
         self.event_sequence = 0
+        self.live_events = live_events
+        self.live_received = self.capture_sequence = 0
+        self.arrival_offset = 0.0
+        self.capture_gaps: dict[str, int] = {}
         self.terminal_at: float | None = None
         self.lock = threading.Lock()
 
@@ -71,6 +78,30 @@ class _Responses:
                 ):
                     raise _ipc.IPCError("Invalid or out-of-order native worker event")
                 self.event_sequence = item["sequence"]
+            elif kind == "live_event":
+                if self.phase != "running" or not self.live_events:
+                    raise _ipc.IPCError("Unexpected typed native worker event")
+                _validate_live_frame(item)
+                sequence = item["capture_sequence"]
+                if (
+                    sequence is not None
+                    and sequence <= self.capture_sequence
+                    or sequence is not None
+                    and self.capture_gaps
+                    or sequence is not None
+                    and item["arrival_offset_seconds"] < self.arrival_offset
+                ):
+                    raise _ipc.IPCError("Out-of-order typed native worker event")
+                if sequence is not None:
+                    self.capture_sequence = sequence
+                else:
+                    stage = item["data"]["stage"]
+                    if stage in self.capture_gaps:
+                        raise _ipc.IPCError("Duplicate native capture gap")
+                    self.capture_gaps[stage] = item["data"]["dropped"]
+                if sequence is not None:
+                    self.arrival_offset = item["arrival_offset_seconds"]
+                self.live_received += 1
             elif kind == "result":
                 if (
                     self.phase != "running"
@@ -95,6 +126,20 @@ class _Responses:
                     or item.get("native_version") != self.producer["native_version"]
                 ):
                     raise _ipc.IPCError("Invalid or out-of-order native worker result")
+                if "capture" in item or self.live_events:
+                    _validate_capture(item.get("capture"))
+                    capture = item["capture"]
+                    if (
+                        capture["live_emitted"] != self.live_received + capture["live_dropped"]
+                        or self.capture_sequence > capture["callbacks"]
+                        or not self.live_events
+                        and capture["live_emitted"]
+                        or any(
+                            capture[f"{stage}_dropped"] != dropped
+                            for stage, dropped in self.capture_gaps.items()
+                        )
+                    ):
+                        raise _ipc.IPCError("Native capture counters contradict typed delivery")
                 self.runs += 1
                 self.phase = "continuation" if self.role == "server" else "ending"
             elif kind == "error":
@@ -127,6 +172,9 @@ class _Responses:
             if keep_running:
                 self.run += 1
                 self.event_sequence = 0
+                self.live_received = self.capture_sequence = 0
+                self.arrival_offset = 0.0
+                self.capture_gaps = {}
                 self.phase = "running"
             else:
                 self.phase = "ending"
@@ -142,6 +190,126 @@ def _finite_number(value: Any) -> bool:
         return False
 
 
+def _validate_live_frame(item: dict[str, Any]) -> None:
+    kind, data, sequence = item.get("kind"), item.get("data"), item.get("capture_sequence")
+    if (
+        not isinstance(kind, str)
+        or not {"data", "capture_sequence", "arrival_offset_seconds", "time"}.issubset(item)
+        or kind != "delivery_gap"
+        and not _finite_number(item.get("arrival_offset_seconds"))
+        or kind != "delivery_gap"
+        and not _finite_number(item.get("time"))
+        or (
+            sequence is not None
+            and (type(sequence) is not int or not 0 < sequence <= (1 << 63) - 1)
+        )
+        or "capture_sequence" not in item
+    ):
+        raise _ipc.IPCError("Invalid typed native event provenance")
+    if kind == "delivery_gap":
+        valid = (
+            sequence is None
+            and item.get("arrival_offset_seconds") is None
+            and item.get("time") is None
+            and isinstance(data, dict)
+            and set(data) == {"stage", "dropped"}
+            and data["stage"] in ("capture", "retention")
+            and type(data["dropped"]) is int
+            and data["dropped"] > 0
+        )
+    elif sequence is None:
+        valid = False
+    elif kind in {"native_start", "interval", "native_end", "native_document"}:
+        valid = isinstance(data, dict)
+    elif kind == "native_error":
+        valid = isinstance(data, (str, dict))
+    elif kind in {"unknown", "server_output"}:
+        valid = (
+            isinstance(data, dict)
+            and set(data) == {"native_kind", "payload"}
+            and isinstance(data["native_kind"], str)
+        )
+    elif kind == "malformed":
+        valid = (
+            isinstance(data, dict)
+            and set(data) == {"reason", "error_type", "sample"}
+            and data["reason"] == "invalid_native_json"
+            and isinstance(data["error_type"], str)
+            and len(data["error_type"]) <= 256
+            and isinstance(data["sample"], str)
+            and len(data["sample"]) <= 256
+        )
+    else:
+        valid = False
+    if not valid:
+        raise _ipc.IPCError("Invalid typed native event payload")
+
+
+_CAPTURE_COUNTERS = (
+    "callbacks",
+    "copied",
+    "capture_dropped",
+    "malformed",
+    "retention_dropped",
+    "live_emitted",
+    "live_dropped",
+)
+_CAPTURE_LIMITS = {
+    "payload_bytes": 8 * 1024 * 1024,
+    "pending_bytes": 16 * 1024 * 1024,
+    "pending_items": 256,
+    "retained_bytes": 12 * 1024 * 1024,
+    "diagnostics": 8,
+}
+
+
+def _validate_capture(capture: Any) -> None:
+    keys = {
+        *_CAPTURE_COUNTERS,
+        "schema_version",
+        "complete_document",
+        "complete_document_source",
+        "getter_error",
+        "reconstruction_complete",
+        "diagnostics",
+        "limits",
+    }
+    if (
+        not isinstance(capture, dict)
+        or set(capture) != keys
+        or type(capture["schema_version"]) is not int
+        or capture["schema_version"] != 1
+        or any(
+            type(capture[key]) is not int or not 0 <= capture[key] <= (1 << 63) - 1
+            for key in _CAPTURE_COUNTERS
+        )
+        or type(capture["complete_document"]) is not bool
+        or type(capture["reconstruction_complete"]) is not bool
+        or not isinstance(capture["limits"], dict)
+        or capture["limits"] != _CAPTURE_LIMITS
+        or any(type(value) is not int for value in capture["limits"].values())
+        or not isinstance(capture["diagnostics"], list)
+        or len(capture["diagnostics"]) > 8
+        or any(not isinstance(value, str) or len(value) > 256 for value in capture["diagnostics"])
+        or capture["getter_error"] is not None
+        and (not isinstance(capture["getter_error"], str) or len(capture["getter_error"]) > 256)
+    ):
+        raise _ipc.IPCError("Invalid native capture receipt")
+    if (
+        capture["callbacks"] != capture["copied"] + capture["capture_dropped"]
+        or capture["malformed"] > capture["copied"]
+        or capture["retention_dropped"] > capture["copied"]
+        or capture["live_dropped"] > capture["live_emitted"]
+        or capture["complete_document_source"] not in (None, "callback", "getter")
+        or capture["complete_document"] != (capture["complete_document_source"] is not None)
+        or capture["reconstruction_complete"]
+        != (
+            not (capture["capture_dropped"] or capture["malformed"] or capture["retention_dropped"])
+        )
+    ):
+        raise _ipc.IPCError("Inconsistent native capture receipt")
+
+
 class _Inbox:
     """Bound queued decoded frames by their wire bytes and reserve control space."""
 
@@ -150,12 +318,13 @@ class _Inbox:
         self.condition = threading.Condition()
         self.event_bytes = self.events = self.control_bytes = self.controls = 0
         self.dropped = 0
+        self.live_dropped = 0
         self.finished = False
         self.failure: Exception | None = None
 
     def put(self, item: dict[str, Any], size: int) -> None:
         """Drop only events, reserving a bounded FIFO allowance for control frames."""
-        event = item["type"] == "event"
+        event = item["type"] in {"event", "live_event"}
         with self.condition:
             if event:
                 if (
@@ -163,7 +332,10 @@ class _Inbox:
                     or self.events >= _ipc.MAX_PENDING_EVENTS
                     or self.event_bytes + size > _ipc.MAX_PENDING_EVENT_BYTES
                 ):
-                    self.dropped += 1
+                    if item["type"] == "live_event":
+                        self.live_dropped += 1
+                    else:
+                        self.dropped += 1
                     return
                 self.events += 1
                 self.event_bytes += size
@@ -177,7 +349,9 @@ class _Inbox:
                 self.control_bytes += size
                 if item["type"] == "result":
                     item["_parent_dropped"] = self.dropped
+                    item["_parent_live_dropped"] = self.live_dropped
                     self.dropped = 0
+                    self.live_dropped = 0
             self.items.append((item, size, event))
             self.condition.notify()
 
@@ -219,11 +393,27 @@ def _worker_command() -> list[str]:
 def _decode_result(message: dict[str, Any], role: Literal["client", "server"]) -> Result:
     """Decode copied native output without trusting a child-supplied Python object."""
     raw = message.get("raw")
-    result = (
-        result_from_iperf_json(raw, reporting_role=role)
-        if isinstance(raw, dict) and raw
-        else Result(ok=False, error=message.get("error") or "No JSON returned by libiperf")
-    )
+    try:
+        result = (
+            result_from_iperf_json(raw, reporting_role=role)
+            if isinstance(raw, dict) and raw
+            else Result(ok=False, error=message.get("error") or "No JSON returned by libiperf")
+        )
+    except (ValueError, TypeError, AttributeError, KeyError, OverflowError):
+        result = Result(
+            ok=False,
+            raw=raw if isinstance(raw, dict) else {},
+            error="Native JSON could not be normalized",
+            execution=ExecutionMetadata(status="incomplete"),
+            diagnostics=[
+                Diagnostic(
+                    "The retained native document has invalid measurement field shapes.",
+                    "warning",
+                    code="execution.malformed_native_json",
+                    evidence_paths=["/raw"],
+                )
+            ],
+        )
     result.reporting_role = role
     if result.execution is None:
         result.execution = ExecutionMetadata(status="completed" if result.ok else "incomplete")
@@ -264,6 +454,22 @@ def _decode_result(message: dict[str, Any], role: Literal["client", "server"]) -
         "queue_bytes": _ipc.MAX_PENDING_EVENT_BYTES,
         "event_bytes": _ipc.MAX_EVENT_BYTES,
     }
+    if "capture" in message:
+        capture = message["capture"]
+        _validate_capture(capture)
+        result.extensions["iperf3_lib.event_capture"] = json.loads(json.dumps(capture))
+        if not capture["complete_document"] and not capture["reconstruction_complete"]:
+            if metadata.status != "failed":
+                result.ok = False
+                metadata.status = "incomplete"
+            result.diagnostics.append(
+                Diagnostic(
+                    "Native event capture lost or malformed reconstruction evidence; retained measurements are partial.",
+                    "warning",
+                    code="execution.incomplete_capture",
+                    evidence_paths=["/extensions/iperf3_lib.event_capture"],
+                )
+            )
     if message.get("raw_representation") == "reconstructed_events" and (
         raw or message.get("native_events")
     ):
@@ -293,6 +499,7 @@ def run_worker(
     should_stop: Callable[[], bool] | None = None,
     timeout: float | None = None,
     _control: _ExecutionControl | None = None,
+    _on_live_event: Callable[[LiveEvent], None] | None = None,
 ) -> Result:
     """Run native code in a child and reap it on every return/error path.
 
@@ -303,7 +510,11 @@ def run_worker(
     """
     if role not in {"client", "server"}:
         raise ValueError("role must be client or server")
-    for name, callback in (("on_event", on_event), ("on_result", on_result)):
+    for name, callback in (
+        ("on_event", on_event),
+        ("on_result", on_result),
+        ("_on_live_event", _on_live_event),
+    ):
         if callback is not None and not callable(callback):
             raise TypeError(f"{name} must be callable")
     if timeout is not None:
@@ -328,6 +539,7 @@ def run_worker(
         "options": options,
         "password": password,
         "events": on_event is not None,
+        "live_events": _on_live_event is not None,
         "max_runs": max_runs,
     }
     session = _ipc.Session.new()
@@ -431,6 +643,33 @@ def run_worker(
     worker_error: Exception | None = None
     last_result: Result | None = None
     count = 0
+    delivery_sequence = projection_dropped = projection_malformed = 0
+    projector = LiveProjector(role)
+
+    def deliver_live(event: LiveEvent) -> None:
+        nonlocal callback_error
+        if _on_live_event is not None and callback_error is None:
+            control.check()
+            try:
+                _on_live_event(event)
+            except Exception as exc:
+                callback_error = exc
+
+    def state_event(state: Literal["starting", "ready"], run_index: int = 1) -> LiveEvent:
+        nonlocal delivery_sequence
+        delivery_sequence += 1
+        return LiveEvent(
+            "worker_state",
+            WorkerStatePayload(state, role),
+            session.request_id,
+            session.worker_id,
+            run_index,
+            delivery_sequence,
+        )
+
+    deliver_live(state_event("starting"))
+    if callback_error is not None:
+        raise callback_error
     process = subprocess.Popen(
         _worker_command(),
         stdin=subprocess.PIPE,
@@ -443,7 +682,7 @@ def run_worker(
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
     assert process.stdin is not None and process.stdout is not None
-    responses = _Responses(session, role, process.pid)
+    responses = _Responses(session, role, process.pid, live_events=_on_live_event is not None)
     stdout = process.stdout
     try:
         control.register(process)
@@ -470,6 +709,7 @@ def run_worker(
             check()
             kind = message.get("type")
             if kind == "ready":
+                deliver_live(state_event("ready"))
                 continue
             if kind == "event":
                 if on_event is not None and callback_error is None:
@@ -485,6 +725,17 @@ def run_worker(
                         )
                     except Exception as exc:
                         callback_error = exc
+            elif kind == "live_event":
+                if _on_live_event is not None and callback_error is None:
+                    delivery_sequence += 1
+                    try:
+                        event = projector.project(message, delivery_sequence=delivery_sequence)
+                    except _ipc.IPCError:
+                        projection_dropped += 1
+                    else:
+                        if event.kind == "malformed" and message["kind"] != "malformed":
+                            projection_malformed += 1
+                        deliver_live(event)
             elif kind == "result":
                 last_result = _decode_result(message, role)
                 last_result.extensions["iperf3_lib.worker"] = {
@@ -504,6 +755,54 @@ def run_worker(
                 delivery["dropped"] = (
                     int(message.get("events_dropped", 0)) + message["_parent_dropped"]
                 )
+                if _on_live_event is not None:
+                    capture = message["capture"]
+                    parent_dropped = message["_parent_live_dropped"]
+                    last_result.extensions["iperf3_lib.live_delivery"] = {
+                        "emitted": capture["live_emitted"],
+                        "worker_dropped": capture["live_dropped"],
+                        "parent_dropped": parent_dropped,
+                        "projection_dropped": projection_dropped,
+                        "projection_malformed": projection_malformed,
+                        "queue_capacity": _ipc.MAX_PENDING_EVENTS,
+                        "queue_bytes": _ipc.MAX_PENDING_EVENT_BYTES,
+                        "event_bytes": _ipc.MAX_EVENT_BYTES,
+                    }
+                    identity = LiveEvent(
+                        "worker_state",
+                        WorkerStatePayload("ready", role),
+                        session.request_id,
+                        session.worker_id,
+                        message["run_index"],
+                    )
+                    for stage, dropped in (
+                        ("worker_delivery", capture["live_dropped"]),
+                        ("parent_delivery", parent_dropped),
+                        ("projection", projection_dropped),
+                    ):
+                        if dropped:
+                            delivery_sequence += 1
+                            deliver_live(
+                                make_delivery_gap_event(
+                                    stage=stage,
+                                    dropped=dropped,
+                                    delivery_sequence=delivery_sequence,
+                                    identity=identity,
+                                )
+                            )
+                    projection_dropped = 0
+                    if projection_malformed:
+                        last_result.diagnostics.append(
+                            Diagnostic(
+                                "Some live native measurements could not be projected; malformed event diagnostics retain their capture provenance.",
+                                "warning",
+                                code="execution.malformed_live_event",
+                                evidence_paths=[
+                                    "/extensions/iperf3_lib.live_delivery/projection_malformed"
+                                ],
+                            )
+                        )
+                    projection_malformed = 0
                 count += 1
                 native_completed = last_result.ok
                 if on_result is not None and callback_error is None:
@@ -522,6 +821,8 @@ def run_worker(
                     )
                     control.check()
                     run_index = responses.continue_run(keep_running)
+                    if keep_running:
+                        projector = LiveProjector(role)
                     write_message(
                         {"type": "continue", "continue": keep_running}, run_index=run_index
                     )

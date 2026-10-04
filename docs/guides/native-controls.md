@@ -184,6 +184,9 @@ comparability.
 
 ## Observe events and bound a run
 
+For typed progress with an owned async iterator, use the
+[live-event API](live-events.md). The callback interface below remains available.
+
 ```python
 from iperf3_lib.events import NativeEvent
 
@@ -215,8 +218,12 @@ be represented as a complete original native document.
 The marker and envelopes are in
 `result.extensions["iperf3_lib.native_json"]` as `representation` and `events`.
 The `execution.reconstructed_json` diagnostic identifies reconstructed capture.
-Full native-document capture needs no reconstruction extension. Bounded live
-delivery queues do not bound memory used for the retained intervals/result.
+Full native-document capture needs no reconstruction extension. Native capture
+and retained reconstruction have separate bounds and quality metadata under
+`iperf3_lib.event_capture`. Lost delivery of already captured progress does not
+invalidate a complete result. Lost reconstruction input on 3.19.1 makes the
+result incomplete; a valid independent 3.21 document can recover final evidence.
+See [capture quality](live-events.md#slow-consumers-and-capture-quality).
 
 The private worker protocol limits each request or result frame to 16 MiB of
 JSON. A result exceeding that limit raises `IperfLibraryError`; it is not

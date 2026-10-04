@@ -1,8 +1,8 @@
 # Python API reference
 
 The site follows `main`; use documentation matching your installed version.
-Async worker cancellation and `IperfCleanupError` are unreleased additions after
-0.3.0. See [installation](../getting-started.md)
+Async worker cancellation, `IperfCleanupError`, and owned typed live streams are
+unreleased additions after 0.3.0. See [installation](../getting-started.md)
 for package setup.
 
 ## Clients and servers
@@ -12,9 +12,11 @@ for package setup.
 | `Client(cfg: ClientConfig, *, rate_intent=None, password=None)` | `Client` | Retains configuration and optional `RateIntent`; admission snapshots and resolves them. Password is separate from retained configuration. |
 | `Client.run(*, timeout=None, on_event=None)` | `Result` | Basic calls use direct CFFI; expanded controls, MPTCP, streaming, timeout or callback select an isolated Python/CFFI worker. |
 | `await Client.arun(*, timeout=None, on_event=None)` | `Result` | Always uses an isolated worker; cancellation waits for worker cleanup before propagating `CancelledError`. |
+| `Client.events(*, timeout=None)` | `EventStream` | Inert factory for an owned async context; delivers typed progress and retains the completed result. |
 | `Server(port=5201, bind_host=None)` or `Server(config=ServerConfig(...))` | `Server` | Legacy address/port arguments or detached typed configuration; do not combine the two forms. |
 | `Server.run_once(*, timeout=None, on_event=None)` | `Result` | Returns one server result from an isolated worker. |
 | `await Server.aserve_once(*, timeout=None, on_event=None)` | `Result` | Runs one isolated server operation with cancellation cleanup. |
+| `Server.events_once(*, timeout=None)` | `EventStream` | Owns one isolated server operation for typed async consumption. |
 | `Server.serve_forever(*, on_result=None, on_event=None, max_runs=None, timeout=None)` | `None` | Sequential results delivered after freeing each native test; timeout covers the complete serving session. |
 | `Server.stop()` | `None` | Signals the serving loop to stop between iterations. |
 
@@ -70,12 +72,14 @@ same worker process; results cannot inherit a prior iteration's JSON.
 
 Import `NativeEvent` from `iperf3_lib.events`. It is a frozen dataclass with
 `kind: str`, detached `data`, `sequence: int`, and `received_at_seconds: float`.
-The receipt timestamp is distinct from native measurement boundaries.
+The receipt timestamp is wall-clock arrival time, distinct from native measurement boundaries.
 
 Supplying `on_event` enables streaming. Callbacks run in the calling Python
 thread (the executor thread for async methods), never within a native C callback.
-Both event queues are bounded at 256. Sequence gaps and the result extension
-`iperf3_lib.event_delivery` record `emitted`, `dropped`, and `queue_capacity`.
+Both transport event queues are bounded at 256 events and 8 MiB, with a 1 MiB
+per-event limit. Sequence gaps and the result extension
+`iperf3_lib.event_delivery` record `emitted`, `dropped`, `queue_capacity`,
+`queue_bytes`, and `event_bytes`.
 Result capture is independent of dropped live delivery. Native 3.21 streaming
 enables full final output. On 3.19.1, `raw` is explicitly labelled
 `reconstructed_events`, with original event envelopes retained separately;
@@ -83,10 +87,22 @@ reconstruction does not claim fields absent from those native events.
 The reconstruction marker is
 `extensions["iperf3_lib.native_json"]["representation"]`; its `events` list
 retains the copied envelopes. `execution.reconstructed_json` is the diagnostic
-code. Full native-document capture has no reconstruction extension. Retained
-result/event evidence is not subject to the live-delivery queue capacity.
+code. Full native-document capture has no reconstruction extension. Native
+capture and retained reconstruction have separate limits from live delivery;
+their quality metadata appears under `iperf3_lib.event_capture`.
 After a callback raises, further callback delivery stops; the active native run
 finishes and the error is raised after worker shutdown.
+
+`Client.events()` and `Server.events_once()` add an owned typed interface.
+Enter the returned `EventStream` with `async with`, iterate its `LiveEvent`
+objects, and await `stream.result()` for the same operation's final `Result`.
+Context exit or `aclose()` settles worker cleanup, including early abandonment.
+Wrapper terminal delivery occurs after the owner finishes; native end/error
+messages cannot establish this state. See [live events](../guides/live-events.md)
+for consumer ownership, payloads, timing, overflow, and capture quality.
+
+`LiveEvent` is separate from `NativeEvent`. Existing callbacks, plan-event
+fields, and persisted report schemas retain their previous shapes.
 
 `iperf3_lib.native_configuration` contains available `{field: {getter, value}}`
 receipts. These prove native stored requests, not kernel-applied settings or

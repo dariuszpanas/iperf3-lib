@@ -4,14 +4,13 @@ Release scope and migration decisions are tracked in the [roadmap](roadmap.md).
 A merged PR prepares code; publishing a package requires an explicit release
 decision.
 
-For 0.3.0, the selected experiment scope is finite sequential trials and
-explicit sweeps. Expanded native controls include callback events and isolated
-Python/CFFI workers with explicit execution timeouts. Adaptive UDP selection,
-broader typed event schemas and consumer APIs, concurrent plans and parent-death
-cleanup remain [follow-on work](design/advanced-execution.md). The historical
-native event probe does not establish those broader guarantees. Release notes
-and capability claims must distinguish the implemented public contract from
-remaining design criteria.
+The published 0.3.0 scope included finite sequential trials, explicit sweeps,
+expanded native controls, callback events and isolated Python/CFFI workers.
+The planned 0.4.0 scope adds owned async and bounded concurrent plans, adaptive
+UDP experiments, and typed live-event consumption. Their current qualification
+maps are linked from the [advanced execution design](design/advanced-execution.md).
+Historical release receipts do not qualify these additions. Release notes and
+capability claims must follow evidence for the combined candidate.
 
 ## Rehearse without publishing
 
@@ -61,8 +60,8 @@ cancellation or concurrency behavior.
 
 ## Installed lifecycle checks in CI
 
-Current CI also qualifies operation cancellation, Linux parent-death cleanup
-and the private worker transport
+Current CI also qualifies operation cancellation, Linux parent-death cleanup,
+the private worker transport, plans, adaptive UDP and typed live events
 from installed wheels and sdists. It builds one distribution pair from the
 candidate revision, then uses fresh environments outside the source checkout
 in all six Python/libiperf combinations. Import paths and installed package
@@ -71,14 +70,19 @@ cases fail qualification.
 
 These checks retain separate lifecycle receipts with the source revision,
 distribution and harness hashes, interpreter/native versions, and per-case
-evidence. They cover idle workers and active TCP/UDP client/server operations,
-worker and socket release, and measured reuse. Five additional pipe scenarios
-check wrong-session and oversized/truncated input, terminal delivery under byte
-saturation, and cancellation during a partial frame. Each distribution must
-pass all fifteen selected cases with explicit cleanup and transport evidence.
-They complement the broader
-release smoke below; they do not establish concurrent plans, retained partial
-results or every proposed IPC guarantee.
+evidence. The 49 selected cases cover cancellation and parent death, malformed
+and saturated transport, sequential and concurrent plan ownership, resource
+recovery, adaptive decisions under measured impairment, and the complete
+protocol/direction live-event matrix. Each distribution must pass all selected
+setup/call/teardown phases; a selected skip fails qualification. See the
+[live-event qualification map](design/live-event-qualification.md) and the
+[isolated execution map](design/isolated-execution-qualification.md) for the
+retained measurements and cleanup requirements.
+
+These CI distributions are separate from the release workflow's retained
+bundle and smoke receipts below. Before publishing 0.4.0, the expanded
+qualification must also cover the exact wheel and sdist selected for release;
+green CI on independently built artifacts is not that evidence.
 
 ## Inspect installed receipt v2
 

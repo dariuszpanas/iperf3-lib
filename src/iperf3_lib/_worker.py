@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import importlib.metadata
-import json
 import os
 import platform
 import sys
@@ -11,6 +10,7 @@ import threading
 import time
 from typing import Any, BinaryIO
 
+from ._event_capture import BoundedDocumentCapture, EventCapture
 from ._ipc import BoundedFrameQueue, IPCError, Session, read_frame
 from .exceptions import IperfError, IperfLibraryError
 from .ffi.api import POSSIBLE_NAMES, ffi, lib
@@ -35,6 +35,8 @@ def _validate_request(request: dict[str, Any]) -> None:
         raise IPCError("Worker options must be an object")
     if type(request.get("events", False)) is not bool:
         raise IPCError("Worker event admission must be a boolean")
+    if type(request.get("live_events", False)) is not bool:
+        raise IPCError("Worker typed event admission must be a boolean")
     maximum = request.get("max_runs", 1)
     if maximum is not None and (type(maximum) is not int or maximum < 1):
         raise IPCError("Worker maximum runs must be positive or null")
@@ -62,8 +64,8 @@ def _producer(version: str) -> dict[str, Any]:
 def execute(request: dict[str, Any], output: BinaryIO, commands: BinaryIO) -> None:
     """Own framed output and free each native test before its result or terminal.
 
-    Event frames have byte and count bounds, with reserved control capacity.
-    Copied native JSON and reconstruction data are not a total memory bound.
+    Capture, parser retention and delivery frames have independent byte/count
+    bounds. A parser settles before any result or terminal frame is published.
     """
     from .native_options import configure_native, observe_native_options
 
@@ -114,6 +116,8 @@ def execute(request: dict[str, Any], output: BinaryIO, commands: BinaryIO) -> No
     count = 0
     run_index = 1
     failure: BaseException | None = None
+    capture: EventCapture | None = None
+    callback = None
 
     def release_test() -> None:
         nonlocal test
@@ -147,74 +151,41 @@ def execute(request: dict[str, Any], output: BinaryIO, commands: BinaryIO) -> No
         version = ffi.string(version_pointer).decode("utf-8")
         if not version:
             raise IperfLibraryError("Native library reported an empty version")
-        raw: dict[str, Any] = {}
-        callback_errors: list[str] = []
-        sequence = 0
-        dropped = 0
-        native_events: list[dict[str, Any]] = []
-        full_json_seen = False
-
-        def capture(_test: Any, payload: Any) -> None:
-            nonlocal raw, sequence, dropped, full_json_seen
-            try:
-                if payload == ffi.NULL:
-                    return
-                data = json.loads(ffi.string(payload).decode("utf-8"))
-                if not isinstance(data, dict):
-                    raise ValueError("native JSON must be an object")
-                if "event" in data and "data" in data:
-                    native_events.append(data)
-                    kind = data["event"]
-                    part = data["data"]
-                    if kind == "start":
-                        raw["start"] = part
-                    elif kind == "interval":
-                        raw.setdefault("intervals", []).append(part)
-                    elif kind == "end":
-                        raw["end"] = part
-                    elif kind == "error":
-                        raw["error"] = part if isinstance(part, str) else str(part)
-                    elif kind == "complete" and isinstance(part, dict):
-                        raw = part
-                        full_json_seen = True
-                    elif kind in {"server_output_json", "server_output_text"}:
-                        raw[kind] = part
-                    sequence += 1
-                    if request.get("events", False):
-                        message = {
-                            "type": "event",
-                            "kind": kind,
-                            "data": part,
-                            "sequence": sequence,
-                            "time": time.time(),
-                        }
-                        try:
-                            admitted = enqueue(message, run_index, event=True)
-                        except IPCError:
-                            # An event exceeding its wire budget is lost
-                            # delivery, just like event queue overflow.
-                            admitted = False
-                        if not admitted:
-                            dropped += 1
-                else:
-                    raw = data
-                    full_json_seen = True
-            except Exception as exc:
-                callback_errors.append(f"Cannot capture native event: {type(exc).__name__}")
-
-        callback = ffi.callback("void(iperf_test *, char *)", capture)
-        lib.iperf_set_test_json_callback(test, callback)
-        enqueue({"type": "ready", "pid": os.getpid(), "producer": _producer(version)}, run_index)
         while True:
-            raw = {}
-            native_events = []
-            full_json_seen = False
-            sequence = dropped = 0
-            callback_errors.clear()
+            # Bind each parser to its run rather than sharing a mutable run index.
+            admitted_run = run_index
+            capture = EventCapture(
+                ffi,
+                lambda message, run=admitted_run: enqueue(message, run, event=True),
+                legacy_events=request.get("events", False),
+                live_events=request.get("live_events", False),
+            )
+            capture.start()
+            callback = ffi.callback("void(iperf_test *, char *)", capture.capture)
+            lib.iperf_set_test_json_callback(test, callback)
+            if run_index == 1:
+                enqueue(
+                    {"type": "ready", "pid": os.getpid(), "producer": _producer(version)}, run_index
+                )
             started_at, started = time.time(), time.monotonic()
             ret = lib.iperf_run_client(test) if role == "client" else lib.iperf_run_server(test)
             error_code = int(lib.i_errno) if ret < 0 else None
             error = _native_error() if ret < 0 else None
+            evidence = observe_native_options(test, options)
+            full_document = None
+            getter_error = None
+            getter = getattr(lib, "iperf_get_test_json_output_string", None)
+            if getter is not None:
+                try:
+                    full_document = BoundedDocumentCapture(ffi).read(getter(test))
+                except Exception as exc:
+                    getter_error = f"Cannot copy native getter: {type(exc).__name__}"
+            # No pointer survives free. Keep the callback alive through free,
+            # then prevent parser events from racing the result/control frames.
+            release_test()
+            capture.close()
+            capture.recover_document(full_document, getter_error)
+            raw = capture.raw
             if (
                 ret < 0
                 and isinstance(raw.get("error"), str)
@@ -223,28 +194,31 @@ def execute(request: dict[str, Any], output: BinaryIO, commands: BinaryIO) -> No
                 error = raw["error"]
             elif ret < 0 and error_code == 0:
                 error = "Native call failed without a specific native error code"
-            if callback_errors:
-                error = callback_errors[0]
+            elif error is None and capture.native_error is not None:
+                # An observed native error remains a failure even if a later
+                # complete document omits it or the native return code is zero.
+                error = capture.native_error
             message = {
                 "type": "result",
                 "raw": raw,
                 "error": error,
                 "native_returncode": ret,
                 "native_error_code": error_code,
-                "evidence": observe_native_options(test, options),
+                "evidence": evidence,
                 "native_version": version,
                 "started_at": started_at,
                 "completed_at": time.time(),
                 "elapsed": time.monotonic() - started,
-                "events_emitted": sequence,
-                "events_dropped": dropped,
+                "events_emitted": capture.events_emitted,
+                "events_dropped": capture.events_dropped,
                 "raw_representation": "native_complete"
-                if full_json_seen
+                if capture.complete_document
                 else "reconstructed_events",
-                "native_events": native_events if not full_json_seen else [],
+                "native_events": capture.native_events,
+                "capture": capture.metadata(),
             }
-            release_test()
             enqueue(message, run_index)
+            capture = None
             count += 1
             if role == "client":
                 break
@@ -270,7 +244,6 @@ def execute(request: dict[str, Any], output: BinaryIO, commands: BinaryIO) -> No
             if lib.iperf_defaults(test) < 0:
                 raise IperfError(_native_error())
             setup = configure_native(test, role, options, password=request.get("password"))
-            lib.iperf_set_test_json_callback(test, callback)
         _ = setup, callback
     except BaseException as exc:
         failure = exc
@@ -280,7 +253,16 @@ def execute(request: dict[str, Any], output: BinaryIO, commands: BinaryIO) -> No
         except BaseException as exc:
             failure = exc
         try:
+            if capture is not None:
+                capture.close()
+        except BaseException as exc:
+            failure = exc
+        try:
             if failure is not None:
+                if capture is not None and not capture.settled:
+                    # A parser that still owns emission must never race terminal.
+                    # EOF without terminal leaves process cleanup with the parent.
+                    raise failure
                 enqueue(
                     {
                         "type": "error",

@@ -181,6 +181,10 @@ def _passed_results():
             evidence = _resource_stress_receipt(nodeid.rsplit("[", 1)[1].removesuffix("]"))
         if key == "adaptive_udp":
             evidence = _adaptive_receipt(nodeid.rsplit("[", 1)[1].removesuffix("]"))
+        if key == "live_events":
+            from test_live_event_evidence import live_receipt
+
+            evidence = live_receipt(nodeid.rsplit("[", 1)[1].removesuffix("]"))
         if key == "cancellation":
             evidence["reuse_bytes"] = 12
             for index, name in enumerate(("reused_client_worker", "reused_server_worker")):

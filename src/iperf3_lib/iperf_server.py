@@ -15,7 +15,8 @@ from .server_config import ServerConfig
 
 if TYPE_CHECKING:
     from ._cancellation import _ExecutionControl
-    from .events import NativeEvent
+    from ._event_stream import EventStream
+    from .events import LiveEvent, NativeEvent
 
 
 class _Unset(Enum):
@@ -117,6 +118,8 @@ class Server:
         on_event: Callable[[NativeEvent], None] | None = None,
         timeout: float | None = None,
         _control: _ExecutionControl | None = None,
+        _on_live_event: Callable[[LiveEvent], None] | None = None,
+        _options: dict[str, Any] | None = None,
     ) -> Result:
         """Retain server ownership until the operation and its worker have ended."""
         _validate_call(on_event, None, timeout)
@@ -125,8 +128,12 @@ class Server:
         release_control = _control
         try:
             execution_options = {"_control": _control} if _control is not None else {}
+            if _on_live_event is not None:
+                execution_options["_on_live_event"] = _on_live_event
             return _run_worker(
-                self._snapshot(events=on_event is not None),
+                _options
+                if _options is not None
+                else self._snapshot(events=on_event is not None or _on_live_event is not None),
                 on_event=on_event,
                 max_runs=1,
                 timeout=timeout,
@@ -140,6 +147,19 @@ class Server:
                 self._run_lock.release()
             else:
                 release_control.when_reaped(self._run_lock.release)
+
+    def events_once(self, *, timeout: float | None = None) -> EventStream:
+        """Create an owned live-event context for one isolated server run."""
+        from ._event_stream import EventStream
+
+        def admit():
+            _validate_call(None, None, timeout)
+            options = self._snapshot(events=True)
+            return lambda control, sink: self._run_once(
+                timeout=timeout, _control=control, _on_live_event=sink, _options=options
+            )
+
+        return EventStream(admit)
 
     def serve_forever(
         self,

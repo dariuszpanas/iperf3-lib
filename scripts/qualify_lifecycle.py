@@ -59,6 +59,16 @@ RESOURCE_CASES = (
     "parent-death",
 )
 ADAPTIVE_CASES = ("clean-forward", "clean-reverse", "impaired-forward")
+LIVE_EVENT_CASES = (
+    *(
+        f"{protocol}-{direction}"
+        for protocol in ("tcp", "udp", "sctp")
+        for direction in ("forward", "reverse", "bidir")
+    ),
+    "native-error",
+    "close-client",
+    "close-server",
+)
 CASE_GROUPS = {
     "cancellation": CASES,
     "worker_lifetime": CASES,
@@ -67,6 +77,7 @@ CASE_GROUPS = {
     "concurrent_plan": CONCURRENT_CASES,
     "resource_stress": RESOURCE_CASES,
     "adaptive_udp": ADAPTIVE_CASES,
+    "live_events": LIVE_EVENT_CASES,
 }
 TESTS = {
     "test_cancellation_integration.py": (
@@ -97,6 +108,7 @@ TESTS = {
         "test_native_adaptive_udp_preserves_measured_decisions",
         "adaptive_udp",
     ),
+    "test_live_events_integration.py": ("test_live_events_roundtrip", "live_events"),
 }
 HELPERS = ("_native_resource_inventory.py",)
 HARNESS = (
@@ -1243,6 +1255,514 @@ def _validate_adaptive_impairment(evidence: dict, result) -> None:
         raise ValueError("controlled impairment did not establish measured low/high decisions")
 
 
+def _live_worker(result, producer: dict) -> dict:
+    """Require native artifact identity to agree with the installed interpreter."""
+    worker = result.extensions.get("iperf3_lib.worker")
+    if (
+        not isinstance(worker, dict)
+        or type(worker.get("protocol_version")) is not int
+        or worker.get("protocol_version") != 1
+        or type(worker.get("run_index")) is not int
+        or worker["run_index"] != 1
+        or type(worker.get("pid")) is not int
+        or worker["pid"] <= 0
+        or any(
+            not isinstance(worker.get(k), str) or re.fullmatch(r"[0-9a-f]{32}", worker[k]) is None
+            for k in ("request_id", "worker_id")
+        )
+        or not isinstance(worker.get("producer"), dict)
+        or any(worker["producer"].get(k) != v for k, v in producer.items())
+    ):
+        raise ValueError("live-event worker identity differs from the installed producer")
+    return worker
+
+
+def _live_cleanup(cleanup: dict, *, count: int, successful: bool) -> list[dict]:
+    """Check retained process exits and pipe/listener ownership, not a summary flag."""
+    if (
+        not isinstance(cleanup, dict)
+        or cleanup.get("listener_released") is not True
+        or cleanup.get("server_lock_released") is not True
+        or not isinstance(cleanup.get("workers"), list)
+        or len(cleanup["workers"]) != count
+    ):
+        raise ValueError("live-event cleanup lacks expected owned workers")
+    workers = cleanup["workers"]
+    for worker in workers:
+        if (
+            not isinstance(worker, dict)
+            or type(worker.get("pid")) is not int
+            or worker["pid"] <= 0
+            or type(worker.get("returncode")) is not int
+            or successful
+            and worker["returncode"] != 0
+            or worker.get("stdin_closed") is not True
+            or worker.get("stdout_closed") is not True
+        ):
+            raise ValueError("live-event worker exit or pipe cleanup is unconfirmed")
+        ready = worker.get("ready")
+        if (
+            not isinstance(ready, dict)
+            or ready.get("pid") != worker["pid"]
+            or type(ready.get("protocol_version")) is not int
+            or ready["protocol_version"] != 1
+            or type(ready.get("run_index")) is not int
+            or ready["run_index"] != 1
+            or any(
+                not isinstance(ready.get(k), str) or re.fullmatch(r"[0-9a-f]{32}", ready[k]) is None
+                for k in ("request_id", "worker_id")
+            )
+        ):
+            raise ValueError("live-event cleanup lacks validated worker readiness identity")
+    if len({worker["pid"] for worker in workers}) != count:
+        raise ValueError("live-event cleanup repeats a worker identity")
+    return workers
+
+
+def _live_artifact(text: str, producer: dict, role: str, *, positive: bool):
+    """Load the existing artifact contract and require actual native measurements."""
+    from iperf3_lib.artifacts import loads_artifact
+
+    artifact = loads_artifact(text)
+    result = artifact.result
+    if (
+        artifact.producer.version != producer["package_version"]
+        or result.reporting_role != role
+        or result.execution is None
+    ):
+        raise ValueError("live-event artifact producer or role mismatch")
+    worker = _live_worker(result, producer)
+    if positive:
+        native = [
+            value
+            for key, value in result.raw.get("end", {}).items()
+            if key.startswith("sum") and isinstance(value, dict)
+        ]
+        measured = any(
+            type(value.get("bytes")) is int
+            and value["bytes"] > 0
+            and type(value.get("seconds")) in {int, float}
+            and math.isfinite(value["seconds"])
+            and value["seconds"] > 0
+            for value in native
+        )
+        if not result.ok or result.execution.status != "completed" or not measured:
+            raise ValueError("live-event artifact lacks positive completed native traffic")
+    return result, worker
+
+
+def _live_measurements(result, *, intervals: bool) -> list[dict]:
+    """Compare typed projections against the separately retained canonical result."""
+    from dataclasses import asdict
+
+    if intervals:
+        return [asdict(item) for item in result.intervals]
+    records = []
+    for flow in result.flows:
+        for value in (flow.sender, flow.receiver):
+            if value is not None:
+                records.append(
+                    {
+                        **asdict(value),
+                        "direction": flow.direction,
+                        "scope": "aggregate",
+                        "stream_id": None,
+                    }
+                )
+    for stream in result.streams:
+        for value in (stream.sender, stream.receiver, stream.unattributed):
+            if value is not None:
+                records.append(
+                    {
+                        **asdict(value),
+                        "direction": stream.direction,
+                        "scope": "stream",
+                        "stream_id": stream.stream_id,
+                    }
+                )
+    return records
+
+
+def _live_facts(value):
+    """Compare measured facts while keeping fragment-relative pointers separate."""
+    if isinstance(value, dict):
+        return {key: _live_facts(item) for key, item in value.items() if key != "evidence_paths"}
+    if isinstance(value, (list, tuple)):
+        return [_live_facts(item) for item in value]
+    return value
+
+
+def _live_endpoint(
+    endpoint: dict,
+    producer: dict,
+    role: str,
+    *,
+    positive: bool,
+    cancelled: bool = False,
+    expected_protocol: str | None = None,
+    expected_method: str | None = None,
+):
+    """Validate ordering, terminal ownership and exact final projection agreement."""
+    events = endpoint["events"]
+    if not isinstance(events, list) or not events:
+        raise ValueError("live-event endpoint has no observed envelopes")
+    sequences = [event.get("delivery_sequence") for event in events]
+    if any(type(value) is not int for value in sequences) or sequences != list(
+        range(1, len(events) + 1)
+    ):
+        raise ValueError("live-event consumer sequences are not contiguous")
+    kinds = [event.get("kind") for event in events]
+    native_kinds = {
+        "native_start",
+        "interval",
+        "native_error",
+        "native_end",
+        "native_document",
+        "server_output",
+        "unknown",
+        "malformed",
+    }
+    allowed_kinds = native_kinds | {"worker_state", "delivery_gap", "terminal"}
+    if any(not isinstance(kind, str) or kind not in allowed_kinds for kind in kinds):
+        raise ValueError("live-event receipt contains an unknown typed tag")
+    if (
+        [index for index, kind in enumerate(kinds) if kind == "worker_state"] != [0, 1]
+        or events[0].get("payload") != {"state": "starting", "role": role}
+        or events[1].get("payload") != {"state": "ready", "role": role}
+    ):
+        raise ValueError("live-event wrapper states must be starting then ready for this role")
+    if kinds.count("terminal") != 1 or kinds[-1] != "terminal":
+        raise ValueError("live-event wrapper terminal is missing, duplicated or premature")
+    identities = {
+        (event.get("request_id"), event.get("worker_id"), event.get("run_index"))
+        for event in events
+    }
+    if len(identities) != 1:
+        raise ValueError("live-event envelopes mix worker identities")
+    identity = next(iter(identities))
+    if identity[2] != 1 or any(
+        not isinstance(v, str) or re.fullmatch(r"[0-9a-f]{32}", v) is None for v in identity[:2]
+    ):
+        raise ValueError("live-event envelope has no admitted run identity")
+    terminal = events[-1]["payload"]
+    if terminal.get("cleanup_confirmed") is not True or terminal.get("consumer_dropped") != 0:
+        raise ValueError("live-event terminal lacks cleanup or has unexpected consumer loss")
+    native_events = [event for event in events if event.get("capture_sequence") is not None]
+    captures = [event["capture_sequence"] for event in native_events]
+    if any(type(value) is not int or value < 1 for value in captures) or captures != sorted(
+        set(captures)
+    ):
+        raise ValueError("live-event native capture order is invalid")
+    offsets = [event.get("arrival_offset_seconds") for event in native_events]
+    if any(
+        type(value) not in {int, float} or not math.isfinite(value) or value < 0
+        for value in offsets
+    ) or offsets != sorted(offsets):
+        raise ValueError("live-event monotonic arrival evidence is invalid")
+    for event in events:
+        if (event["kind"] in native_kinds) != (event.get("capture_sequence") is not None):
+            raise ValueError("live-event kind contradicts native capture provenance")
+        if event.get("capture_sequence") is None:
+            if (
+                event.get("arrival_offset_seconds") is not None
+                or event.get("received_at_seconds") is not None
+            ):
+                raise ValueError("synthetic live event invents native arrival evidence")
+        elif (
+            type(event.get("received_at_seconds")) not in {int, float}
+            or not math.isfinite(event["received_at_seconds"])
+            or event["received_at_seconds"] <= 0
+        ):
+            raise ValueError("native live event has no wall-clock receipt")
+    starts = [event["payload"] for event in events if event["kind"] == "native_start"]
+    if len(starts) > 1:
+        raise ValueError("live-event receipt repeats native start provenance")
+    if cancelled:
+        if (
+            endpoint.get("artifact_json") is not None
+            or endpoint.get("error_type") != "CancelledError"
+            or terminal.get("outcome") != "cancelled"
+            or terminal.get("result_available") is not False
+            or terminal.get("native_status") is not None
+        ):
+            raise ValueError("closed live stream fabricated a completed result")
+        if len(starts) != 1 or starts[0].get("reporting_role") != role:
+            raise ValueError("closed live stream lacks native start role provenance")
+        start = starts[0]
+        raw_start = start.get("raw")
+        native = raw_start.get("test_start") if isinstance(raw_start, dict) else None
+        if (
+            not isinstance(native, dict)
+            or not isinstance(native.get("protocol"), str)
+            or start.get("protocol") != native["protocol"].lower()
+            or expected_protocol is not None
+            and start.get("protocol") != expected_protocol
+            or expected_method is not None
+            and start.get("method") != expected_method
+            or start.get("method")
+            != (
+                "bidirectional"
+                if native.get("bidir", 0)
+                else "reverse"
+                if native.get("reverse", 0)
+                else "forward"
+            )
+        ):
+            raise ValueError("closed live stream start contradicts configured native provenance")
+        if not any(
+            m.get("bytes", 0) > 0
+            for event in events
+            if event["kind"] == "interval"
+            for m in event["payload"]["measurements"]
+            if type(m.get("bytes")) is int
+        ):
+            raise ValueError("live stream was closed before measured traffic")
+        return None, identity
+    if endpoint.get("error_type") is not None:
+        raise ValueError("live-event endpoint raised instead of retaining its native result")
+    final, worker = _live_artifact(endpoint["artifact_json"], producer, role, positive=positive)
+    if starts and (
+        starts[0].get("raw") != final.raw.get("start")
+        or starts[0].get("protocol") != final.protocol
+        or starts[0].get("method") != final.execution.method
+        or starts[0].get("reporting_role") != final.reporting_role
+    ):
+        raise ValueError("live native start differs from the final native provenance")
+    if identity != (worker["request_id"], worker["worker_id"], worker["run_index"]):
+        raise ValueError("live events do not identify the completed artifact")
+    if (
+        terminal.get("outcome") != "completed"
+        or terminal.get("result_available") is not True
+        or terminal.get("native_status") != final.execution.status
+    ):
+        raise ValueError("live-event terminal disagrees with the final native result")
+    capture = final.extensions.get("iperf3_lib.event_capture")
+    if (
+        not isinstance(capture, dict)
+        or terminal.get("capture") != capture
+        or capture.get("schema_version") != 1
+        or any(
+            type(capture.get(k)) is not int or capture[k] < 0
+            for k in ("callbacks", "copied", "capture_dropped", "malformed", "retention_dropped")
+        )
+        or capture["callbacks"] != capture["copied"] + capture["capture_dropped"]
+    ):
+        raise ValueError("live-event capture counters lack coherent provenance")
+    limits = {
+        "payload_bytes": 8 * 1024 * 1024,
+        "pending_bytes": 16 * 1024 * 1024,
+        "pending_items": 256,
+        "retained_bytes": 12 * 1024 * 1024,
+        "diagnostics": 8,
+    }
+    delivery = final.extensions.get("iperf3_lib.live_delivery")
+    if (
+        capture.get("limits") != limits
+        or not isinstance(delivery, dict)
+        or terminal.get("delivery") != delivery
+        or any(
+            type(delivery.get(k)) is not int or delivery[k] < 0
+            for k in (
+                "emitted",
+                "worker_dropped",
+                "parent_dropped",
+                "projection_dropped",
+                "projection_malformed",
+            )
+        )
+        or any(
+            delivery.get(k) != v
+            for k, v in {
+                "queue_capacity": 256,
+                "queue_bytes": 8 * 1024 * 1024,
+                "event_bytes": 1024 * 1024,
+            }.items()
+        )
+    ):
+        raise ValueError("live-event result omits capture or delivery bounds")
+    if positive:
+        if (
+            any(capture[k] != 0 for k in ("capture_dropped", "malformed", "retention_dropped"))
+            or any(
+                delivery[k] != 0
+                for k in (
+                    "worker_dropped",
+                    "parent_dropped",
+                    "projection_dropped",
+                    "projection_malformed",
+                )
+            )
+            or delivery["emitted"] != len(native_events)
+            or "delivery_gap" in kinds
+            or "malformed" in kinds
+            or any(kinds.count(k) != 1 for k in ("native_start", "native_end"))
+            or not kinds.index("native_start") < kinds.index("native_end") < len(kinds) - 1
+        ):
+            raise ValueError("clean live-event matrix has incomplete capture or ordering")
+        interval_events = [event["payload"] for event in events if event["kind"] == "interval"]
+        if [event["raw"] for event in interval_events] != final.raw.get("intervals"):
+            raise ValueError("live intervals differ from retained native final intervals")
+        projections = [m for event in interval_events for m in event["measurements"]]
+        if _live_facts(projections) != _live_facts(_live_measurements(final, intervals=True)):
+            raise ValueError("live interval projections differ from canonical final measurements")
+        end_event = next(event["payload"] for event in events if event["kind"] == "native_end")
+        if end_event["raw"] != final.raw.get("end") or _live_facts(
+            end_event["measurements"]
+        ) != _live_facts(_live_measurements(final, intervals=False)):
+            raise ValueError("live end projections differ from the final native summary")
+        documents = [event["payload"] for event in events if event["kind"] == "native_document"]
+        if producer["native_version"].removeprefix("iperf ") == "3.19.1":
+            provenance = final.extensions.get("iperf3_lib.native_json", {})
+            if (
+                documents
+                or capture.get("complete_document") is not False
+                or capture.get("reconstruction_complete") is not True
+                or provenance.get("representation") != "reconstructed_events"
+                or not provenance.get("events")
+            ):
+                raise ValueError(
+                    "minimum native version lacks explicit complete reconstruction evidence"
+                )
+        elif (
+            len(documents) != 1
+            or documents[0]["raw"] != final.raw
+            or capture.get("complete_document") is not True
+        ):
+            raise ValueError("latest native version lacks an independent complete document")
+    return final, identity
+
+
+def _validate_live_event_receipt(evidence: dict, result: dict, nodeid: str) -> None:
+    """Qualify both native endpoints and owned consumer closure from retained data."""
+    case = nodeid.rsplit("[", 1)[1].removesuffix("]")
+    producer = {
+        key: result[key if key != "python_version" else "python"]
+        for key in ("package_version", "python_version", "native_version")
+    }
+    mode = (
+        "native-error"
+        if case == "native-error"
+        else "close"
+        if case.startswith("close-")
+        else "matrix"
+    )
+    protocol, direction = case.split("-", 1) if mode == "matrix" else ("tcp", "forward")
+    try:
+        if (
+            type(evidence.get("schema_version")) is not int
+            or evidence["schema_version"] != 1
+            or evidence.get("case") != case
+            or evidence.get("mode") != mode
+            or evidence.get("protocol") != protocol
+            or evidence.get("direction") != direction
+            or evidence.get("producer") != producer
+            or type(evidence.get("port")) is not int
+            or not 1 <= evidence["port"] <= 65535
+        ):
+            raise ValueError("scenario identity or installed producer differs")
+        support = evidence.get("support")
+        unsupported = (
+            protocol == "sctp"
+            and isinstance(support, dict)
+            and support.get("status") == "kernel_unsupported"
+        )
+        if protocol == "sctp":
+            if (
+                not isinstance(support, dict)
+                or support.get("family") != 2
+                or support.get("type") != 1
+                or support.get("protocol") != 132
+                or not support.get("kernel_release")
+                or (
+                    support.get("errno") not in (93, 94, 97)
+                    if unsupported
+                    else support.get("status") != "supported" or support.get("errno") is not None
+                )
+            ):
+                raise ValueError("SCTP support lacks a specific kernel protocol probe")
+        elif support is not None:
+            raise ValueError("non-SCTP case has unrelated protocol support evidence")
+        count = 0 if unsupported else 1 if mode == "native-error" else 2
+        workers = _live_cleanup(evidence["cleanup"], count=count, successful=mode == "matrix")
+        endpoints = evidence["endpoints"]
+        expected_roles = (
+            set() if unsupported else {"client"} if mode == "native-error" else {"client", "server"}
+        )
+        if set(endpoints) != expected_roles:
+            raise ValueError("endpoint coverage differs from the required scenario")
+        identities = []
+        for role in sorted(expected_roles):
+            final, identity = _live_endpoint(
+                endpoints[role],
+                producer,
+                role,
+                positive=mode == "matrix",
+                cancelled=case == f"close-{role}",
+                expected_protocol=protocol,
+                expected_method="bidirectional" if direction == "bidir" else direction,
+            )
+            identities.append(identity)
+            matched = [
+                entry
+                for entry in workers
+                if tuple(entry["ready"][key] for key in ("request_id", "worker_id", "run_index"))
+                == identity
+            ]
+            if len(matched) != 1 or any(
+                matched[0]["ready"]["producer"].get(k) != v for k, v in producer.items()
+            ):
+                raise ValueError("live-event endpoint identity has no matching reaped worker")
+            if final is not None:
+                worker = _live_worker(final, producer)
+                if worker["pid"] not in {entry["pid"] for entry in workers}:
+                    raise ValueError("native artifact worker has no cleanup receipt")
+            if mode == "matrix":
+                native = final.raw["start"]["test_start"]
+                expected_directions = (
+                    {"client_to_server", "server_to_client"}
+                    if direction == "bidir"
+                    else {"server_to_client"}
+                    if direction == "reverse"
+                    else {"client_to_server"}
+                )
+                if (
+                    final.protocol != protocol
+                    or native["protocol"].lower() != protocol
+                    or bool(native.get("reverse", 0)) != (direction == "reverse")
+                    or bool(native.get("bidir", 0)) != (direction == "bidir")
+                    or {flow.direction for flow in final.flows} != expected_directions
+                    or {item.direction for item in final.intervals if item.bytes and item.bytes > 0}
+                    != expected_directions
+                ):
+                    raise ValueError("native protocol/direction differs from typed association")
+            elif mode == "native-error":
+                kinds = [event["kind"] for event in endpoints[role]["events"]]
+                if (
+                    final.ok
+                    or final.execution.status != "failed"
+                    or not final.error
+                    or "native_error" not in kinds
+                ):
+                    raise ValueError("native error was hidden by an end or wrapper terminal")
+        reuse = evidence["reuse"]
+        reused_workers = _live_cleanup(reuse["cleanup"], count=2, successful=True)
+        for role in ("client", "server"):
+            reused, worker = _live_artifact(
+                reuse[f"{role}_artifact_json"], producer, role, positive=True
+            )
+            if reused.protocol != "tcp" or worker["pid"] not in {
+                entry["pid"] for entry in reused_workers
+            }:
+                raise ValueError("live-event reuse lacks measured TCP and matching cleanup")
+            identities.append((worker["request_id"], worker["worker_id"], worker["run_index"]))
+            if not any(entry["ready"] == worker for entry in reused_workers):
+                raise ValueError("live-event reuse differs from its validated readiness receipt")
+        if len(set(identities)) != len(identities):
+            raise ValueError("live-event operation and reuse share an admission identity")
+    except (KeyError, TypeError, ValueError, AttributeError) as exc:
+        raise ValueError(f"invalid live-event native receipt: {nodeid}: {exc}") from exc
+
+
 def validate_results(result: dict) -> None:
     """Require every selected case to pass setup, execution, teardown and evidence checks."""
     expected = expected_tests()
@@ -1276,6 +1796,8 @@ def validate_results(result: dict) -> None:
             _validate_resource_receipt(evidence, result, nodeid)
         elif property_name == "adaptive_udp":
             _validate_adaptive_receipt(evidence, result, nodeid)
+        elif property_name == "live_events":
+            _validate_live_event_receipt(evidence, result, nodeid)
         elif property_name == "cancellation":
             active = "[active-" in nodeid
             if (
@@ -1529,7 +2051,7 @@ def qualify(args) -> None:
                     env=environment,
                     capture_output=True,
                     text=True,
-                    timeout=360,
+                    timeout=600,
                     check=False,
                 )
                 (output / f"{entry['kind']}.log").write_text(completed.stdout + completed.stderr)

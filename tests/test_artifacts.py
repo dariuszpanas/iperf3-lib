@@ -545,7 +545,11 @@ def test_client_execution_metadata_survives_artifact_boundary(monkeypatch, statu
     monkeypatch.setattr(
         client_module,
         "ffi",
-        SimpleNamespace(NULL=0, new=lambda spec, value: value, string=lambda value: value),
+        SimpleNamespace(
+            NULL=0,
+            new=lambda spec, value: value,
+            string=lambda value, maxlen=-1: value if maxlen < 0 else value[:maxlen],
+        ),
     )
     wall = iter([100, 103])
     monotonic = iter([200, 202.5])
