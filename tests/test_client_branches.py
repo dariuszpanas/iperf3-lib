@@ -17,9 +17,9 @@ class DummyFFI:
         """Initialize DummyFFI with NULL attribute."""
         self.NULL = 0
 
-    def string(self, s):
+    def string(self, s, maxlen=None):
         """Return the input string (simulate cffi.string)."""
-        return s
+        return s[:maxlen]
 
     def new(self, spec, val):
         """Return the value (simulate cffi.new)."""
@@ -314,6 +314,104 @@ def test_client_uses_json_callback_when_supported(monkeypatch):
     assert res.ok is True
     assert res.raw["end"]["sum_sent"]["bits_per_second"] == 99.0
     assert record["json_callback"] is True
+
+
+@pytest.mark.parametrize("getter", [0, b'{"end":{"sum_sent":{"bits_per_second":99}}}'])
+def test_direct_callback_copy_failure_requires_independent_document(monkeypatch, getter):
+    """A callback overflow cannot reuse stale bytes as a successful final result."""
+    from iperf3_lib import _event_capture
+
+    class CallbackLib(RecorderLib):
+        def iperf_set_test_json_callback(self, t, callback):
+            self.callback = callback
+
+        def iperf_run_client(self, t):
+            self.callback(t, b'{"end":{}}')
+            self.callback(t, b"x" * (_event_capture.MAX_CAPTURE_BYTES + 1))
+            return 0
+
+        def iperf_get_test_json_output_string(self, t):
+            return getter
+
+        def iperf_free_test(self, t):
+            self._record["frees"] = self._record.get("frees", 0) + 1
+            # The installed Python/CFFI callback is still strongly owned here.
+            self.callback(t, b'{"end":{}}')
+
+    result, record = _setup_and_run(monkeypatch, CallbackLib(), {}, CallbackFFI())
+    assert record["frees"] == 1
+    if getter:
+        assert result.ok and result.raw == json.loads(getter)
+        assert any(item.code == "execution.capture_recovered" for item in result.diagnostics)
+    else:
+        assert not result.ok and "Cannot capture native JSON" in result.error
+
+
+def test_direct_getter_overflow_frees_native_test_once(monkeypatch):
+    """Getter copying has the callback bound even when callback APIs are absent."""
+    from iperf3_lib import _event_capture
+    from iperf3_lib.exceptions import IperfLibraryError
+
+    class BoundedLib(RecorderLib):
+        def iperf_get_test_json_output_string(self, t):
+            return b"x" * (_event_capture.MAX_CAPTURE_BYTES + 1)
+
+        def iperf_free_test(self, t):
+            self._record["frees"] = self._record.get("frees", 0) + 1
+
+    native = BoundedLib()
+    with pytest.raises(IperfLibraryError, match="capture byte limit"):
+        _setup_and_run(monkeypatch, native, {})
+    assert native._record["frees"] == 1
+
+
+@pytest.mark.parametrize("replacement", ["callback", "getter"])
+def test_direct_later_complete_document_cannot_erase_native_error(monkeypatch, replacement):
+    """A known error survives later valid JSON, including independent getter recovery."""
+    clean = b'{"end":{"sum_sent":{"bits_per_second":99}}}'
+
+    class CallbackLib(RecorderLib):
+        def iperf_set_test_json_callback(self, t, callback):
+            self.callback = callback
+
+        def iperf_run_client(self, t):
+            self.callback(t, b'{"error":"observed native failure","end":{}}')
+            self.callback(t, clean if replacement == "callback" else b"invalid JSON")
+            return 0
+
+        def iperf_get_test_json_output_string(self, t):
+            return clean
+
+        def iperf_free_test(self, t):
+            self._record["frees"] = self._record.get("frees", 0) + 1
+
+    result, record = _setup_and_run(monkeypatch, CallbackLib(), {}, CallbackFFI())
+    assert not result.ok and result.error == "observed native failure"
+    assert result.execution.status == "failed"
+    assert record["frees"] == 1
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        b'{"end":{},"end":{"sum_sent":{"bits_per_second":99}}}',
+        b'{"extra":NaN,"end":{"sum_sent":{"bits_per_second":99}}}',
+    ],
+)
+def test_direct_getter_rejects_non_strict_native_json(monkeypatch, payload):
+    """Direct final JSON follows the same duplicate/nonfinite rules as worker capture."""
+
+    class InvalidLib(RecorderLib):
+        def iperf_get_test_json_output_string(self, t):
+            return payload
+
+        def iperf_free_test(self, t):
+            self._record["frees"] = self._record.get("frees", 0) + 1
+
+    native = InvalidLib()
+    with pytest.raises(ValueError):
+        _setup_and_run(monkeypatch, native, {})
+    assert native._record["frees"] == 1
 
 
 def test_client_records_requested_native_and_observed_execution_metadata(monkeypatch):

@@ -32,6 +32,318 @@ RESULT = {
 }
 
 
+def capture_receipt(**updates):
+    """Build the exact bounded native-capture receipt with overridable evidence."""
+    receipt = {
+        "schema_version": 1,
+        "callbacks": 1,
+        "copied": 1,
+        "capture_dropped": 0,
+        "malformed": 0,
+        "retention_dropped": 0,
+        "live_emitted": 1,
+        "live_dropped": 0,
+        "complete_document": True,
+        "complete_document_source": "callback",
+        "getter_error": None,
+        "reconstruction_complete": True,
+        "diagnostics": [],
+        "limits": dict(_execution._CAPTURE_LIMITS),
+    }
+    receipt.update(updates)
+    return receipt
+
+
+def live_frame(kind="native_document", data=None, *, sequence=1, offset=0.1):
+    """Build a native-origin typed frame without Session-owned transport metadata."""
+    return {
+        "type": "live_event",
+        "kind": kind,
+        "data": RESULT["raw"] if data is None else data,
+        "capture_sequence": sequence,
+        "arrival_offset_seconds": offset,
+        "time": 10.5,
+    }
+
+
+def test_typed_and_legacy_callbacks_preserve_separate_sequences_and_identity(monkeypatch):
+    """Duplicated delivery modes keep legacy envelope counts and admitted identities."""
+    processes = child(
+        monkeypatch,
+        "assert request['events'] and request['live_events']\n"
+        "send({'type':'event','kind':'end','data':result['raw']['end'],'sequence':1,'time':10.5})\n"
+        f"send({live_frame('native_end', RESULT['raw']['end'])!r})\n"
+        f"send({live_frame(sequence=2, offset=0.2)!r})\n"
+        f"result['capture']={capture_receipt(callbacks=2, copied=2, live_emitted=2)!r}\n"
+        "result.update(events_emitted=1,events_dropped=0)\nsend(result)\nsend({'type':'done'})\n",
+    )
+    live, legacy = [], []
+    result = _execution.run_worker("client", {}, on_event=legacy.append, _on_live_event=live.append)
+    assert [event.kind for event in live] == [
+        "worker_state",
+        "worker_state",
+        "native_end",
+        "native_document",
+    ]
+    assert [event.delivery_sequence for event in live] == [1, 2, 3, 4]
+    assert [event.capture_sequence for event in live] == [None, None, 1, 2]
+    assert [(event.kind, event.sequence, event.received_at_seconds) for event in legacy] == [
+        ("end", 1, 10.5)
+    ]
+    worker = result.extensions["iperf3_lib.worker"]
+    assert all(
+        (event.request_id, event.worker_id, event.run_index)
+        == (worker["request_id"], worker["worker_id"], 1)
+        for event in live
+    )
+    assert result.extensions["iperf3_lib.event_delivery"]["emitted"] == 1
+    assert result.extensions["iperf3_lib.live_delivery"]["emitted"] == 2
+    live[-1].payload.raw["end"].clear()
+    legacy[0].data.clear()
+    assert result.raw["end"] and live[-2].payload.raw
+    assert processes[0].poll() == 0
+
+
+def test_typed_projected_oversize_is_counted_without_losing_complete_result(monkeypatch):
+    """Canonical projection expansion is advisory loss, even when the wire frame fits."""
+    processes = child(
+        monkeypatch,
+        "payload={'sum':{'bytes':1,'seconds':1},'padding':'x'*(_ipc.MAX_EVENT_BYTES-550)}\n"
+        "send({'type':'live_event','kind':'interval','data':payload,'capture_sequence':1,'arrival_offset_seconds':0.1,'time':10.5})\n"
+        f"result['capture']={capture_receipt()!r}\nsend(result)\nsend({{'type':'done'}})\n",
+    )
+    live = []
+    result = _execution.run_worker("client", {}, _on_live_event=live.append)
+    assert result.ok and processes[0].poll() == 0
+    assert result.extensions["iperf3_lib.live_delivery"]["projection_dropped"] == 1
+    gaps = [event.payload for event in live if event.kind == "delivery_gap"]
+    assert [(gap.stage, gap.dropped) for gap in gaps] == [("projection", 1)]
+
+
+def test_typed_semantic_malformed_event_preserves_independent_complete_result(monkeypatch):
+    """Valid JSON with unusable native fields becomes an explicit advisory malformed event."""
+    child(
+        monkeypatch,
+        f"send({live_frame('interval', {'streams': 'bad'})!r})\n"
+        f"result['capture']={capture_receipt()!r}\nsend(result)\nsend({{'type':'done'}})\n",
+    )
+    live = []
+    result = _execution.run_worker("client", {}, _on_live_event=live.append)
+    malformed = next(event for event in live if event.kind == "malformed")
+    assert malformed.payload.reason == "invalid_native_shape" and malformed.capture_sequence == 1
+    assert result.ok
+    assert result.extensions["iperf3_lib.live_delivery"]["projection_malformed"] == 1
+    assert any(d.code == "execution.malformed_live_event" for d in result.diagnostics)
+
+
+@pytest.mark.parametrize("native_error", [None, "original native failure"])
+def test_malformed_final_native_document_retains_raw_and_native_failure_precedence(native_error):
+    """Normalization failure remains inspectable and cannot replace the original native error."""
+    message = {**RESULT, "raw": {"intervals": [{"streams": "bad"}]}, "error": native_error}
+    result = _execution._decode_result(message, "client")
+    assert not result.ok and result.raw == message["raw"]
+    assert result.execution.status == ("failed" if native_error else "incomplete")
+    assert result.error == (native_error or "Native JSON could not be normalized")
+    assert any(d.code == "execution.malformed_native_json" for d in result.diagnostics)
+
+
+@pytest.mark.parametrize("complete", [False, True])
+@pytest.mark.parametrize("native_error", [None, "original failure"])
+def test_capture_loss_only_invalidates_reconstruction_and_preserves_native_error(
+    complete, native_error
+):
+    """Capture quality and native failure stay independent from complete-document recovery."""
+    capture = capture_receipt(
+        callbacks=2,
+        capture_dropped=1,
+        reconstruction_complete=False,
+        complete_document=complete,
+        complete_document_source="getter" if complete else None,
+    )
+    result = _execution._decode_result(
+        {**RESULT, "capture": capture, "error": native_error}, "client"
+    )
+    assert result.ok is (complete and native_error is None)
+    assert result.execution.status == (
+        "failed" if native_error else "completed" if complete else "incomplete"
+    )
+    if native_error:
+        assert result.error == native_error
+    assert result.extensions["iperf3_lib.event_capture"] == capture
+    capture["callbacks"] = 999
+    assert result.extensions["iperf3_lib.event_capture"]["callbacks"] == 2
+
+
+@pytest.mark.parametrize(
+    "update",
+    [
+        {"schema_version": True},
+        {"callbacks": True},
+        {"copied": -1},
+        {"callbacks": 0},
+        {"malformed": 2},
+        {"retention_dropped": 2},
+        {"live_dropped": 2},
+        {"complete_document": 1},
+        {"complete_document_source": None},
+        {"reconstruction_complete": False},
+        {"getter_error": "x" * 257},
+        {"diagnostics": ["x"] * 9},
+        {"diagnostics": [True]},
+        {"limits": {**_execution._CAPTURE_LIMITS, "diagnostics": True}},
+        {"unexpected": 1},
+    ],
+)
+def test_capture_receipt_is_strict_and_rejects_contradictions(update):
+    """Loss receipts cannot be fabricated by bools, missing bounds or inconsistent algebra."""
+    with pytest.raises(_ipc.IPCError):
+        _execution._validate_capture(capture_receipt(**update))
+
+
+@pytest.mark.parametrize(
+    "update",
+    [
+        {"capture_sequence": True},
+        {"capture_sequence": 0},
+        {"capture_sequence": None},
+        {"arrival_offset_seconds": True},
+        {"arrival_offset_seconds": -1},
+        {"arrival_offset_seconds": float("inf")},
+        {"time": None},
+        {"time": -1},
+        {"kind": "terminal"},
+        {"kind": "worker_state"},
+        {"kind": "interval", "data": 42},
+    ],
+)
+def test_typed_native_provenance_rejects_invalid_fields(update):
+    """Only native callback kinds with positive capture sequence and finite arrivals pass."""
+    with pytest.raises(_ipc.IPCError):
+        _execution._validate_live_frame({**live_frame(), **update})
+
+
+@pytest.mark.parametrize(
+    "second",
+    [
+        live_frame(sequence=1, offset=0.2),
+        live_frame(sequence=2, offset=0.01),
+    ],
+)
+def test_typed_capture_replay_and_monotonic_time_regressions_abort_worker(monkeypatch, second):
+    """Native sequence replay and arrival-clock reversal fail before application admission."""
+    processes = child(monkeypatch, f"send({live_frame()!r})\nsend({second!r})\ntime.sleep(20)\n")
+    with pytest.raises(IperfLibraryError, match="Out-of-order"):
+        _execution.run_worker("client", {}, _on_live_event=lambda event: None, timeout=3)
+    assert processes[0].poll() is not None
+
+
+def test_typed_result_counts_cannot_contradict_received_native_events(monkeypatch):
+    """Result receipts account for every accepted live frame independently of legacy counts."""
+    processes = child(
+        monkeypatch,
+        f"send({live_frame()!r})\nresult['capture']={capture_receipt(live_emitted=0)!r}\n"
+        "send(result)\nsend({'type':'done'})\n",
+    )
+    with pytest.raises(IperfLibraryError, match="contradict typed delivery"):
+        _execution.run_worker("client", {}, _on_live_event=lambda event: None)
+    assert processes[0].poll() is not None
+
+
+def test_typed_and_legacy_inbox_share_capacity_with_separate_per_run_losses(monkeypatch):
+    """Two delivery modes cannot double queue capacity or alter each other's counters."""
+    monkeypatch.setattr(_ipc, "MAX_PENDING_EVENTS", 2)
+    inbox = _execution._Inbox()
+    for kind in ("event", "live_event", "live_event", "event"):
+        inbox.put({"type": kind}, 100)
+    assert inbox.events == 2 and inbox.dropped == inbox.live_dropped == 1
+    inbox.put({"type": "result"}, 200)
+    assert inbox.dropped == inbox.live_dropped == 0
+    assert inbox.get(0)["type"] == "event"
+    assert inbox.get(0)["type"] == "live_event"
+    assert inbox.get(0) == {"type": "result", "_parent_dropped": 1, "_parent_live_dropped": 1}
+
+
+def test_typed_callback_error_keeps_process_cleanup_precedence(monkeypatch):
+    """An application typed callback failure is raised after the worker has been reaped."""
+    processes = child(
+        monkeypatch,
+        f"send({live_frame()!r})\nresult['capture']={capture_receipt()!r}\n"
+        "time.sleep(.1)\nsend(result)\nsend({'type':'done'})\n",
+    )
+    calls = []
+
+    def fail(event):
+        calls.append(event.kind)
+        if event.kind == "native_document":
+            raise LookupError("consumer failure")
+
+    with pytest.raises(LookupError, match="consumer failure"):
+        _execution.run_worker("client", {}, _on_live_event=fail)
+    assert calls == ["worker_state", "worker_state", "native_document"]
+    assert processes[0].poll() == 0 and processes[0].stdout.closed
+
+
+@pytest.mark.parametrize("tamper", [False, True])
+def test_capture_gap_has_no_native_arrival_and_matches_final_loss_count(monkeypatch, tamper):
+    """Synthetic capture loss keeps explicit absent arrival and cannot contradict receipts."""
+    gap = {
+        "type": "live_event",
+        "kind": "delivery_gap",
+        "data": {"stage": "capture", "dropped": 2 if tamper else 1},
+        "capture_sequence": None,
+        "arrival_offset_seconds": None,
+        "time": None,
+    }
+    receipt = capture_receipt(
+        callbacks=1,
+        copied=0,
+        capture_dropped=1,
+        reconstruction_complete=False,
+        complete_document=False,
+        complete_document_source=None,
+    )
+    processes = child(
+        monkeypatch,
+        f"send({gap!r})\nresult['capture']={receipt!r}\nsend(result)\nsend({{'type':'done'}})\n",
+    )
+    live = []
+    if tamper:
+        with pytest.raises(IperfLibraryError, match="contradict typed delivery"):
+            _execution.run_worker("client", {}, _on_live_event=live.append)
+    else:
+        result = _execution.run_worker("client", {}, _on_live_event=live.append)
+        assert not result.ok and result.execution.status == "incomplete"
+        event = next(event for event in live if event.kind == "delivery_gap")
+        assert (
+            event.capture_sequence
+            is event.arrival_offset_seconds
+            is event.received_at_seconds
+            is None
+        )
+    assert processes[0].poll() is not None
+
+
+def test_typed_server_continuation_resets_native_sequence_and_projection_provenance(monkeypatch):
+    """Each server run has independent capture counters/start metadata and stable session identity."""
+    message = live_frame("native_start", {"test_start": {"protocol": "TCP", "reverse": 1}})
+    interval = live_frame(
+        "interval", {"sum": {"sender": False, "bytes": 1, "seconds": 1}}, sequence=1
+    )
+    child(
+        monkeypatch,
+        f"result['capture']={capture_receipt()!r}\nsend({message!r})\nsend(result)\n"
+        "assert receive()['continue']\n"
+        f"send({interval!r})\nsend(result)\nassert not receive()['continue']\nsend({{'type':'done'}})\n",
+    )
+    live = []
+    result = _execution.run_worker("server", {}, max_runs=2, _on_live_event=live.append)
+    assert result.ok and result.extensions["iperf3_lib.worker"]["run_index"] == 2
+    interval_event = next(event for event in live if event.kind == "interval")
+    assert interval_event.run_index == 2 and interval_event.capture_sequence == 1
+    assert interval_event.payload.measurements[0].direction == "unknown"
+    assert len({event.request_id for event in live}) == 1
+
+
 @pytest_asyncio.fixture
 async def loop_error_reports():
     """Capture unsolicited asyncio diagnostics without changing their delivery."""
@@ -462,7 +774,7 @@ def test_parent_inbox_byte_budget_reserves_result_and_terminal_capacity():
     inbox.finish()
     for _ in range(admitted):
         assert inbox.get(0)["type"] == "event"
-    assert inbox.get(0) == {"type": "result", "_parent_dropped": 1}
+    assert inbox.get(0) == {"type": "result", "_parent_dropped": 1, "_parent_live_dropped": 0}
     assert inbox.get(0) == {"type": "terminal"}
     assert inbox.get(0) == {"type": "eof"}
     assert (inbox.events, inbox.event_bytes, inbox.controls, inbox.control_bytes) == (0, 0, 0, 0)
@@ -688,7 +1000,9 @@ def test_worker_copies_json_before_reset_and_frees_once(monkeypatch, role, fail)
         _worker,
         "ffi",
         SimpleNamespace(
-            NULL=None, string=lambda value: value, callback=lambda signature, callback: callback
+            NULL=None,
+            string=lambda value, maxlen=None: value[:maxlen],
+            callback=lambda signature, callback: callback,
         ),
     )
     monkeypatch.setattr(
@@ -739,7 +1053,9 @@ def worker_native(monkeypatch):
         _worker,
         "ffi",
         SimpleNamespace(
-            NULL=None, string=lambda value: value, callback=lambda signature, callback: callback
+            NULL=None,
+            string=lambda value, maxlen=None: value[:maxlen],
+            callback=lambda signature, callback: callback,
         ),
     )
     monkeypatch.setattr(

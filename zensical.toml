@@ -18,6 +18,7 @@ nav = [
   { "Guides" = [
     { "Running clients and servers" = "guides/running-tests.md" },
     { "Native controls and execution" = "guides/native-controls.md" },
+    { "Consuming live events" = "guides/live-events.md" },
     { "Rate intent and capabilities" = "guides/configuration-intent.md" },
     { "Reading results" = "guides/results.md" },
     { "Portable result artifacts" = "guides/artifacts.md" },

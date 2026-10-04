@@ -1,10 +1,11 @@
 # Advanced execution: design and release disposition
 
-Status: **design criteria, with a first worker/event implementation added under
-[#53](https://github.com/dariuszpanas/iperf3-lib/issues/53)**. Reviewed on 2026-09-26.
-The [native-control guide](../../docs/guides/native-controls.md) documents that narrower
-public contract. This design's broader acceptance criteria are not established
-by implementation or by the historical native-event probe alone. The [roadmap](../roadmap.md) and
+Status: **implementation contracts for the unreleased 0.4.0 scope**. The original
+design review and native-event exploration were recorded on 2026-09-26.
+The [native-control guide](../../docs/guides/native-controls.md) and
+[live-event guide](../../docs/guides/live-events.md) document the public interfaces.
+The historical probe does not establish their broader acceptance criteria.
+The [roadmap](../roadmap.md) and
 [release-scope issue #26](https://github.com/dariuszpanas/iperf3-lib/issues/26)
 track the overall release decision.
 
@@ -17,8 +18,8 @@ criteria have evidence; implementation and collected tests alone are insufficien
 
 | Proposal | Decision | Evidence needed for complete qualification |
 | --- | --- | --- |
-| [Adaptive UDP #34](https://github.com/dariuszpanas/iperf3-lib/issues/34) | Separate pure finite planner, sequential execution and standalone reports; see the [unreleased guide](../../docs/guides/adaptive-udp.md). | Deterministic decision tests, bounded native mechanics, and a controlled impaired-link experiment. |
-| [Live events #35](https://github.com/dariuszpanas/iperf3-lib/issues/35) | Keep a separate event API and retain the complete-result contract. | Minimum/latest event assembly, bounded delivery, failure/overflow/abandonment tests, and lifecycle qualification. |
+| [Adaptive UDP #34](https://github.com/dariuszpanas/iperf3-lib/issues/34) | Qualified and merged through PR69; see the [unreleased guide](../../docs/guides/adaptive-udp.md). | The issue retains exact-source synthetic, minimum/latest native, isolated impairment, and installed wheel/sdist evidence. |
+| [Live events #35](https://github.com/dariuszpanas/iperf3-lib/issues/35) | Owned typed async contexts preserve complete-result access and legacy callbacks. | Minimum/latest event assembly, bounded delivery, failure/overflow/abandonment tests, and lifecycle qualification. |
 | [Process isolation #36](https://github.com/dariuszpanas/iperf3-lib/issues/36) | Qualified and merged through PR68. | The [acceptance map](isolated-execution-qualification.md) and issue retain the exact-source installed matrix, bounded transport, partial evidence and resource cleanup qualification. |
 
 Native event shapes have been observed in a small loopback experiment. The
@@ -131,17 +132,21 @@ mechanism; adaptive UDP remains unreleased until separately selected and qualifi
 
 ### Event and result contracts
 
-Explore a separate `events()` API; the name and transport are provisional.
-An asynchronous iterator is a candidate, subject to ownership and delivery
-qualification. Existing methods keep their complete-result behavior.
+`Client.events()` and `Server.events_once()` return inert `EventStream`
+instances. Async context entry snapshots configuration and starts one owned
+isolated operation. One consumer iterates typed `LiveEvent` values and obtains
+the final result through `result()`. Context exit and explicit `aclose()` settle
+ownership; an early break or cancelled wait cannot leave an unowned worker.
+Existing complete-result methods and four-field `NativeEvent` callbacks keep
+their public shape.
 
-Each event should retain run ID, increasing callback-arrival sequence, copied
-raw payload, event kind, monotonic arrival offset, and optional native
-measurement timestamps. Arrival order describes delivery, not packet chronology.
+Each typed event retains run identity, a delivery sequence, optional native
+capture sequence, copied raw evidence, kind, and separately named monotonic
+arrival and native measurement timing. Arrival order describes delivery, not packet chronology.
 Direction, endpoint observation, scope, and local stream identity must follow
 the shared result semantics, with unknown values explicit.
 
-Candidate kinds are start, interval, native error, end, complete document,
+Payload kinds distinguish start, interval, native error, end, complete document,
 server output, malformed input, delivery gap, and worker terminal state.
 Unknown future kinds remain advisory raw events. A native end event and the
 wrapper's terminal state are distinct: the probe observed end after an error.
@@ -150,10 +155,13 @@ on every supported native version.
 
 The [native observation report](native-event-observations.md) shows that
 3.19.1 lacks the full-output setter and returned no complete document in
-streaming mode. Supporting that endpoint requires qualified event assembly
-or an explicitly narrower event-only terminal contract. On 3.21, retained
-complete JSON can duplicate event data and must count against memory bounds.
-Choose and document this compatibility strategy before exposing the API.
+streaming mode. That endpoint reconstructs from bounded retained envelopes;
+missing or malformed input makes a reconstructed result unsuccessful and
+incomplete even when an end fragment exists. An original native error remains
+a failure. On 3.21, an independently retained valid complete document can
+recover final evidence despite lost progress. Combined serialized evidence
+counts against the retention allowance. Neither representation changes the
+existing result artifact schema or `iperf3_lib.native_json` extension shape.
 
 ### Callback ownership and delivery
 
@@ -169,8 +177,10 @@ and terminal bookkeeping separately so interval overflow cannot erase final
 status. If intervals are dropped, retain sequence gaps and cumulative dropped
 counts. An incomplete event sequence cannot be presented as a complete result.
 
-Malformed input should produce a bounded diagnostic. Copy failures become
-explicit terminal data-quality failures. Neither parsing errors nor user
+Malformed input and copy failures produce bounded diagnostics and explicit
+capture quality. Lossy reconstruction cannot report success; a separately
+retained valid native complete document can recover final evidence.
+Neither parsing errors nor user
 callback exceptions may escape through C. Consumer abandonment stops delivery
 and discards future nonterminal payloads; the owner must still drain/clean up
 the direct run or await an isolated worker's terminal state. Queue bounds do
@@ -179,6 +189,8 @@ not cancel a native call.
 ### Qualification still required
 
 The 22 exploratory probes establish small event-shape observations only.
+The [live-event qualification map](live-event-qualification.md) connects these
+requirements to executable tests and exact-source installed receipts.
 Production qualification must cover malformed/oversized payloads, copy and
 consumer failures, queue saturation, dropped-event reporting, abandonment,
 late/error terminal events, and minimum/latest final-result behavior across
@@ -313,9 +325,10 @@ design do not establish its cancellation, stress or orphan-cleanup qualification
 
 ## Release follow-through
 
-Keep #34–36 open until their implementation and qualification criteria are
-met. This document records a design disposition, not completion of those
-criteria. The native-controls implementation must preserve complete results and
+Close each issue only when its implementation and qualification criteria are
+met, with acceptance checkboxes and retained exact-source evidence reconciled.
+Issues #34 and #36 record their completed qualification. The live-event issue
+tracks the remaining candidate evidence separately. The native-controls implementation must preserve complete results and
 explicit lifecycle/concurrency limits while its combined source is qualified.
 Revisit each broader proposal with its own acceptance evidence and release
 decision; adaptive UDP selection remains separate from explicit sweeps.

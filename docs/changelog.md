@@ -6,6 +6,15 @@ These pages describe `main`. Released versions remain available through
 
 ## Unreleased
 
+- Add owned typed live-event streams through `Client.events()` and
+  `Server.events_once()`, retaining complete-result access and awaiting cleanup
+  after consumer abandonment or cancellation. Separate native measurement time,
+  callback arrival, flow association, and wrapper terminal status.
+- Move native JSON parsing and result assembly outside C callbacks. Bound
+  copied payloads, queued bytes, retained evidence, and consumer delivery;
+  distinguish capture loss from progress loss and mark lossy minimum-version
+  reconstruction incomplete. Existing `NativeEvent` and report schemas remain
+  unchanged.
 - Add exploratory bounded adaptive UDP experiments with explicit admission
   limits, confirmation measurements, retained non-monotonic and failed
   observations, and standalone reports of tested operating points.

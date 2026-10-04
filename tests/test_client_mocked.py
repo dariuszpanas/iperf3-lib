@@ -12,9 +12,9 @@ class DummyFFI:
         """Initialize DummyFFI with NULL attribute."""
         self.NULL = 0
 
-    def string(self, s):
+    def string(self, s, maxlen=None):
         """Return the input string (simulate cffi.string)."""
-        return s
+        return s[:maxlen]
 
     def new(self, spec, val):
         """Return the value (simulate cffi.new)."""
