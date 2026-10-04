@@ -15,6 +15,10 @@ Upgrading an existing 0.2.0 application? Read the
 [dataclass migration guide](guides/migration-0.3.md) for API substitutions,
 stricter inputs, missing-data handling, and saved-result formats.
 
+For an existing 0.3.0 application, the
+[unreleased upgrade guide](guides/migration-0.4.md) covers async lifecycle
+changes, customizations, optional new APIs, and report readers.
+
 ## Install the Python package
 
 For the published package, choose the installer used by your application:
