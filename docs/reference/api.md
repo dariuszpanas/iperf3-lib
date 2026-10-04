@@ -422,7 +422,7 @@ Import `PlanExecutionResult`, `PlanTrialRecord`, `PlanExecutionReport`,
 `iperf3_lib.plan_execution`. Each error exposes a detached `partial_result`;
 cleanup errors also retain original worker owners in `cleanup_errors`.
 The plan deadline is separate from the elapsed admission budget. Execution is
-sequential with global completion-to-next-start pauses. Interrupted records
+sequential with global completion-to-next-start pauses. Interrupted and exception records
 carry bounded `partial_events`, `events_observed`, and `events_dropped`;
 `cleanup_confirmed` and `execution_success` describe the full history.
 
@@ -444,7 +444,9 @@ These functions use standalone plan-execution schema 2, with
 `pause_semantics="global_completion_to_start"`. They share the report validation
 exceptions but do not reinterpret assessment-v1 or sweep-v1 histories. See
 [async plan evidence](../guides/trials.md#cancel-an-async-plan-and-retain-its-evidence)
-for cancellation, retention limits and compatibility boundaries.
+for cancellation, retention limits and compatibility boundaries. Existing v2
+archives remain readable; new exception records carrying event evidence require
+the updated v2 reader.
 
 ## Bounded concurrent plans (unreleased)
 

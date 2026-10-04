@@ -124,6 +124,23 @@ def report(stop=None, *, paused=False):
     )
 
 
+def exception_execution(*, returned_evidence=False, dropped_only=False):
+    """Keep an ordinary failure between two completed sequential trials."""
+    current = execution()
+    failed = replace(
+        current.trials[1],
+        status="exception",
+        artifact=None,
+        exception=TrialException("example.WorkerError", "no final artifact"),
+        partial_events=() if dropped_only else (NativeEvent("interval", {"bytes": 20}, 1, 102.5),),
+        events_observed=2,
+        events_dropped=2 if dropped_only else 1,
+        returned_result_evidence={"raw": {"end": {}}} if returned_evidence else None,
+        diagnostics=("Result could not be encoded",) if returned_evidence else (),
+    )
+    return replace(current, trials=(current.trials[0], failed, current.trials[2]))
+
+
 @pytest.mark.parametrize(
     "annotation",
     [
@@ -291,9 +308,10 @@ def test_contradictory_fields_and_fabricated_interruption_evidence_are_rejected(
         plan_report_from_dict(data)
 
 
-def test_events_require_increasing_sequence_count_bytes_and_interrupted_status():
+@pytest.mark.parametrize("status", ["cancelled", "exception"])
+def test_events_require_increasing_sequence_count_bytes_and_eligible_status(status):
     """Retention has count and serialized-byte limits independent of native data size."""
-    original = execution("cancelled")
+    original = execution("cancelled") if status == "cancelled" else exception_execution()
     middle = original.trials[1]
 
     def candidate(events):
@@ -323,8 +341,79 @@ def test_events_require_increasing_sequence_count_bytes_and_interrupted_status()
         replace(original.trials[0], partial_events=events, events_observed=64),
         *original.trials[1:],
     )
-    with pytest.raises(ReportValidationError, match="only interrupted"):
+    with pytest.raises(ReportValidationError, match="only exception or interrupted"):
         snapshot_plan_execution(replace(original, trials=records))
+
+
+@pytest.mark.parametrize("returned_evidence", [False, True])
+@pytest.mark.parametrize("dropped_only", [False, True])
+def test_exception_events_round_trip_and_junit_preserve_all_diagnostic_evidence(
+    returned_evidence, dropped_only
+):
+    """V2 retains crash diagnostics, retention counts, and any unencodable result together."""
+    original = PlanExecutionReport(
+        exception_execution(returned_evidence=returned_evidence, dropped_only=dropped_only),
+        ArtifactProducer("fixture", "2"),
+    )
+    restored = loads_plan_report(dumps_plan_report(original))
+    assert restored == original and restored.schema_version == 2
+    record = restored.execution.trials[1]
+    assert record.artifact is None and record.status == "exception" and record.reason is None
+    assert record.events_observed == 2 and record.events_dropped == (2 if dropped_only else 1)
+    assert restored.execution.cleanup_confirmed and not restored.execution.execution_success
+    root = ET.fromstring(render_plan_junit(restored))
+    failed = root.findall("testcase")[1]
+    assert failed.find("error").attrib["type"] == "exception"
+    evidence = json.loads(failed.find("system-out").text)
+    assert evidence["events_observed"] == 2 and evidence["events_dropped"] == record.events_dropped
+    if dropped_only:
+        assert evidence["partial_events"] == []
+    else:
+        assert evidence["partial_events"][0]["data"] == {"bytes": 20}
+        original.execution.trials[1].partial_events[0].data["bytes"] = 999
+        assert record.partial_events[0].data == {"bytes": 20}
+    if returned_evidence:
+        assert evidence["returned_result_evidence"] == record.returned_result_evidence
+    else:
+        assert "returned_result_evidence" not in evidence
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"events_observed": 0},
+        {"events_observed": True},
+        {"events_dropped": -1},
+        {"events_dropped": 0},
+        {"partial_events": (NativeEvent("", {}, 1, 102.5),)},
+        {"partial_events": (NativeEvent("interval", {}, 0, 102.5),)},
+        {"partial_events": (NativeEvent("interval", {}, 1, float("nan")),)},
+        {"exception": None},
+    ],
+)
+def test_exception_event_metadata_and_outcome_are_validated(change):
+    """The additive status cannot bypass strict event accounting or exception requirements."""
+    current = exception_execution()
+    records = (current.trials[0], replace(current.trials[1], **change), current.trials[2])
+    with pytest.raises(ReportValidationError):
+        snapshot_plan_execution(replace(current, trials=records))
+
+
+@pytest.mark.parametrize("status", ["completed", "failed", "incomplete", "not_run"])
+def test_partial_events_remain_invalid_for_native_and_unstarted_outcomes(status):
+    """Native artifact records and unstarted trials cannot acquire exception diagnostics."""
+    current = execution("cancelled") if status == "not_run" else execution()
+    index = 2 if status == "not_run" else 0
+    record = replace(
+        current.trials[index],
+        status=status,
+        partial_events=(NativeEvent("interval", {}, 1, 100),),
+        events_observed=1,
+    )
+    records = list(current.trials)
+    records[index] = record
+    with pytest.raises(ReportValidationError, match="only exception or interrupted"):
+        snapshot_plan_execution(replace(current, trials=tuple(records)))
 
 
 @pytest.mark.parametrize(

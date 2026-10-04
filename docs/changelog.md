@@ -6,6 +6,12 @@ These pages describe `main`. Released versions remain available through
 
 ## Unreleased
 
+- Preserve bounded observed events when a sequential async trial encounters a
+  worker crash, transport failure or another execution exception. Keep completed
+  artifacts and unstarted trials in the history, and retain both event and
+  unencodable-result diagnostics in JUnit. Existing v2 archives and fields remain
+  unchanged; earlier strict readers must be upgraded for new exception records
+  carrying events.
 - Add opt-in bounded concurrent plans with worker and aggregate target-rate
   admission limits, endpoint and caller-resource exclusion, per-cell ordering,
   and cleanup-safe multi-worker cancellation. Standalone schema-v3 reports retain

@@ -4,6 +4,7 @@ import json
 import subprocess
 import sys
 import textwrap
+from pathlib import Path
 
 import pytest
 
@@ -13,6 +14,10 @@ CASES = (
     "active-deadline-udp",
     "completed-tcp",
     "stop-on-error-udp",
+    "active-worker-crash-tcp",
+    "active-worker-crash-udp",
+    "active-transport-failure-tcp",
+    "active-transport-failure-udp",
 )
 
 SCENARIO = textwrap.dedent(
@@ -25,12 +30,15 @@ SCENARIO = textwrap.dedent(
     import pathlib
     import platform
     import re
+    import signal
     import socket
     import subprocess
     import sys
     import tempfile
     import time
 
+    sys.path.insert(0, sys.argv[2])
+    import _native_resource_inventory as inventory
     from iperf3_lib import _execution
     from iperf3_lib import async_trials as plan_runner
     from iperf3_lib.async_trials import arun_plan
@@ -45,13 +53,18 @@ SCENARIO = textwrap.dedent(
     from iperf3_lib.trials import PlanBudget, TrialPolicy, TrialSpec, prepare_plan
 
     case = sys.argv[1]
+    crash_case = case.startswith('active-worker-crash-')
+    transport_case = case.startswith('active-transport-failure-')
+    fault_case = crash_case or transport_case
     protocol = case.rsplit('-', 1)[1]
     host = '127.0.0.1'
     with socket.socket() as reservation:
         reservation.bind((host, 0))
         port = reservation.getsockname()[1]
     processes = []
+    ready = {}
     real_popen = subprocess.Popen
+    real_accept = _execution._Responses.accept
 
     def record(*args, **kwargs):
         process = real_popen(*args, **kwargs)
@@ -61,6 +74,15 @@ SCENARIO = textwrap.dedent(
         return process
 
     _execution.subprocess.Popen = record
+
+    def observe_accept(responses, message):
+        outcome = real_accept(responses, message)
+        if message['type'] == 'ready':
+            ready[responses.pid] = {key: message[key] for key in
+                                   ('protocol_version', 'request_id', 'worker_id', 'run_index', 'pid', 'producer')}
+        return outcome
+
+    _execution._Responses.accept = observe_accept
 
     async def listener_ready(task):
         deadline = time.monotonic() + 8
@@ -84,10 +106,9 @@ SCENARIO = textwrap.dedent(
             released.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             released.bind((host, port))
 
-    def producer_receipt(result, process):
+    def worker_receipt(receipt, process):
         from iperf3_lib.ffi.api import POSSIBLE_NAMES, ffi, lib
 
-        receipt = result.extensions['iperf3_lib.worker']
         assert type(receipt['protocol_version']) is int and receipt['protocol_version'] == 1
         assert receipt['pid'] == process.pid
         assert receipt['run_index'] == 1
@@ -106,6 +127,9 @@ SCENARIO = textwrap.dedent(
         }
         return receipt
 
+    def producer_receipt(result, process):
+        return worker_receipt(result.extensions['iperf3_lib.worker'], process)
+
     def positive_interval_bytes(events):
         return sum(
             event.data.get('sum', {}).get('bytes', 0)
@@ -121,6 +145,7 @@ SCENARIO = textwrap.dedent(
         pause_entered = asyncio.Event()
         server_results = []
         active_bytes = []
+        active_measurements = []
 
         original_sleep = asyncio.sleep
 
@@ -138,6 +163,9 @@ SCENARIO = textwrap.dedent(
             # second owned client excludes late callbacks from trial one.
             original_capture(capture, event)
             if len(processes) == 3 and positive_interval_bytes((event,)) > 0:
+                active_measurements.append({'sequence': event.sequence,
+                                            'received_at_seconds': event.received_at_seconds,
+                                            'bytes': positive_interval_bytes((event,))})
                 loop.call_soon_threadsafe(captured_active_event.set)
 
         plan_runner._Events.__call__ = observe_capture
@@ -152,14 +180,14 @@ SCENARIO = textwrap.dedent(
                     active_bytes.append(measured)
                     loop.call_soon_threadsafe(active_observed.set)
 
-        expected_statuses = {
+        expected_statuses = ['completed', 'exception', 'not_run'] if fault_case else {
             'active-cancel-tcp': ['completed', 'cancelled', 'not_run'],
             'pause-cancel-tcp': ['completed', 'not_run', 'not_run'],
             'active-deadline-udp': ['completed', 'timed_out', 'not_run'],
             'completed-tcp': ['completed', 'completed', 'completed'],
             'stop-on-error-udp': ['completed', 'failed', 'not_run'],
         }[case]
-        expected_stop = {
+        expected_stop = 'stop_on_error' if fault_case else {
             'active-cancel-tcp': 'cancelled', 'pause-cancel-tcp': 'cancelled',
             'active-deadline-udp': 'timeout', 'completed-tcp': None,
             'stop-on-error-udp': 'stop_on_error',
@@ -167,7 +195,7 @@ SCENARIO = textwrap.dedent(
         expected_admitted = 1 if case == 'pause-cancel-tcp' else (3 if case == 'completed-tcp' else 2)
         server_runs = 1 if case in ('pause-cancel-tcp', 'stop-on-error-udp') else expected_admitted
         pause = 30 if case == 'pause-cancel-tcp' else 0.25
-        active_case = case in ('active-cancel-tcp', 'active-deadline-udp')
+        active_case = case.startswith('active-')
         server = Server(config=ServerConfig(
             bind_address=host, port=port, interval_seconds=0.25,
         ))
@@ -200,6 +228,7 @@ SCENARIO = textwrap.dedent(
             )
             try:
                 timeout = 6 if case == 'active-deadline-udp' else None
+                fault = None
                 plan_task = asyncio.create_task(arun_plan(plan, timeout=timeout))
                 if active_case:
                     await asyncio.wait_for(active_observed.wait(), timeout=5)
@@ -207,6 +236,21 @@ SCENARIO = textwrap.dedent(
                     assert active_bytes and active_bytes[0] > 0
                     if case == 'active-cancel-tcp':
                         plan_task.cancel('native plan cancellation qualification')
+                    elif fault_case:
+                        assert len(processes) == 3 and not plan_task.done()
+                        target = processes[2]
+                        assert target.returncode is None
+                        before = inventory.snapshot_process(target.pid)
+                        assert before['socket_fds'] and before['children'] == []
+                        assert all(children == [] for children in before['thread_children'].values())
+                        fault = {'kind': 'sigkill' if crash_case else 'stdout-close',
+                                 'worker': worker_receipt(ready[target.pid], target),
+                                 'before': before,
+                                 'measurements_before_fault': list(active_measurements)}
+                        if crash_case:
+                            os.kill(target.pid, signal.SIGKILL)
+                        else:
+                            await asyncio.wait_for(asyncio.to_thread(target.stdout.close), timeout=3)
                 elif case == 'pause-cancel-tcp':
                     await asyncio.wait_for(pause_entered.wait(), timeout=8)
                     # Observe the actual scheduler pause, then allow its real
@@ -236,7 +280,7 @@ SCENARIO = textwrap.dedent(
                 assert execution.execution_success is (case == 'completed-tcp')
                 assert all(trial.cleanup_confirmed for trial in execution.trials)
                 for trial in execution.trials:
-                    if trial.status in ('cancelled', 'timed_out', 'not_run'):
+                    if trial.status in ('cancelled', 'timed_out', 'exception', 'not_run'):
                         assert trial.artifact is None
                     if trial.status == 'not_run':
                         assert trial.reason == expected_stop
@@ -257,6 +301,15 @@ SCENARIO = textwrap.dedent(
                     interrupted_bytes = positive_interval_bytes(interrupted.partial_events)
                     assert interrupted_bytes > 0
                     assert interrupted.events_observed >= len(interrupted.partial_events) > 0
+                    assert interrupted.events_dropped == interrupted.events_observed - len(interrupted.partial_events)
+                if fault_case:
+                    assert execution.trials[1].exception is not None
+                    assert execution.trials[1].exception.type_name == 'iperf3_lib._ipc.IPCError'
+                    assert target.returncode == -9 if crash_case else target.returncode in (-15, -9, 1)
+                    birth = fault['before']['identity']['start_ticks']
+                    assert not inventory.process_identity_matches(target.pid, birth)
+                    fault.update(returncode=target.returncode, identity_absent_after=True,
+                                 pipe_closed=target.stdout.closed, measurements=list(active_measurements))
                 if case == 'pause-cancel-tcp':
                     assert execution.observed_pause_seconds > 0
                 if case == 'stop-on-error-udp':
@@ -307,6 +360,7 @@ SCENARIO = textwrap.dedent(
                     'report_sha256': hashlib.sha256(persisted.encode('utf-8')).hexdigest(),
                     'report_roundtrip': True, 'detached': True,
                     'completed_worker': first_producer, 'reuse_worker': reuse_producer,
+                    'fault': fault,
                 }))
             finally:
                 if plan_task is not None and not plan_task.done():
@@ -342,7 +396,7 @@ def test_async_plan_native_scenario_compiles():
 def test_native_async_plan_retains_partial_history_and_releases_workers(case, record_property):
     """Owned plans retain exact partial histories and permit measured listener reuse."""
     completed = subprocess.run(
-        [sys.executable, "-c", SCENARIO, case],
+        [sys.executable, "-c", SCENARIO, case, str(Path(__file__).resolve().parent)],
         capture_output=True,
         text=True,
         timeout=45,

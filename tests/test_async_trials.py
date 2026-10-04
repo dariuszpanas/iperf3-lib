@@ -10,7 +10,8 @@ import pytest
 import pytest_asyncio
 
 from iperf3_lib.config import ClientConfig
-from iperf3_lib.exceptions import IperfCleanupError
+from iperf3_lib.events import NativeEvent
+from iperf3_lib.exceptions import IperfCleanupError, IperfLibraryError
 from iperf3_lib.plan_execution import PlanCancelledError, PlanCleanupError, PlanTimeoutError
 from iperf3_lib.result import result_from_iperf_json
 from iperf3_lib.trials import PlanBudget, TrialPolicy, prepare_trials
@@ -497,6 +498,7 @@ async def test_returned_unencodable_result_retains_json_safe_evidence(monkeypatc
     returned.extensions["bad"] = object()
 
     async def execute(self, **kwargs):
+        kwargs["on_event"](NativeEvent("interval", {"sum": {"bytes": 20}}, 1, 10))
         return returned
 
     monkeypatch.setattr(client_type, "arun", execute)
@@ -506,6 +508,143 @@ async def test_returned_unencodable_result_retains_json_safe_evidence(monkeypatc
     assert record.artifact is None
     assert record.returned_result_evidence["raw"] == returned.raw
     assert record.diagnostics
+    assert record.partial_events == (NativeEvent("interval", {"sum": {"bytes": 20}}, 1, 10),)
+    assert record.events_observed == 1 and record.events_dropped == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stop_on_error", [False, True])
+@pytest.mark.parametrize("failure", ["worker_crash", "transport", "invalid_result"])
+async def test_exception_events_preserve_completed_prefix_and_sequential_admission_policy(
+    monkeypatch, client_type, stop_on_error, failure
+):
+    """Native diagnostics survive ordinary failure without changing whether later work runs."""
+    calls = []
+    payload = {"sum": {"bytes": 20}}
+
+    async def execute(self, **kwargs):
+        calls.append(asyncio.current_task())
+        kwargs["on_event"](NativeEvent("interval", payload, 1, 10))
+        if len(calls) == 2:
+            if failure == "worker_crash":
+                raise IperfLibraryError("Native worker exited with code -9")
+            if failure == "transport":
+                raise BrokenPipeError("Native worker transport closed")
+            return object()
+        return _completed()
+
+    monkeypatch.setattr(client_type, "arun", execute)
+    result = await _run(_plan(stop_on_error=stop_on_error))
+    payload["sum"]["bytes"] = 999
+    assert [record.status for record in result.trials] == [
+        "completed",
+        "exception",
+        "not_run" if stop_on_error else "completed",
+    ]
+    failed = result.trials[1]
+    assert failed.partial_events == (NativeEvent("interval", {"sum": {"bytes": 20}}, 1, 10),)
+    assert failed.events_observed == 1 and failed.events_dropped == 0
+    assert failed.artifact is None and failed.exception is not None and failed.reason is None
+    assert result.stop_reason == ("stop_on_error" if stop_on_error else None)
+    assert len(calls) == (2 if stop_on_error else 3) and all(child.done() for child in calls)
+    assert result.cleanup_confirmed and not result.execution_success
+    assert result.trials[0].artifact.result.ok and result.trials[0].partial_events == ()
+    assert result.trials[2].partial_events == ()
+    if not stop_on_error:
+        assert result.trials[2].artifact.result.ok
+
+
+@pytest.mark.asyncio
+async def test_cancellation_after_exception_retains_earlier_event_diagnostics(
+    monkeypatch, client_type
+):
+    """A later interrupted trial cannot erase the completed prefix or an earlier worker failure."""
+    entered = asyncio.Event()
+    calls = []
+    payload = {"sum": {"bytes": 20}}
+
+    async def execute(self, **kwargs):
+        calls.append(asyncio.current_task())
+        kwargs["on_event"](NativeEvent("interval", payload, 1, 10))
+        if len(calls) == 1:
+            return _completed()
+        if len(calls) == 2:
+            raise IperfLibraryError("Native worker crashed")
+        entered.set()
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(client_type, "arun", execute)
+    task = asyncio.create_task(_run(_plan(repetitions=4)))
+    try:
+        await asyncio.wait_for(entered.wait(), 2)
+        payload["sum"]["bytes"] = 999
+        task.cancel("after worker failure")
+        with pytest.raises(PlanCancelledError, match="after worker failure") as caught:
+            await _settled(task)
+        result = caught.value.partial_result
+        assert [record.status for record in result.trials] == [
+            "completed",
+            "exception",
+            "cancelled",
+            "not_run",
+        ]
+        assert result.trials[0].artifact.result.ok
+        assert result.trials[1].reason is None and result.trials[2].reason == "cancelled"
+        for record in result.trials[1:3]:
+            assert record.partial_events == (
+                NativeEvent("interval", {"sum": {"bytes": 20}}, 1, 10),
+            )
+            assert record.events_observed == 1 and record.events_dropped == 0
+            assert record.artifact is None
+        assert result.stop_reason == "cancelled" and result.cleanup_confirmed
+        assert len(calls) == 3 and all(child.done() for child in calls)
+    finally:
+        await _finish(task)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("payload_bytes", [1, 60000, 65536])
+async def test_exception_events_retain_bounded_prefix_and_dropped_only_counts(
+    monkeypatch, client_type, payload_bytes
+):
+    """Crash evidence obeys the count, aggregate-byte, and single-event retention caps."""
+    from iperf3_lib._ipc import encode_frame
+
+    async def execute(self, **kwargs):
+        for sequence in range(1, 71):
+            kwargs["on_event"](
+                NativeEvent("interval", {"payload": "x" * payload_bytes}, sequence, 10)
+            )
+        raise IperfLibraryError("Native worker crashed after event delivery")
+
+    monkeypatch.setattr(client_type, "arun", execute)
+    record = (await _run(_plan(repetitions=1))).trials[0]
+    assert record.status == "exception" and record.artifact is None
+    assert record.events_observed == 70
+    assert record.events_dropped == 70 - len(record.partial_events)
+    if payload_bytes == 65536:
+        assert record.partial_events == () and record.events_dropped == 70
+        return
+    assert [event.sequence for event in record.partial_events] == list(
+        range(1, len(record.partial_events) + 1)
+    )
+    frames = [
+        encode_frame(
+            {
+                "kind": event.kind,
+                "data": event.data,
+                "sequence": event.sequence,
+                "received_at_seconds": event.received_at_seconds,
+            }
+        )
+        for event in record.partial_events
+    ]
+    assert max(map(len, frames)) <= 65536 and sum(map(len, frames)) <= 1024 * 1024
+    assert (
+        len(record.partial_events) == 64
+        if payload_bytes == 1
+        else 0 < len(record.partial_events) < 64
+    )
 
 
 @pytest.mark.asyncio

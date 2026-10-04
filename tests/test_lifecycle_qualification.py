@@ -221,15 +221,20 @@ def _async_plan_receipt(case):
     from iperf3_lib.plan_execution import PlanExecutionResult, PlanTrialRecord
     from iperf3_lib.plan_reports import dumps_plan_report, plan_report_from_execution
     from iperf3_lib.result import result_from_iperf_json
-    from iperf3_lib.trials import PlanBudget, TrialPolicy, TrialSpec, prepare_plan
+    from iperf3_lib.trials import PlanBudget, TrialException, TrialPolicy, TrialSpec, prepare_plan
 
-    statuses, stop = {
-        "active-cancel-tcp": (["completed", "cancelled", "not_run"], "cancelled"),
-        "pause-cancel-tcp": (["completed", "not_run", "not_run"], "cancelled"),
-        "active-deadline-udp": (["completed", "timed_out", "not_run"], "timeout"),
-        "completed-tcp": (["completed", "completed", "completed"], None),
-        "stop-on-error-udp": (["completed", "failed", "not_run"], "stop_on_error"),
-    }[case]
+    fault_case = case.startswith(("active-worker-crash-", "active-transport-failure-"))
+    statuses, stop = (
+        (["completed", "exception", "not_run"], "stop_on_error")
+        if fault_case
+        else {
+            "active-cancel-tcp": (["completed", "cancelled", "not_run"], "cancelled"),
+            "pause-cancel-tcp": (["completed", "not_run", "not_run"], "cancelled"),
+            "active-deadline-udp": (["completed", "timed_out", "not_run"], "timeout"),
+            "completed-tcp": (["completed", "completed", "completed"], None),
+            "stop-on-error-udp": (["completed", "failed", "not_run"], "stop_on_error"),
+        }[case]
+    )
     protocol = case.rsplit("-", 1)[1]
     plan = prepare_plan(
         [
@@ -259,7 +264,7 @@ def _async_plan_receipt(case):
                 "library_selector": {},
             },
         }
-        for index in range(2)
+        for index in range(3)
     ]
     records = []
     for index, (spec, status) in enumerate(zip(plan.trials, statuses, strict=True)):
@@ -287,7 +292,12 @@ def _async_plan_receipt(case):
                 spec,
                 status,
                 artifact=artifact,
-                reason=stop if events else None,
+                exception=TrialException(
+                    "iperf3_lib._ipc.IPCError", "Native worker transport failed"
+                )
+                if status == "exception"
+                else None,
+                reason=stop if events and status != "exception" else None,
                 started_at_seconds=1000.0 + index,
                 completed_at_seconds=1001.0 + index,
                 elapsed_seconds=1.0,
@@ -308,6 +318,25 @@ def _async_plan_receipt(case):
     encoded = dumps_plan_report(plan_report_from_execution(execution))
     admitted = sum(status != "not_run" for status in statuses)
     active = case.startswith("active-")
+    fault = None
+    if fault_case:
+        observation = {"sequence": 1, "received_at_seconds": 1001.0, "bytes": 12}
+        fault = {
+            "kind": "sigkill" if case.startswith("active-worker-crash-") else "stdout-close",
+            "worker": workers[2],
+            "before": {
+                "identity": {"pid": 202, "ppid": 100, "state": "S", "start_ticks": 302},
+                "thread_children": {"202": []},
+                "children": [],
+                "fds": {"0": "pipe:[10]", "1": "pipe:[11]", "3": "socket:[12]"},
+                "socket_fds": {"3": "socket:[12]"},
+            },
+            "measurements_before_fault": [observation.copy()],
+            "returncode": -9 if case.startswith("active-worker-crash-") else -15,
+            "identity_absent_after": True,
+            "pipe_closed": True,
+            "measurements": [observation.copy()],
+        }
     return {
         "case": case,
         "protocol": protocol,
@@ -330,6 +359,7 @@ def _async_plan_receipt(case):
         "report_sha256": hashlib.sha256(encoded.encode()).hexdigest(),
         "completed_worker": workers[0],
         "reuse_worker": workers[1],
+        "fault": fault,
     }
 
 
@@ -989,6 +1019,86 @@ def test_async_plan_receipts_reject_resealed_contradictory_report_evidence(chang
     call["properties"]["async_plan"] = json.dumps(evidence)
     with pytest.raises(ValueError, match="async plan receipt"):
         qualification.validate_results(result)
+
+
+def _check_async_plan_receipt(evidence):
+    runtime = {"package_version": "0.3.0", "python": "3.14.2", "native_version": "iperf 3.21"}
+    nodeid = (
+        "test_async_trials_integration.py::"
+        f"test_native_async_plan_retains_partial_history_and_releases_workers[{evidence['case']}]"
+    )
+    qualification._validate_plan_receipt(evidence, runtime, nodeid)
+
+
+@pytest.mark.parametrize("case", qualification.PLAN_CASES)
+def test_async_plan_receipts_accept_every_selected_native_scenario(case):
+    """The installed selection includes both protocols and both active-worker fault types."""
+    _check_async_plan_receipt(_async_plan_receipt(case))
+
+
+@pytest.mark.parametrize(
+    "path,value",
+    [
+        (("kind",), "stdout-close"),
+        (("returncode",), 0),
+        (("identity_absent_after",), False),
+        (("pipe_closed",), False),
+        (("worker", "pid"), 200),
+        (("worker", "producer", "python_version"), "3.12.0"),
+        (("before", "identity", "pid"), 999),
+        (("before", "identity", "state"), "Z"),
+        (("before", "socket_fds"), {}),
+        (("before", "thread_children", "202"), [203]),
+        (("measurements_before_fault",), []),
+        (("measurements",), []),
+        (("measurements", 0, "sequence"), True),
+        (("measurements", 0, "bytes"), 0),
+        (("measurements", 0, "received_at_seconds"), 999.0),
+    ],
+)
+def test_async_plan_crash_receipts_reject_missing_or_contradictory_fault_evidence(path, value):
+    """Cleanup labels alone cannot qualify a fault without process and observation evidence."""
+    evidence = _async_plan_receipt("active-worker-crash-tcp")
+    container = evidence["fault"]
+    for key in path[:-1]:
+        container = container[key]
+    container[path[-1]] = value
+    with pytest.raises(ValueError, match="async plan receipt"):
+        _check_async_plan_receipt(evidence)
+
+
+@pytest.mark.parametrize("protocol", ["tcp", "udp"])
+@pytest.mark.parametrize("returncode", [0, True, -9, -15, 1])
+def test_async_plan_transport_receipts_require_an_observed_terminated_exit(protocol, returncode):
+    """Pipe interruption must produce a protocol failure and measured worker cleanup."""
+    evidence = _async_plan_receipt(f"active-transport-failure-{protocol}")
+    evidence["fault"]["returncode"] = returncode
+    if type(returncode) is int and returncode in (-9, -15, 1):
+        _check_async_plan_receipt(evidence)
+    else:
+        with pytest.raises(ValueError, match="async plan receipt"):
+            _check_async_plan_receipt(evidence)
+
+
+@pytest.mark.parametrize("change", ["missing-events", "unobserved-event", "counts", "exception"])
+def test_async_plan_fault_receipts_reject_resealed_missing_or_fabricated_partial_events(change):
+    """A real active fault cannot qualify if the persisted exception loses copied traffic."""
+    evidence = _async_plan_receipt("active-transport-failure-udp")
+    report = json.loads(evidence["report_json"])
+    trial = report["execution"]["trials"][1]
+    if change == "missing-events":
+        trial.update(partial_events=[], events_observed=0, events_dropped=0)
+    elif change == "unobserved-event":
+        trial["partial_events"][0]["data"]["sum"]["bytes"] = 99
+        evidence["retained_interrupted_bytes"] = 99
+    elif change == "counts":
+        trial["events_observed"] += 1
+    else:
+        trial["exception"]["type_name"] = "builtins.TimeoutError"
+    evidence["report_json"] = json.dumps(report)
+    evidence["report_sha256"] = hashlib.sha256(evidence["report_json"].encode()).hexdigest()
+    with pytest.raises(ValueError, match="async plan receipt"):
+        _check_async_plan_receipt(evidence)
 
 
 @pytest.mark.parametrize(
