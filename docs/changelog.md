@@ -16,6 +16,9 @@ for async behavior changes, application customizations, and saved-report readers
 - Add a separate Python 3.15.0rc3 preview lane with explicit interpreter selection,
   both native endpoints, and retained installed wheel/sdist evidence. Stable
   Python support remains 3.12–3.14 pending final-runtime qualification.
+- Declare Python 3.15 readiness in package classifiers after successful RC3
+  qualification. Keep the shared `py3-none-any` wheel, Python `>=3.12` requirement,
+  and existing workflow matrices; add final-runtime coverage after its release.
 - Qualify expanded lifecycle, plan, adaptive and live-event behavior from the
   exact retained release wheel and sdist. Require a complete verified smoke and
   lifecycle receipt set before publication and retain its qualification index.

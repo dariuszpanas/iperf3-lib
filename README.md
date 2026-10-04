@@ -43,6 +43,10 @@ benchmark. The Python package does not bundle libiperf. Current native
 qualification covers libiperf **3.19.1** and **3.22** on Linux; see the
 [compatibility reference](https://dariuszpanas.github.io/iperf3-lib/reference/compatibility.html).
 
+Package metadata declares **Python 3.15 readiness**, validated on standard-GIL
+Python 3.15.0rc3 with both native endpoints. Stable CI and release qualification
+remain on Python 3.12–3.14 until the final 3.15 runtime is available and qualified.
+
 Documentation follows `main`. The installation guide explains how to choose
 between a published package and a source revision; consult the
 [changelog](https://dariuszpanas.github.io/iperf3-lib/changelog.html) for release
