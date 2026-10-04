@@ -13,6 +13,28 @@ by native **libiperf** through CFFI. Configure clients and servers from Python,
 preserve and analyze measurements, run repeatable experiments, and export
 results to Prometheus.
 
+## Why use iperf3-lib?
+
+Use `iperf3-lib` when benchmarks feed an application, a repeatable test campaign,
+or a monitoring pipeline. Reuse a tested Python API for the work that otherwise
+accumulates around `subprocess` calls or Ansible tasks:
+
+- **Configure tests with validated dataclasses**, including traffic direction,
+  transport controls, and explicit rate intent.
+- **Interpret measurements consistently**, keeping sender and receiver
+  observations separate, preserving native JSON, and distinguishing missing
+  measurements from measured zero.
+- **Build on reusable experiments and reports**: repeated trials, baseline
+  assessments, bounded parameter sweeps, portable artifacts, and Prometheus
+  output.
+
+The library calls `libiperf` through CFFI; it does not invoke the `iperf3`
+executable. Some execution paths use isolated Python worker processes. A short
+CLI script remains useful for one-off tests, and Ansible can deploy and run
+Python benchmark applications across your hosts. See
+[choosing a Python API, CLI, or Ansible workflow](https://dariuszpanas.github.io/iperf3-lib/guides/choosing-an-integration.html)
+for the comparison, execution boundaries, and version-specific features.
+
 ## Getting started
 
 Follow the [installation and first-run guide](https://dariuszpanas.github.io/iperf3-lib/getting-started.html)

@@ -3,6 +3,11 @@
 `iperf3-lib` runs network throughput tests through the native `libiperf` shared
 library and returns Python objects for your application to inspect.
 
+Coming from a subprocess script or Ansible playbook? See
+[choosing an integration](guides/choosing-an-integration.md) for the reusable
+configuration, result, experiment, and reporting features, or keep your runner
+and import its completed JSON.
+
 !!! note "Match the documentation to your version"
     This site follows `main`. Dataclasses, portable artifacts, analysis, trial
     plans, sweeps, and Prometheus output are available in 0.3.0; 0.2.0 uses

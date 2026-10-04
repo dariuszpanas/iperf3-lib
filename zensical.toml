@@ -12,6 +12,7 @@ extra_css = ["stylesheets/extra.css"]
 nav = [
   { "Home" = "index.md" },
   { "Get started" = [
+    { "Why use iperf3-lib?" = "guides/choosing-an-integration.md" },
     { "Installation and first run" = "getting-started.md" },
     { "Migrating from 0.2.0" = "guides/migration-0.3.md" },
     { "Preparing an upgrade from 0.3.0" = "guides/migration-0.4.md" },
