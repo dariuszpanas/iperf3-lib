@@ -1,7 +1,8 @@
 # Repeated trials and assessments
 
-These APIs are available in 0.3.0. See [installation](../getting-started.md)
-for package setup.
+Synchronous trial plans and assessments are available in 0.3.0; owned async
+execution is unreleased. See [installation](../getting-started.md) for package
+setup and the [upgrade guide](migration-0.4.md) for execution and report boundaries.
 
 A trial plan runs a finite, declared sequence. It keeps warm-up, failed,
 incomplete, and unstarted runs so the report describes the entire experiment.

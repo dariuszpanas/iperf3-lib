@@ -14,6 +14,7 @@ nav = [
   { "Get started" = [
     { "Installation and first run" = "getting-started.md" },
     { "Migrating from 0.2.0" = "guides/migration-0.3.md" },
+    { "Preparing an upgrade from 0.3.0" = "guides/migration-0.4.md" },
   ] },
   { "Guides" = [
     { "Running clients and servers" = "guides/running-tests.md" },

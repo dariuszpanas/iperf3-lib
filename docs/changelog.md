@@ -6,6 +6,9 @@ These pages describe `main`. Released versions remain available through
 
 ## Unreleased
 
+Upgrading from 0.3.0? Read the [unreleased migration guide](guides/migration-0.4.md)
+for async behavior changes, application customizations, and saved-report readers.
+
 - Add a separate Python 3.15.0rc3 preview lane with explicit interpreter selection,
   both native endpoints, and retained installed wheel/sdist evidence. Stable
   Python support remains 3.12–3.14 pending final-runtime qualification.

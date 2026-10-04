@@ -1,7 +1,8 @@
 # Running clients and servers
 
-These examples use the APIs available in 0.3.0. Follow
-[Getting started](../getting-started.md).
+Client/server APIs are available in 0.3.0; the async cancellation and cleanup
+behavior described below is unreleased. Follow [Getting started](../getting-started.md)
+and the [upgrade guide](migration-0.4.md) for an existing 0.3.0 application.
 
 ## Choose a protocol and direction
 

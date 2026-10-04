@@ -22,8 +22,9 @@ benchmark. The Python package does not bundle libiperf.
 Documentation follows `main`. The installation guide explains how to choose
 between a published package and a source revision; consult the
 [changelog](https://dariuszpanas.github.io/iperf3-lib/changelog.html) for release
-status and the [migration guide](https://dariuszpanas.github.io/iperf3-lib/guides/migration-0.3.html)
-when upgrading an existing application.
+status. Upgrade guidance covers
+[0.2.0 to 0.3.0](https://dariuszpanas.github.io/iperf3-lib/guides/migration-0.3.html)
+and [unreleased changes after 0.3.0](https://dariuszpanas.github.io/iperf3-lib/guides/migration-0.4.html).
 
 ## Documentation
 
