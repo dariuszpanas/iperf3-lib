@@ -162,7 +162,9 @@ def archive_hashes(path: Path, kind: str) -> dict[str, str]:
     return contents
 
 
-def write_manifest(source: Path, distributions: Path, revision: str) -> dict:
+def write_manifest(
+    source: Path, distributions: Path, revision: str, *, manifest_path: Path | None = None
+) -> dict:
     """Bind both distributions and the lifecycle harness to the source revision."""
     if not re.fullmatch(r"[0-9a-f]{40}", revision):
         raise ValueError("source revision must be a full commit SHA")
@@ -192,13 +194,20 @@ def write_manifest(source: Path, distributions: Path, revision: str) -> dict:
         "harness_sha256": {name: digest(source / name) for name in HARNESS},
         "distributions": artifacts,
     }
-    (distributions / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    path = manifest_path if manifest_path is not None else distributions / "manifest.json"
+    if any(path.resolve() == (distributions / name).resolve() for name in expected.values()):
+        raise ValueError("lifecycle manifest cannot replace a distribution")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(manifest, indent=2) + "\n")
     return manifest
 
 
-def verify_manifest(source: Path, distributions: Path, revision: str) -> dict:
+def verify_manifest(
+    source: Path, distributions: Path, revision: str, *, manifest_path: Path | None = None
+) -> dict:
     """Reject stale harnesses, substituted archives and mismatched source identity."""
-    manifest = json.loads((distributions / "manifest.json").read_text())
+    path = manifest_path if manifest_path is not None else distributions / "manifest.json"
+    manifest = json.loads(path.read_text())
     if (
         manifest.get("kind") != "iperf3-lib.lifecycle-build"
         or manifest.get("schema_version") != 1
@@ -1950,9 +1959,10 @@ def _test(args) -> int:
 def qualify(args) -> None:
     """Run the sealed harness in fresh isolated environments for both artifacts."""
     source, distributions = args.source.resolve(), args.distributions.resolve()
-    if digest(distributions / "manifest.json") != args.manifest_sha256:
+    manifest_path = (args.manifest or distributions / "manifest.json").resolve()
+    if digest(manifest_path) != args.manifest_sha256:
         raise ValueError("lifecycle manifest differs from the build job's retained identity")
-    manifest = verify_manifest(source, distributions, args.revision)
+    manifest = verify_manifest(source, distributions, args.revision, manifest_path=manifest_path)
     args.output.mkdir(parents=True, exist_ok=True)
     output = args.output.resolve()
     pins = pinned_requirements()
@@ -1970,7 +1980,7 @@ def qualify(args) -> None:
             "schema_version": 1,
             "source_revision": args.revision,
             "distribution": entry,
-            "manifest_sha256": digest(distributions / "manifest.json"),
+            "manifest_sha256": digest(manifest_path),
             "harness_sha256": manifest["harness_sha256"],
             "dependency_pins": pins,
             "expected_python": args.python,
@@ -2032,7 +2042,7 @@ def qualify(args) -> None:
                     str(runner),
                     "test",
                     "--manifest",
-                    str(distributions / "manifest.json"),
+                    str(manifest_path),
                     "--source",
                     str(source),
                     "--config",
@@ -2083,6 +2093,9 @@ def main() -> int:
         command = commands.add_parser(name)
         command.add_argument("--source", type=Path, default=Path.cwd())
         command.add_argument("--distributions", type=Path, required=True)
+        command.add_argument(
+            "--manifest", type=Path, help="manifest path (default: DISTRIBUTIONS/manifest.json)"
+        )
         command.add_argument("--revision", required=True)
         if name == "manifest":
             command.add_argument("--github-output", type=Path)
@@ -2127,10 +2140,11 @@ def main() -> int:
             cwd=args.source,
             check=True,
         )
-        write_manifest(args.source, args.distributions, args.revision)
+        manifest_path = args.manifest or args.distributions / "manifest.json"
+        write_manifest(args.source, args.distributions, args.revision, manifest_path=manifest_path)
         if args.github_output:
             with args.github_output.open("a") as stream:
-                stream.write(f"manifest-sha256={digest(args.distributions / 'manifest.json')}\n")
+                stream.write(f"manifest-sha256={digest(manifest_path)}\n")
     else:
         qualify(args)
     return 0

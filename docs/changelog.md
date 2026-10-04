@@ -6,6 +6,9 @@ These pages describe `main`. Released versions remain available through
 
 ## Unreleased
 
+- Qualify expanded lifecycle, plan, adaptive and live-event behavior from the
+  exact retained release wheel and sdist. Require a complete verified smoke and
+  lifecycle receipt set before publication and retain its qualification index.
 - Add owned typed live-event streams through `Client.events()` and
   `Server.events_once()`, retaining complete-result access and awaiting cleanup
   after consumer abandonment or cancellation. Separate native measurement time,
