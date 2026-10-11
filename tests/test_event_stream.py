@@ -1,6 +1,7 @@
 """Owned live consumption, bounded wakeups, cancellation and facade snapshots."""
 
 import asyncio
+import inspect
 import threading
 import time
 from types import SimpleNamespace
@@ -312,6 +313,65 @@ async def test_client_snapshot_is_at_context_entry_and_legacy_calls_stay_inert(m
     assert calls[0][1]["port"] == 5202
     assert calls[0][1]["json_stream"] is True
     assert callable(calls[0][2]["_on_live_event"])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("role", ["client", "server"])
+@pytest.mark.parametrize("error_type", [RuntimeError, asyncio.CancelledError])
+async def test_rejected_entry_closes_coroutine_and_allows_fresh_stream(
+    monkeypatch, role, error_type
+):
+    """Failed submission is single-use but acquires no worker or server admission."""
+    from iperf3_lib import _execution, iperf_server
+    from iperf3_lib.config import ClientConfig
+    from iperf3_lib.iperf_client import Client
+
+    calls, rejected = [], []
+    failure = error_type("stream task factory rejected entry")
+
+    def worker(*args, **kwargs):
+        calls.append((args, kwargs))
+        return Result(ok=True)
+
+    monkeypatch.setattr(_execution, "run_worker", worker)
+    monkeypatch.setattr(iperf_server, "_run_worker", worker)
+    if role == "client":
+        owner = Client(ClientConfig("127.0.0.1", duration=1))
+        create_stream = owner.events
+    else:
+        owner = iperf_server.Server()
+        create_stream = owner.events_once
+    stream = create_stream()
+
+    def factory(loop, coroutine, **kwargs):
+        rejected.append(coroutine)
+        raise failure
+
+    loop = asyncio.get_running_loop()
+    original_factory = loop.get_task_factory()
+    loop.set_task_factory(factory)
+    try:
+        with pytest.raises(error_type) as caught:
+            await stream.__aenter__()
+    finally:
+        loop.set_task_factory(original_factory)
+        rejected_state = inspect.getcoroutinestate(rejected[0])
+        rejected[0].close()
+
+    assert caught.value is failure
+    assert rejected_state == inspect.CORO_CLOSED
+    assert stream._owner is None and calls == []
+    if role == "server":
+        assert not owner._run_lock.locked()
+    with pytest.raises(RuntimeError, match="more than once"):
+        await stream.__aenter__()
+    await stream.aclose()
+    async with create_stream() as fresh:
+        assert (await fresh.result()).ok
+        assert [event.kind async for event in fresh] == ["terminal"]
+    assert len(calls) == 1
+    if role == "server":
+        assert not owner._run_lock.locked()
 
 
 @pytest.mark.asyncio

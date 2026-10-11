@@ -138,7 +138,7 @@ class _Run:
             self.pause_elapsed += time.monotonic() - pause_started
         self.check_limits()
 
-    async def drain(self, child: asyncio.Task[Result]) -> None:
+    async def drain(self, child: asyncio.Future[Result]) -> None:
         # Cancel once: further cancellation must never reach the child's cleanup.
         if not child.done():
             message = (
@@ -168,7 +168,16 @@ class _Run:
                 raise TimeoutError("Plan execution exceeded its deadline")
             return await _execute(_copy_spec(spec), timeout=remaining, on_event=events)
 
-        child = asyncio.create_task(execute())
+        operation = execute()
+        child: asyncio.Future[Result]
+        try:
+            child = asyncio.create_task(operation)
+        except BaseException as error:
+            # A rejected submission acquired no worker. Close its coroutine and
+            # retain the failure through the same outcome path as an owned task.
+            operation.close()
+            child = asyncio.get_running_loop().create_future()
+            child.set_exception(error)
         try:
             done, _ = await asyncio.wait((child,), timeout=self.remaining())
             if not done or self.remaining() == 0:

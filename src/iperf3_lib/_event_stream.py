@@ -75,7 +75,12 @@ class EventStream:
         self._loop = asyncio.get_running_loop()
         self._available = asyncio.Event()
         operation = self._admit()
-        self._owner = asyncio.create_task(_run_async(lambda control: operation(control, self._put)))
+        pending = _run_async(lambda control: operation(control, self._put))
+        try:
+            self._owner = asyncio.create_task(pending)
+        except BaseException:
+            pending.close()
+            raise
         self._owner.add_done_callback(self._settled)
         return self
 
