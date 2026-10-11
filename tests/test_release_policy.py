@@ -206,7 +206,7 @@ def test_actual_tag_must_identify_the_qualified_commit(git_candidate) -> None:
 
 
 @pytest.fixture
-def artifact_bundle(tmp_path: Path) -> tuple[Path, Path, Path]:
+def artifact_bundle(tmp_path: Path, request: pytest.FixtureRequest) -> tuple[Path, Path, Path]:
     """Create minimal valid archives with matching embedded metadata and README."""
     directory = tmp_path / "dist"
     directory.mkdir()
@@ -214,7 +214,11 @@ def artifact_bundle(tmp_path: Path) -> tuple[Path, Path, Path]:
     site.mkdir()
     (site / "index.html").write_text('<h1 id="docs">Docs</h1>')
     readme = tmp_path / "README.md"
-    text = "# Package\n\n[Docs](https://dariuszpanas.github.io/iperf3-lib/#docs)\n"
+    text = getattr(
+        request,
+        "param",
+        "# Package\n\n[Docs](https://dariuszpanas.github.io/iperf3-lib/#docs)\n",
+    )
     readme.write_text(text)
     metadata = (
         f"Metadata-Version: 2.4\nName: iperf3-lib\nVersion: {VERSION}\n"
@@ -300,6 +304,103 @@ def test_distribution_policy_accepts_equivalent_marker_formatting(artifact_bundl
         text = archive.read(f"iperf3_lib-{VERSION}.dist-info/METADATA").decode()
     text = text.replace("'3.15'", '"3.15"').replace("; python_version ", ";python_version")
     assert metadata_description(text, VERSION) == readme.read_text()
+
+
+@pytest.mark.parametrize(
+    "description",
+    [
+        "The **0.4.0 candidate is unreleased**; **0.3.0** is the latest published version.",
+        "See the unreleased changes after 0.3.0.",
+        "This is an **UNPUBLISHED** candidate.",
+        "Version 0.4.0 has not yet been published.",
+        "Version 0.4.0 is not released.",
+        "The latest **published**\nversion is **0.4.0**.",
+        "The current published release is `0.4.0`.",
+        "The latest-published-version is 0.4.0.",
+    ],
+)
+def test_distribution_description_rejects_temporary_publication_status(
+    artifact_bundle, description: str
+) -> None:
+    """Reject mutable release claims even when metadata identity is otherwise valid."""
+    directory, readme, _ = artifact_bundle
+    with zipfile.ZipFile(directory / f"iperf3_lib-{VERSION}-py3-none-any.whl") as archive:
+        metadata = archive.read(f"iperf3_lib-{VERSION}.dist-info/METADATA").decode()
+    with pytest.raises(
+        ValueError, match="temporary publication status; use a release-neutral README"
+    ):
+        metadata_description(metadata.replace(readme.read_text(), description), VERSION)
+
+
+@pytest.mark.parametrize(
+    "description",
+    [
+        "Beta project maturity. Supports Python 3.12–3.15 and libiperf 3.19.1–3.22.\n",
+        "Upgrade guidance: [0.3.0 to 0.4.0](https://example.invalid/migration).\n",
+        "See the [changelog](https://example.invalid/changelog) for release status.\n",
+        "Install a published package or a source revision.\n",
+        "Compare the candidate result with the baseline.\n",
+    ],
+)
+def test_distribution_description_preserves_release_neutral_prose(
+    artifact_bundle, description: str
+) -> None:
+    """Preserve stable maturity, compatibility, migration, and usage text byte for byte."""
+    directory, readme, _ = artifact_bundle
+    with zipfile.ZipFile(directory / f"iperf3_lib-{VERSION}-py3-none-any.whl") as archive:
+        metadata = archive.read(f"iperf3_lib-{VERSION}.dist-info/METADATA").decode()
+    assert (
+        metadata_description(metadata.replace(readme.read_text(), description), VERSION)
+        == description
+    )
+
+
+@pytest.mark.parametrize(
+    "artifact_bundle",
+    ["The **0.4.0 candidate is unreleased**; **0.3.0** is the latest published version.\n"],
+    indirect=True,
+)
+def test_matching_source_and_archives_still_reject_temporary_publication_status(
+    artifact_bundle,
+) -> None:
+    """Matching embedded bytes alone cannot qualify a misleading package README."""
+    directory, readme, site = artifact_bundle
+    with pytest.raises(ValueError, match="use a release-neutral README"):
+        inspect_distributions(directory, VERSION, readme, site)
+
+
+@pytest.mark.parametrize("kind", ["wheel", "sdist"])
+def test_each_archive_rejects_temporary_status_with_a_neutral_source_readme(
+    artifact_bundle, kind: str
+) -> None:
+    """Inspect the actual embedded description of each archive, not only its source."""
+    directory, readme, site = artifact_bundle
+    original = readme.read_text().encode()
+    replacement = b"This candidate is unpublished.\n"
+    if kind == "wheel":
+        path = directory / f"iperf3_lib-{VERSION}-py3-none-any.whl"
+        with zipfile.ZipFile(path) as archive:
+            entries = {name: archive.read(name) for name in archive.namelist()}
+        with zipfile.ZipFile(path, "w") as archive:
+            for name, content in entries.items():
+                archive.writestr(name, content.replace(original, replacement))
+    else:
+        path = directory / f"iperf3_lib-{VERSION}.tar.gz"
+        members = []
+        with tarfile.open(path, "r:gz") as archive:
+            for member in archive.getmembers():
+                source = archive.extractfile(member)
+                assert source is not None
+                content = source.read()
+                if member.name.endswith("/PKG-INFO"):
+                    content = content.replace(original, replacement)
+                members.append((member, content))
+        with tarfile.open(path, "w:gz") as archive:
+            for member, content in members:
+                member.size = len(content)
+                archive.addfile(member, io.BytesIO(content))
+    with pytest.raises(ValueError, match="use a release-neutral README"):
+        inspect_distributions(directory, VERSION, readme, site)
 
 
 def test_manifest_binds_hashes_sizes_version_and_revision(artifact_bundle) -> None:

@@ -4,6 +4,17 @@ These pages describe `main`. Released versions remain available through
 [GitHub releases](https://github.com/dariuszpanas/iperf3-lib/releases) and
 [PyPI](https://pypi.org/project/iperf3-lib/).
 
+## 0.4.1
+
+- Make the packaged README independent of publication timing. The immutable
+  0.4.0 description incorrectly calls 0.4.0 unreleased; a repository-only edit
+  cannot update that PyPI description.
+- Reject temporary publication-status claims in wheel and sdist descriptions
+  before sealing release artifacts, and require the final README to pass this
+  check before candidate qualification.
+- No changes to the Python API, native execution, dependency requirements or
+  result formats.
+
 ## 0.4.0 — 2026-10-11
 
 Published on [PyPI](https://pypi.org/project/iperf3-lib/0.4.0/) and as

@@ -81,7 +81,9 @@ A successful rehearsal contains:
   and unit gates, YAGA policy checks, and Docker-backed workflow lint.
 - One wheel/sdist pair checked with Twine and wheel-content validation.
   Both embedded descriptions must match the candidate README and render with
-  valid documentation links. Every absolute documentation URL in the README,
+  valid documentation links. The descriptions must be suitable for publication:
+  temporary claims such as "unreleased" or "latest published version" are
+  rejected. Every absolute documentation URL in the README,
   including its deployed HTML fragments, is checked alongside the public
   landing and changelog pages.
 - A `release-bundle` artifact with those distributions and
@@ -194,16 +196,26 @@ aggregate workflow result together before publication.
    deferred to a later version.
 2. Update `project.version` in `pyproject.toml` and the local project identity
    in `uv.lock`. Keep historical artifact producer identities unchanged. Record
-   selected changes under a versioned **unreleased candidate** heading in the
-   [changelog](../docs/changelog.md); a metadata version does not establish publication.
-   Update installation examples, migration instructions, and the banner
-   together. Keep the README's documentation links current; release history
-   and version-specific instructions belong in the linked pages.
-3. Run local quality/unit gates before the Docker/native matrix. Merge the
-   candidate through the normal required checks, then run a build-only hosted
+   selected changes under a version heading in the
+   [changelog](../docs/changelog.md), without a publication date until upload
+   succeeds; a metadata version does not establish publication. Track candidate
+   status in the release issue. Prepare installation examples and migration
+   instructions together, and update the site's latest-release banner after
+   publication. Keep the packaged README release-neutral: no "unreleased",
+   "not yet published" or "latest published version" claims. Factual feature
+   availability, compatibility, Beta maturity and migration links are appropriate.
+   Release status and dates belong in the linked changelog and release pages.
+3. Run local quality/unit gates and build preview wheel/sdist archives. Inspect
+   their embedded, rendered README as the eventual PyPI description before
+   accepting the candidate for native qualification. Confirm that its wording
+   will remain true after publication; rendering and matching hashes alone do
+   not check this. PyPI retains the first uploaded description and cannot apply
+   a later repository edit to that release. Then run the Docker/native matrix,
+   merge through the normal required checks, and run a build-only hosted
    rehearsal for the resulting exact commit. Inspect the retained distributions,
    hashes, and every installed-native receipt.
-4. Inspect the rendered README and deployed documentation anonymously. Confirm
+4. Inspect the retained artifacts' rendered README and deployed documentation
+   anonymously. Confirm
    the Pages revision, actual page content, and public links. The automated
    HTTP checks alone do not establish that the intended revision is displayed.
 5. For measurement/exporter changes, also require the real
@@ -211,8 +223,11 @@ aggregate workflow result together before publication.
    or a string comparison of metrics is insufficient.
 6. After qualification, obtain the explicit publication decision. Only an
    actual publication establishes a release date and permits changing the
-   changelog's candidate status. Do not rebuild qualified distribution bytes
-   merely to remove a temporary publication-status sentence from their README.
+   changelog's publication date. If any packaged content, including its README,
+   needs correction after qualification, prepare a new candidate and repeat
+   exact-source qualification before publishing. Never publish a known stale
+   description to preserve an earlier qualification. Once published, retain the
+   immutable distribution bytes; a description correction needs a new release.
 7. Verify the registry's trusted-publisher configuration and intended publishing
    environment restrictions before selecting a publication target. The workflow
    does not create or administratively configure those settings for a rehearsal.
@@ -224,7 +239,7 @@ and post releases are not part of this publication policy.
 Validate a planned tag against the current metadata:
 
 ```bash
-uv run --no-project python scripts/validate_release.py --tag v0.4.0
+uv run --no-project python scripts/validate_release.py --tag v0.4.1
 ```
 
 That local metadata check alone does not qualify the candidate. The workflow
@@ -258,6 +273,10 @@ assets and their hashes against the retained manifest. Install the published
 package in a clean environment, check version and lazy import, and run a
 native smoke with a supported library. Inspect the public PyPI description
 and its documentation links without maintainer authentication.
+Check that the description's wording is correct for the published release;
+matching the qualified source does not establish semantic correctness. Keep the
+release checklist open if this fails. A newer release can correct the default
+project page, but the old version's description remains immutable.
 
 If publication is interrupted, inspect which files reached the registry
 before retrying. Published files cannot be overwritten. If only GitHub Release
