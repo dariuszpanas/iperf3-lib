@@ -1,8 +1,16 @@
 # Security
 
 `iperf3-lib` loads the system `libiperf`; it does not bundle or patch the native
-library. Use the supported baseline or newer and follow
+library. Use patched libiperf **3.22 or newer** and follow
 [upstream iperf security releases](https://github.com/esnet/iperf/releases).
+The 3.19.1 minimum is a compatibility baseline tested in CI, not a security
+recommendation. Upstream versions `>=3.14,<3.22`, including unpatched 3.19.1,
+are affected by the UDP receive-worker denial of service
+[CVE-2026-102253](https://www.cve.org/CVERecord?id=CVE-2026-102253).
+Version [3.22](https://github.com/esnet/iperf/releases/tag/3.22) fixes this and
+other native security issues. Distributors may backport fixes; check their
+advisories for the exact installed build. Upgrading the Python package does
+not apply native fixes.
 Linux is the tested platform; see [compatibility](reference/compatibility.md).
 
 ## Report privately

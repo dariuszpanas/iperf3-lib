@@ -7,8 +7,18 @@ Older `0.x` releases should be upgraded before reporting an issue that is
 already fixed in the current release.
 
 This package loads the system `libiperf`; it does not vendor or patch iperf3.
-Use libiperf 3.19.1 or newer and follow
+Use patched libiperf **3.22 or newer** and follow
 [upstream iperf security releases](https://github.com/esnet/iperf/releases).
+The 3.19.1 minimum is a compatibility baseline tested in CI, not a security
+recommendation.
+
+[CVE-2026-102253](https://www.cve.org/CVERecord?id=CVE-2026-102253) affects
+upstream iperf3 versions `>=3.14,<3.22`, including unpatched 3.19.1, and permits
+an unauthenticated denial of service in the UDP receive worker. The
+[3.22 release](https://github.com/esnet/iperf/releases/tag/3.22) fixes this and
+other native security issues. A distributor may backport fixes; verify its
+security advisories for the exact installed build. Upgrading `iperf3-lib`
+does not upgrade or secure the system native library.
 
 ## Reporting a vulnerability
 
