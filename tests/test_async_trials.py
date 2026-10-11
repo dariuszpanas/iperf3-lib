@@ -2,6 +2,7 @@
 
 import asyncio
 import concurrent.futures
+import inspect
 import threading
 from dataclasses import replace
 from types import SimpleNamespace
@@ -182,6 +183,116 @@ async def test_stop_on_error_preserves_unstarted_trials_without_an_extra_pause(
     assert result.stop_reason == "stop_on_error"
     assert not result.execution_success
     assert all(record.started_at_seconds is None for record in result.trials[1:])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stop_on_error", [False, True])
+@pytest.mark.parametrize("eager", [False, True])
+async def test_second_task_creation_failure_closes_coroutine_and_retains_history(
+    monkeypatch, client_type, stop_on_error, eager
+):
+    """Rejected submissions keep earlier artifacts and obey ordinary stop policy."""
+    from iperf3_lib.plan_reports import (
+        dumps_plan_report,
+        loads_plan_report,
+        plan_report_from_execution,
+    )
+
+    loop = asyncio.get_running_loop()
+    original_factory = loop.get_task_factory()
+    attempted, started = [], []
+    failure = RuntimeError("second task factory failed")
+    plan = _plan(stop_on_error=stop_on_error)
+
+    async def execute(self, **kwargs):
+        started.append(len(attempted))
+        result = _completed()
+        result.raw["trial"] = len(attempted)
+        return result
+
+    def factory(loop, coroutine, **kwargs):
+        attempted.append(coroutine)
+        if len(attempted) == 2:
+            raise failure
+        if eager:
+            return asyncio.eager_task_factory(loop, coroutine, **kwargs)
+        return asyncio.Task(coroutine, loop=loop, **kwargs)
+
+    monkeypatch.setattr(client_type, "arun", execute)
+    loop.set_task_factory(factory)
+    try:
+        result = await _run(plan)
+    finally:
+        loop.set_task_factory(original_factory)
+        # Avoid a warning if the regression reopens: assert closure before cleanup.
+        rejected_state = inspect.getcoroutinestate(attempted[1])
+        attempted[1].close()
+
+    assert rejected_state == inspect.CORO_CLOSED
+    assert started == ([1] if stop_on_error else [1, 3])
+    assert [record.spec.trial_id for record in result.trials] == [
+        spec.trial_id for spec in plan.trials
+    ]
+    assert [record.status for record in result.trials] == [
+        "completed",
+        "exception",
+        "not_run" if stop_on_error else "completed",
+    ]
+    assert result.trials[0].artifact.result.raw["trial"] == 1
+    rejected = result.trials[1]
+    assert rejected.exception.type_name == "builtins.RuntimeError"
+    assert rejected.exception.message == str(failure)
+    assert rejected.artifact is None and rejected.partial_events == ()
+    assert rejected.cleanup_confirmed
+    assert result.stop_reason == ("stop_on_error" if stop_on_error else None)
+    if stop_on_error:
+        assert result.trials[2].reason == "stop_on_error"
+        assert result.trials[2].started_at_seconds is None
+    else:
+        assert result.trials[2].artifact.result.raw["trial"] == 3
+    assert result.cleanup_confirmed and not result.execution_success
+    report = plan_report_from_execution(result)
+    assert loads_plan_report(dumps_plan_report(report)) == report
+
+
+@pytest.mark.asyncio
+async def test_task_factory_cancellation_retains_history_and_original_cause(
+    monkeypatch, client_type
+):
+    """A cancelled submission closes its coroutine without losing prior completion."""
+    loop = asyncio.get_running_loop()
+    original_factory = loop.get_task_factory()
+    attempted, started = [], []
+    failure = asyncio.CancelledError("factory cancelled submission")
+
+    async def execute(self, **kwargs):
+        started.append(self)
+        return _completed()
+
+    def factory(loop, coroutine, **kwargs):
+        attempted.append(coroutine)
+        if len(attempted) == 2:
+            raise failure
+        return asyncio.Task(coroutine, loop=loop, **kwargs)
+
+    monkeypatch.setattr(client_type, "arun", execute)
+    loop.set_task_factory(factory)
+    try:
+        with pytest.raises(PlanCancelledError, match="factory cancelled submission") as caught:
+            await _run(_plan())
+    finally:
+        loop.set_task_factory(original_factory)
+        rejected_state = inspect.getcoroutinestate(attempted[1])
+        attempted[1].close()
+
+    assert rejected_state == inspect.CORO_CLOSED
+    assert len(started) == 1
+    assert caught.value.__cause__ is failure
+    partial = caught.value.partial_result
+    assert [record.status for record in partial.trials] == ["completed", "cancelled", "not_run"]
+    assert partial.trials[0].artifact.result.ok
+    assert partial.trials[1].exception.message == str(failure)
+    assert partial.stop_reason == "cancelled" and partial.cleanup_confirmed
 
 
 @pytest.mark.asyncio
