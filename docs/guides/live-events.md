@@ -2,7 +2,7 @@
 
 Live events let an application show progress while a benchmark runs. Use an
 owned async context to consume them and retrieve the completed `Result` from
-the same operation. This API is an unreleased addition after 0.3.0.
+the same operation. This API is available starting in 0.4.0.
 
 ```python
 import asyncio

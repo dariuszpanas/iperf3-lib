@@ -9,10 +9,11 @@ configuration, result, experiment, and reporting features, or keep your runner
 and import its completed JSON.
 
 !!! note "Match the documentation to your version"
-    This site follows the **unreleased 0.4.0 candidate** on `main`.
-    The latest published version is **0.3.0**. Dataclasses, portable artifacts, analysis, trial
-    plans, sweeps, and Prometheus output are available in 0.3.0; 0.2.0 uses
-    Pydantic models. Use documentation matching your installed version.
+    This site follows `main`; the latest published version is **0.4.0**.
+    The project retains Beta maturity. Dataclasses, portable artifacts, analysis,
+    trial plans, sweeps, and Prometheus output first shipped in 0.3.0; 0.4.0 adds
+    owned async execution, concurrent plans, adaptive UDP and typed live events.
+    Use documentation matching your installed version.
     Check the [changelog](changelog.md) and
     [published releases](https://github.com/dariuszpanas/iperf3-lib/releases)
     for publication status.
@@ -22,12 +23,12 @@ Upgrading an existing 0.2.0 application? Read the
 stricter inputs, missing-data handling, and saved-result formats.
 
 For an existing 0.3.0 application, the
-[unreleased upgrade guide](guides/migration-0.4.md) covers async lifecycle
+[0.4.0 upgrade guide](guides/migration-0.4.md) covers async lifecycle
 changes, customizations, optional new APIs, and report readers.
 
 ## Install the Python package
 
-For the published 0.3.0 package, choose the installer used by your application:
+For the published 0.4.0 package, choose the installer used by your application:
 
 ```bash
 uv add iperf3-lib
@@ -37,7 +38,7 @@ uv add iperf3-lib
 python -m pip install iperf3-lib
 ```
 
-To evaluate the unreleased 0.4.0 candidate from source:
+To evaluate the current development revision from source:
 
 ```bash
 python -m pip install "iperf3-lib @ git+https://github.com/dariuszpanas/iperf3-lib.git@main"

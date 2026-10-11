@@ -1,13 +1,13 @@
 # Repeated trials and assessments
 
 Synchronous trial plans and assessments are available in 0.3.0; owned async
-execution is unreleased. See [installation](../getting-started.md) for package
+execution is available in 0.4.0. See [installation](../getting-started.md) for package
 setup and the [upgrade guide](migration-0.4.md) for execution and report boundaries.
 
 A trial plan runs a finite, declared sequence. It keeps warm-up, failed,
 incomplete, and unstarted runs so the report describes the entire experiment.
 `run_plan` is synchronous and sequential; each trial calls `Client.run()` once.
-The unreleased `arun_plan` API adds owned sequential async execution and retained
+The `arun_plan` API, added in 0.4.0, provides owned sequential async execution and retained
 diagnostic evidence after cancellation, worker crashes and transport failures.
 Neither runner retries trials.
 For independent cells, [bounded concurrent plans](concurrent-plans.md) provide
@@ -68,7 +68,7 @@ as `KeyboardInterrupt` propagate.
 
 ## Cancel an async plan and retain its evidence
 
-Available on `main` (unreleased), `arun_plan` accepts the same `PreparedPlan` and
+Available in 0.4.0, `arun_plan` accepts the same `PreparedPlan` and
 owns one isolated `Client.arun()` task at a time. Cancelling the plan stops new
 admissions, cancels the active client, waits for cleanup, and raises
 `PlanCancelledError`, an `asyncio.CancelledError` subclass. Its `partial_result`

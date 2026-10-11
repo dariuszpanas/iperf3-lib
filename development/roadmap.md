@@ -5,9 +5,9 @@ This is retained planning background from the 0.3.0 development cycle.
 for current scope and completion status; the tables below preserve the planning
 context rather than certify the current release candidate.
 
-## Next release: 0.4.0
+## Released 0.4.0
 
-The current development scope adds owned async and bounded concurrent plans,
+Version 0.4.0 adds owned async and bounded concurrent plans,
 adaptive UDP experiments, and typed live-event consumption. Issues
 [#36](https://github.com/dariuszpanas/iperf3-lib/issues/36),
 [#34](https://github.com/dariuszpanas/iperf3-lib/issues/34), and
@@ -18,12 +18,12 @@ retained exact-source native and installed-package qualification. The
 Python 3.15 support and qualification are tracked in
 [#63](https://github.com/dariuszpanas/iperf3-lib/issues/63). Python 3.15 final is
 included in the stable CI and release matrices; the RC3 workflow is retained
-for manual historical diagnostics. Final 0.4.0 release preparation must qualify
-the combined source, retained wheel and sdist on Python 3.12–3.15,
-documentation, and Grafana integration. The versioned unreleased-candidate changelog is a
-development record; it does not establish that these features are published.
+for manual historical diagnostics. The combined 0.4.0 source and retained
+wheel/sdist were qualified on Python 3.12–3.15, together with documentation
+and Grafana integration. The [changelog](../docs/changelog.md) links the
+published package and GitHub release; #78 retains the exact-source evidence.
 
-The 0.4.0 candidate freezes this scope with the task-submission correction in
+The 0.4.0 release completes this scope with the task-submission correction in
 [#77](https://github.com/dariuszpanas/iperf3-lib/issues/77) and the patched-native
 recommendation. No additional feature cycle is required for this Beta release.
 Stable API/deprecation guarantees, immutable versioned documentation, broader
@@ -265,17 +265,19 @@ rates. Do not assume observations are perfectly monotonic. Report requested
 load, achieved sender/receiver rates, loss, and variation as a **tested
 operating range**, not the network's exact physical capacity.
 
-The unreleased implementation follows 0.3.0 and has a separate pure planner,
+The 0.4.0 implementation has a separate pure planner,
 sequential batch runner and standalone adaptive-UDP report. The
 [adaptive UDP design](design/advanced-execution.md#adaptive-udp-exploration)
 specifies admission, non-monotonic selection, under-driven senders, and
 inconclusive outcomes. Its [guide](../docs/guides/adaptive-udp.md) documents
 mandatory confirmation, complete failure retention, observed cooldowns and
 explicit budgets. Controlled impaired-link evidence is required alongside the
-supported native and installed-distribution matrix before issue34 closes.
+supported native and installed-distribution matrix; issue #34 retains that evidence.
 
-Both ideas build on trial plans and configuration intent. Run plans
-sequentially under the current execution contract.
+Both ideas build on trial plans and configuration intent. The default
+`run_plan` and `arun_plan` APIs stay sequential. Explicit
+[bounded concurrent plans](../docs/guides/concurrent-plans.md) are opt-in and
+require worker/rate limits and resource exclusions.
 
 ## 8. Live events and isolated execution
 

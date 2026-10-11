@@ -1,10 +1,10 @@
-# Prepare an upgrade from 0.3.0
+# Upgrade from 0.3.0 to 0.4.0
 
-!!! note "0.4.0 unreleased candidate"
-    This guide describes the 0.4.0 candidate on `main` after published 0.3.0. It does not
-    establish that 0.4.0 has been released or extend the supported platform
-    matrix. Check the [changelog](../changelog.md) and use documentation matching
-    the source revision or package you install.
+!!! note "0.4.0 upgrade"
+    This guide covers the changes from 0.3.0 to published 0.4.0. The project
+    retains Beta maturity and the documented platform limits. Check the
+    [changelog](../changelog.md) and use documentation matching the source
+    revision or package you install.
 
 Existing dataclass configurations, synchronous runs, result artifacts,
 assessments, sweeps, and Prometheus output remain available. You do not need to
@@ -14,7 +14,7 @@ are optional.
 
 ## Update async lifecycle assumptions
 
-| Application behavior | Published 0.3.0 | Current `main` |
+| Application behavior | 0.3.0 | 0.4.0 |
 | --- | --- | --- |
 | `await client.arun()` | Delegates to `run()` through an executor; basic runs can use direct native calls. | Always uses an isolated Python/CFFI worker. |
 | Cancel `arun()` or `aserve_once()` | Cancels the await without stopping its executor operation. | Stops the owned worker and waits for cleanup before propagating cancellation. |

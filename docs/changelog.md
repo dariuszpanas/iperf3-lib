@@ -4,12 +4,13 @@ These pages describe `main`. Released versions remain available through
 [GitHub releases](https://github.com/dariuszpanas/iperf3-lib/releases) and
 [PyPI](https://pypi.org/project/iperf3-lib/).
 
-## 0.4.0 — unreleased candidate
+## 0.4.0 — 2026-10-11
 
-This candidate retains the project's Beta maturity status. Version metadata
-and these notes prepare the release; they do not establish publication.
+Published on [PyPI](https://pypi.org/project/iperf3-lib/0.4.0/) and as
+[GitHub release v0.4.0](https://github.com/dariuszpanas/iperf3-lib/releases/tag/v0.4.0).
+The project retains Beta maturity; 0.4.0 is an ordinary package version.
 
-Upgrading from 0.3.0? Read the [unreleased migration guide](guides/migration-0.4.md)
+Upgrading from 0.3.0? Read the [0.4.0 migration guide](guides/migration-0.4.md)
 for async behavior changes, application customizations, and saved-report readers.
 
 - Preserve sequential plan history when an application's task factory rejects
