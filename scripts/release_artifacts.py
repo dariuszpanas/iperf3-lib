@@ -35,6 +35,22 @@ def distribution_files(directory: Path, version: str) -> list[Path]:
     return sorted(directory / name for name in expected)
 
 
+def _require_release_neutral_description(description: str) -> None:
+    """Keep temporary publication status out of immutable package descriptions."""
+    plain = " ".join(re.sub(r"[`*_]", "", description).split())
+    if re.search(
+        r"\b(?:unreleased|unpublished)\b"
+        r"|\bnot (?:yet )?(?:been )?(?:released|published)\b"
+        r"|\b(?:latest|current)[ -]+published[ -]+(?:version|release)\b",
+        plain,
+        re.IGNORECASE,
+    ):
+        raise ValueError(
+            "package description contains temporary publication status; use a release-neutral "
+            "README and link to the changelog for release status"
+        )
+
+
 def metadata_description(metadata: str, version: str) -> str:
     """Check package identity and the CFFI-only runtime dependency boundary."""
     parsed = Parser().parsestr(metadata)
@@ -55,6 +71,7 @@ def metadata_description(metadata: str, version: str) -> str:
     payload = parsed.get_payload()
     if not isinstance(payload, str) or not payload.strip():
         raise ValueError("distribution has no package description")
+    _require_release_neutral_description(payload)
     return payload
 
 
@@ -62,6 +79,8 @@ def inspect_distributions(directory: Path, version: str, readme: Path, site: Pat
     """Inspect archive metadata and render both embedded package descriptions."""
     from scripts.check_docs import check_site
 
+    expected_readme = readme.read_text(encoding="utf-8").strip()
+    _require_release_neutral_description(expected_readme)
     descriptions: list[str] = []
     for artifact in distribution_files(directory, version):
         if artifact.suffix == ".whl":
@@ -92,7 +111,6 @@ def inspect_distributions(directory: Path, version: str, readme: Path, site: Pat
                 descriptions.append(metadata_description(metadata.read().decode(), version))
                 if tomllib.loads(project.read().decode())["project"]["version"] != version:
                     raise ValueError("sdist project version differs from its metadata")
-    expected_readme = readme.read_text(encoding="utf-8").strip()
     for description in descriptions:
         if description.strip() != expected_readme:
             raise ValueError("embedded distribution description differs from the candidate README")
