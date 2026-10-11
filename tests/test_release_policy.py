@@ -218,7 +218,9 @@ def artifact_bundle(tmp_path: Path) -> tuple[Path, Path, Path]:
     readme.write_text(text)
     metadata = (
         f"Metadata-Version: 2.4\nName: iperf3-lib\nVersion: {VERSION}\n"
-        "Requires-Python: >=3.12\nRequires-Dist: cffi<3,>=2.0\n"
+        "Requires-Python: >=3.12\n"
+        "Requires-Dist: cffi<3,>=2.0; python_version < '3.15'\n"
+        "Requires-Dist: cffi<3,>=2.1.1; python_version >= '3.15'\n"
         "Description-Content-Type: text/markdown\n\n" + text
     )
     wheel = directory / f"iperf3_lib-{VERSION}-py3-none-any.whl"
@@ -273,6 +275,11 @@ def test_distribution_set_allows_only_the_uv_output_marker(artifact_bundle) -> N
         ("Name: iperf3-lib", "Name: other-project"),
         ("Version: 0.3.0", "Version: 0.2.0"),
         ("Requires-Dist: cffi<3,>=2.0", "Requires-Dist: pydantic>=2"),
+        ("cffi<3,>=2.1.1", "cffi<3,>=2.0"),
+        ("cffi<3,>=2.1.1", "cffi<3,>=2.1"),
+        ("python_version >= '3.15'", "python_version > '3.15'"),
+        ("; python_version < '3.15'", ""),
+        ("Requires-Dist: cffi<3,>=2.1.1; python_version >= '3.15'\n", ""),
         ("Requires-Python: >=3.12", "Requires-Python: >=3.10"),
         ("Description-Content-Type: text/markdown", "Description-Content-Type: text/plain"),
     ],
@@ -284,6 +291,15 @@ def test_distribution_policy_rejects_metadata_drift(artifact_bundle, change) -> 
         text = archive.read(f"iperf3_lib-{VERSION}.dist-info/METADATA").decode()
     with pytest.raises(ValueError):
         metadata_description(text.replace(*change), VERSION)
+
+
+def test_distribution_policy_accepts_equivalent_marker_formatting(artifact_bundle) -> None:
+    """Accept the normalized quote and whitespace variants emitted by build backends."""
+    directory, readme, _ = artifact_bundle
+    with zipfile.ZipFile(directory / f"iperf3_lib-{VERSION}-py3-none-any.whl") as archive:
+        text = archive.read(f"iperf3_lib-{VERSION}.dist-info/METADATA").decode()
+    text = text.replace("'3.15'", '"3.15"').replace("; python_version ", ";python_version")
+    assert metadata_description(text, VERSION) == readme.read_text()
 
 
 def test_manifest_binds_hashes_sizes_version_and_revision(artifact_bundle) -> None:
@@ -514,10 +530,11 @@ def test_workflow_has_safe_dispatch_exact_revision_and_full_matrix(release_workf
     assert "options: [qualify, testpypi]" in workflow
     assert "default: qualify" in workflow
     assert "ref: ${{ needs.build.outputs.revision }}" in workflow
-    assert 'python: ["3.12", "3.13", "3.14"]' in workflow
+    assert 'python: ["3.12", "3.13", "3.14", "3.15"]' in workflow
     assert 'iperf: ["3.19.1", "3.22"]' in workflow
     assert "pytest -vv --cov=iperf3_lib" in workflow
     assert "for kind in wheel sdist" in workflow
+    assert 'uv venv --python /opt/venv/bin/python "$venv"' in workflow
     assert '"$venv/bin/python" -I /app/scripts/smoke_release.py' in workflow
     assert "run: uv build --no-sources" in workflow
     for job, mode in (("publish-testpypi", "testpypi"), ("publish-pypi", "pypi")):

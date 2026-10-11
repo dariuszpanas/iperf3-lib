@@ -314,8 +314,8 @@ deadline races, parent death, truncated output, saturation, repeated workers,
 and worker/traffic admission limits. Measure worker/socket/orphan cleanup.
 The [qualification map](isolated-execution-qualification.md) defines the required
 contract evidence, repeated resource inventories and exact-candidate audit.
-Qualify installed wheels and sdists across Python 3.12–3.14 and both native
-endpoints. This proposal keeps Python/CFFI as the execution backend; it does
+Qualify installed wheels and sdists across standard-GIL Python 3.12–3.15 and
+both native endpoints. This proposal keeps Python/CFFI as the execution backend; it does
 not use the iperf3 CLI to execute application benchmarks.
 
 Linux support remains explicit. Windows is a development host, and the

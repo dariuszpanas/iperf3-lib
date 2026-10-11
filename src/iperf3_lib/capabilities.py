@@ -73,7 +73,7 @@ class CapabilityReport:
     current_platform: str
     current_python: str
     tested_platforms: tuple[str, ...] = ("Linux",)
-    tested_python_versions: tuple[str, ...] = ("3.12", "3.13", "3.14")
+    tested_python_versions: tuple[str, ...] = ("3.12", "3.13", "3.14", "3.15")
     tested_native_versions: tuple[str, ...] = ("3.19.1", "3.22")
 
 

@@ -1,7 +1,7 @@
 # Contributing
 
 Thanks for improving `iperf3-lib`. Changes should preserve the supported
-Python 3.12-3.14 and libiperf 3.19.1/3.22 matrix.
+standard-GIL Python 3.12–3.15 and libiperf 3.19.1/3.22 matrix.
 
 ## Development setup
 
@@ -24,6 +24,13 @@ The Docker compatibility dimensions can be selected explicitly:
 
 ```bash
 make docker-test PYTHON_BASE=python:3.14-slim IPERF3_VERSION=3.19.1
+```
+
+Until the official Python 3.15 Docker image is available, select the final
+managed interpreter explicitly over the Python 3.14 base image:
+
+```bash
+uv run --frozen python scripts/docker_validate.py test --python-base python:3.14-slim --build-arg PYTHON_RUNTIME=3.15.0 --iperf-version 3.22
 ```
 
 ### Reuse one local Docker context

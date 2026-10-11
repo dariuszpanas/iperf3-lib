@@ -1,9 +1,8 @@
 name: Python preview
 
 on:
-  pull_request:
-    branches: [main]
-    types: [opened, synchronize, reopened, ready_for_review]
+  # Keep the historical RC3 lane available for explicit evidence reproduction.
+  # Final Python 3.15 is required by the regular CI and release matrices.
   workflow_dispatch:
 
 permissions:

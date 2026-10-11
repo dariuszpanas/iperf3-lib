@@ -4,7 +4,7 @@
 
 | Component | Project coverage |
 | --- | --- |
-| Python | 3.12, 3.13, 3.14. |
+| Python | 3.12, 3.13, 3.14, 3.15 with the standard GIL. |
 | libiperf | 3.19.1 minimum; 3.22 default. CI tests both endpoints. |
 | Operating system | Linux. |
 | Protocols | TCP, UDP, SCTP; SCTP also requires operating-system and native-library support. |
@@ -13,17 +13,18 @@ The package declares Python `>=3.12`; the versions listed above are the
 current tested matrix. macOS and FreeBSD are unverified by this project.
 Windows DLL loading is best-effort and has no native CI coverage.
 
-Package metadata declares **Python 3.15 readiness** based on successful
-standard-GIL Python 3.15.0rc3 qualification against both native endpoints,
-including installed wheel and sdist checks. The package uses one `py3-none-any`
-wheel across Python versions; `Requires-Python: >=3.12` already permits 3.15.
-The classifier records readiness for PyPI discovery; runtime compatibility also
-depends on CFFI and the native library.
+Python 3.15 final is included in stable CI and release qualification against
+both native endpoints, including installed wheel and sdist checks. The package
+uses one `py3-none-any` wheel across Python versions; `Requires-Python: >=3.12`
+is unchanged. Python 3.15 requires CFFI 2.1.1 or newer: the
+[CFFI 2.1.1 release](https://github.com/python-cffi/cffi/releases/tag/v2.1.1)
+fixes an ABI incompatibility introduced in Python 3.15.0b4. Python 3.12–3.14
+retains the CFFI 2.0 minimum. Runtime compatibility also depends on the native
+library. Free-threaded Python builds are outside the tested matrix.
 
-The separate RC3 preview workflow retains the actual interpreter and artifact
-evidence. Stable CI and release qualification remain on Python 3.12–3.14 until
-the final Python 3.15 interpreter and official Docker image are available.
-Final-runtime qualification for the planned 0.4.0 release will follow then.
+The earlier Python 3.15.0rc3 preview workflow remains available for manual
+historical diagnostics. Its receipts do not qualify the final interpreter or
+replace the current release matrix.
 
 Installing the Python package does not install or upgrade libiperf. Follow the
 [upstream iperf releases](https://github.com/esnet/iperf/releases) for native

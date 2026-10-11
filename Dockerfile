@@ -7,6 +7,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG IPERF3_VERSION=3.22
+ARG PYTHON_RUNTIME=python
 
 # Build libiperf from an official release. libsctp-dev enables SCTP support.
 RUN apt-get update \
@@ -41,12 +42,16 @@ COPY --from=uv /uv /uvx /usr/local/bin/
 
 ENV VIRTUAL_ENV=/opt/venv \
     UV_PROJECT_ENVIRONMENT=/opt/venv \
+    UV_PYTHON=${PYTHON_RUNTIME} \
+    UV_PYTHON_INSTALL_DIR=/opt/python \
     UV_LINK_MODE=copy \
     UV_COMPILE_BYTECODE=1 \
     PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /app
 
+# An explicit version selects managed CPython when its official image is not yet
+# available. The default selects the base image interpreter.
 # Cache the frozen development environment independently from source changes.
 COPY pyproject.toml uv.lock README.md LICENSE ./
 RUN uv sync --frozen --dev --no-install-project

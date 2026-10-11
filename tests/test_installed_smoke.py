@@ -19,6 +19,45 @@ from scripts import smoke_release as smoke
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.mark.parametrize(
+    "requirements,accepted",
+    [
+        (["cffi<3,>=2.0"], True),
+        (
+            [
+                "cffi<3,>=2.0; python_version < '3.15'",
+                "cffi<3,>=2.1.1; python_version >= '3.15'",
+            ],
+            True,
+        ),
+        (None, False),
+        ([], False),
+        (["pydantic>=2"], False),
+        (["cffi<3,>=2.1.1", "pydantic>=2; python_version < '3.15'"], False),
+    ],
+)
+def test_installed_metadata_keeps_cffi_only_boundary_with_conditional_requirements(
+    tmp_path, monkeypatch, requirements, accepted
+):
+    """Check raw installed metadata without treating conditional entries as extra packages."""
+    import iperf3_lib
+
+    location = tmp_path / "site-packages/iperf3_lib/__init__.py"
+    distribution = SimpleNamespace(
+        version="0.3.0", requires=requirements, read_text=lambda name: None
+    )
+    monkeypatch.setattr(iperf3_lib, "__file__", str(location))
+    monkeypatch.setattr(
+        smoke, "sys", SimpleNamespace(flags=SimpleNamespace(isolated=True), prefix=str(tmp_path))
+    )
+    monkeypatch.setattr(importlib.metadata, "distribution", lambda name: distribution)
+    if accepted:
+        assert smoke.require_installed_package("0.3.0") == str(location.resolve())
+    else:
+        with pytest.raises(ValueError, match="runtime dependencies must contain only CFFI"):
+            smoke.require_installed_package("0.3.0")
+
+
 def native_result(version="3.21", profile="tcp-forward", config=None, intent=None):
     """Keep genuine measurement receipts while explicitly synthesizing wrapper/config evidence."""
     raw = json.loads(
