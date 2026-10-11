@@ -13,6 +13,7 @@ import tarfile
 import textwrap
 import zipfile
 from functools import lru_cache
+from importlib.metadata import version
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -21,6 +22,8 @@ import pytest
 from scripts import qualify_lifecycle as qualification
 
 REVISION = "a" * 40
+# Synthetic receipts must identify the package that generates their nested artifacts.
+PACKAGE_VERSION = version("iperf3-lib")
 
 
 @pytest.fixture
@@ -341,7 +344,7 @@ def _passed_results():
                     "request_id": str(index) * 32,
                     "worker_id": str(index + 2) * 32,
                     "producer": {
-                        "package_version": "0.3.0",
+                        "package_version": PACKAGE_VERSION,
                         "python_version": "3.14.2",
                         "native_version": "iperf 3.21",
                         "library_selector": {"source": "platform_search", "candidates": []},
@@ -362,7 +365,7 @@ def _passed_results():
         "reports": reports,
         "python": "3.14.2",
         "native_version": "iperf 3.21",
-        "package_version": "0.3.0",
+        "package_version": PACKAGE_VERSION,
     }
 
 
@@ -513,7 +516,7 @@ def _adaptive_receipt_cached(case):
         "case": case,
         "port": 5201,
         "producer": {
-            "package_version": "0.3.0",
+            "package_version": PACKAGE_VERSION,
             "python_version": "3.14.2",
             "native_version": "iperf 3.21",
         },
@@ -535,7 +538,7 @@ def test_adaptive_receipts_require_native_allocation_measurements_and_cleanup(ca
     evidence["producer"]["native_version"] = native_version
     qualification._validate_adaptive_receipt(
         evidence,
-        {"package_version": "0.3.0", "python": "3.14.2", "native_version": native_version},
+        {"package_version": PACKAGE_VERSION, "python": "3.14.2", "native_version": native_version},
         f"test_adaptive_integration.py::test_native_adaptive_udp_preserves_measured_decisions[{case}]",
     )
 
@@ -578,7 +581,11 @@ def test_adaptive_receipts_reject_missing_or_contradictory_measurements(path, va
     with pytest.raises(ValueError, match="adaptive UDP receipt"):
         qualification._validate_adaptive_receipt(
             evidence,
-            {"package_version": "0.3.0", "python": "3.14.2", "native_version": "iperf 3.21"},
+            {
+                "package_version": PACKAGE_VERSION,
+                "python": "3.14.2",
+                "native_version": "iperf 3.21",
+            },
             "test_adaptive_integration.py::test_native_adaptive_udp_preserves_measured_decisions[impaired-forward]",
         )
 
@@ -594,7 +601,11 @@ def test_adaptive_receipt_rejects_resealed_decision_without_matching_native_tria
     with pytest.raises(ValueError, match="adaptive UDP receipt"):
         qualification._validate_adaptive_receipt(
             evidence,
-            {"package_version": "0.3.0", "python": "3.14.2", "native_version": "iperf 3.21"},
+            {
+                "package_version": PACKAGE_VERSION,
+                "python": "3.14.2",
+                "native_version": "iperf 3.21",
+            },
             "test_adaptive_integration.py::test_native_adaptive_udp_preserves_measured_decisions[impaired-forward]",
         )
 
@@ -644,7 +655,7 @@ def _async_plan_receipt(case):
             "request_id": str(index) * 32,
             "worker_id": str(index + 2) * 32,
             "producer": {
-                "package_version": "0.3.0",
+                "package_version": PACKAGE_VERSION,
                 "python_version": "3.14.2",
                 "native_version": "iperf 3.21",
                 "library_selector": {},
@@ -830,7 +841,7 @@ def _concurrent_plan_receipt(case):
             "request_id": f"{index + 10:032x}",
             "worker_id": f"{index + 100:032x}",
             "producer": {
-                "package_version": "0.3.0",
+                "package_version": PACKAGE_VERSION,
                 "python_version": "3.14.2",
                 "native_version": "iperf 3.21",
                 "library_selector": {},
@@ -1035,7 +1046,7 @@ def _resource_stress_receipt(case):
                 "request_id": f"{pid:032x}",
                 "worker_id": f"{pid + 10000:032x}",
                 "producer": {
-                    "package_version": "0.3.0",
+                    "package_version": PACKAGE_VERSION,
                     "python_version": "3.14.2",
                     "native_version": "iperf 3.21",
                     "library_selector": {},
@@ -1095,7 +1106,11 @@ def _resource_stress_receipt(case):
 
 
 def _check_resource_receipt(evidence):
-    runtime = {"package_version": "0.3.0", "python": "3.14.2", "native_version": "iperf 3.21"}
+    runtime = {
+        "package_version": PACKAGE_VERSION,
+        "python": "3.14.2",
+        "native_version": "iperf 3.21",
+    }
     nodeid = f"test_resource_stress_integration.py::test_repeated_native_lifecycles_restore_owned_resources[{evidence['case']}]"
     qualification._validate_resource_receipt(evidence, runtime, nodeid)
 
@@ -1199,7 +1214,11 @@ def test_lifecycle_results_require_every_expected_case_and_native_receipt():
 
 
 def _check_concurrent_receipt(evidence):
-    runtime = {"package_version": "0.3.0", "python": "3.14.2", "native_version": "iperf 3.21"}
+    runtime = {
+        "package_version": PACKAGE_VERSION,
+        "python": "3.14.2",
+        "native_version": "iperf 3.21",
+    }
     nodeid = (
         "test_concurrent_trials_integration.py::"
         f"test_native_concurrent_plan_preserves_bounds_and_owned_cleanup[{evidence['case']}]"
@@ -1408,7 +1427,11 @@ def test_async_plan_receipts_reject_resealed_contradictory_report_evidence(chang
 
 
 def _check_async_plan_receipt(evidence):
-    runtime = {"package_version": "0.3.0", "python": "3.14.2", "native_version": "iperf 3.21"}
+    runtime = {
+        "package_version": PACKAGE_VERSION,
+        "python": "3.14.2",
+        "native_version": "iperf 3.21",
+    }
     nodeid = (
         "test_async_trials_integration.py::"
         f"test_native_async_plan_retains_partial_history_and_releases_workers[{evidence['case']}]"
@@ -1675,6 +1698,7 @@ def test_isolated_pytest_hook_retains_actual_case_phases_and_properties(tmp_path
     config.write_text("[pytest]\n")
     program = textwrap.dedent("""
         import json, runpy, sys
+        from importlib.metadata import version
         # This synthetic hook test uses the caller's existing test dependencies
         # explicitly; the production installed qualifier still enforces its venv.
         sys.path[:0] = json.loads(sys.argv[2])
@@ -1683,7 +1707,7 @@ def test_isolated_pytest_hook_retains_actual_case_phases_and_properties(tmp_path
         plugin = runner['_Reports']()
         status = pytest.main(['-c', 'pytest.ini', '-q', *runner['expected_tests']()], plugins=[plugin])
         result = {'exit_code': int(status), 'collected': plugin.collected, 'reports': plugin.reports,
-                  'python': '3.14.2', 'native_version': 'iperf 3.21', 'package_version': '0.3.0'}
+                  'python': '3.14.2', 'native_version': 'iperf 3.21', 'package_version': version('iperf3-lib')}
         try:
             runner['validate_results'](result)
         except ValueError:

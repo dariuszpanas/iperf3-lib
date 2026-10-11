@@ -4,11 +4,19 @@ These pages describe `main`. Released versions remain available through
 [GitHub releases](https://github.com/dariuszpanas/iperf3-lib/releases) and
 [PyPI](https://pypi.org/project/iperf3-lib/).
 
-## Unreleased
+## 0.4.0 — unreleased candidate
+
+This candidate retains the project's Beta maturity status. Version metadata
+and these notes prepare the release; they do not establish publication.
 
 Upgrading from 0.3.0? Read the [unreleased migration guide](guides/migration-0.4.md)
 for async behavior changes, application customizations, and saved-report readers.
 
+- Preserve sequential plan history when an application's task factory rejects
+  a trial. Close rejected trial and live-event coroutines without starting a
+  worker, and allow fresh event streams from the same client or server.
+- Recommend patched libiperf 3.22 for deployment. Retain 3.19.1 only as the
+  compatibility baseline; see the [security policy](security.md).
 - Move the default/latest libiperf endpoint from 3.21 to 3.22, retaining the
   3.19.1 minimum and historical native fixtures. Qualify 3.22 result evidence
   without changing report schemas; the native release includes upstream

@@ -5,6 +5,7 @@ import copy
 import json
 from dataclasses import asdict
 from functools import lru_cache
+from importlib.metadata import version
 from pathlib import Path
 
 import pytest
@@ -15,7 +16,12 @@ from iperf3_lib.events import LiveEvent, WorkerStatePayload
 from iperf3_lib.result import result_from_iperf_json
 from scripts import qualify_lifecycle as qualification
 
-PRODUCER = {"package_version": "0.3.0", "python_version": "3.14.2", "native_version": "iperf 3.21"}
+# This receipt is synthesized now; retained native inputs keep their historical versions.
+PRODUCER = {
+    "package_version": version("iperf3-lib"),
+    "python_version": "3.14.2",
+    "native_version": "iperf 3.21",
+}
 
 
 def live_receipt(case, *, native_version="iperf 3.21"):
