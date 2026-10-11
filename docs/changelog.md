@@ -13,12 +13,13 @@ for async behavior changes, application customizations, and saved-report readers
   3.19.1 minimum and historical native fixtures. Qualify 3.22 result evidence
   without changing report schemas; the native release includes upstream
   security and cleanup fixes.
-- Add a separate Python 3.15.0rc3 preview lane with explicit interpreter selection,
-  both native endpoints, and retained installed wheel/sdist evidence. Stable
-  Python support remains 3.12–3.14 pending final-runtime qualification.
-- Declare Python 3.15 readiness in package classifiers after successful RC3
-  qualification. Keep the shared `py3-none-any` wheel, Python `>=3.12` requirement,
-  and existing workflow matrices; add final-runtime coverage after its release.
+- Add standard-GIL Python 3.15 final support to stable CI, native integration,
+  and installed wheel/sdist release qualification with both libiperf endpoints.
+  Require CFFI 2.1.1 or newer on Python 3.15 for its
+  [Python 3.15 ABI compatibility fix](https://github.com/python-cffi/cffi/releases/tag/v2.1.1),
+  while retaining the CFFI 2.0 minimum on older Python versions. Keep Python
+  `>=3.12` and the shared `py3-none-any` wheel. Retain the earlier Python
+  3.15.0rc3 preview workflow as a manual historical diagnostic.
 - Qualify expanded lifecycle, plan, adaptive and live-event behavior from the
   exact retained release wheel and sdist. Require a complete verified smoke and
   lifecycle receipt set before publication and retain its qualification index.

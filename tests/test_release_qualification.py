@@ -50,7 +50,7 @@ def save(path, value):
 
 @pytest.fixture(scope="module")
 def retained_matrix(tmp_path_factory):
-    """Create all 24 receipts using existing full semantic factories, with no native load."""
+    """Create all 32 receipts using existing full semantic factories, with no native load."""
     from test_installed_smoke import installed_receipt
     from test_lifecycle_qualification import _passed_results
     from test_live_event_evidence import live_receipt
@@ -224,13 +224,13 @@ def test_complete_release_matrix_validates_semantics_and_records_retained_hashes
     index = aggregate.verify_qualification(**matrix.args)
     assert index["status"] == "passed"
     assert index["totals"] == {
-        "smoke_receipts": 12,
-        "lifecycle_receipts": 12,
-        "lifecycle_cases": 588,
-        "lifecycle_phases": 1764,
+        "smoke_receipts": 16,
+        "lifecycle_receipts": 16,
+        "lifecycle_cases": 784,
+        "lifecycle_phases": 2352,
     }
     assert len(index["lifecycle_selection"]) == 49
-    assert len(index["receipts"]) == 12
+    assert len(index["receipts"]) == 16
     first = index["receipts"][0]
     assert first["smoke_sha256"] == lifecycle.digest(matrix.smoke / "wheel.json")
     assert first["lifecycle_tests_sha256"] == lifecycle.digest(
@@ -265,7 +265,7 @@ def test_matrix_inventory_rejects_missing_extra_or_swapped_receipts(matrix, faul
     elif fault == "extra-file":
         matrix.change(matrix.smoke / "duplicate.json", (matrix.smoke / "wheel.json").read_bytes())
     elif fault == "extra-cell":
-        matrix.directory(matrix.args["smoke_root"] / "native-evidence-py3.15-iperf3.22")
+        matrix.directory(matrix.args["smoke_root"] / "native-evidence-py3.16-iperf3.22")
     elif fault == "swapped-kind":
         matrix.change(matrix.smoke / "wheel.json", (matrix.smoke / "sdist.json").read_bytes())
     else:
@@ -276,6 +276,52 @@ def test_matrix_inventory_rejects_missing_extra_or_swapped_receipts(matrix, faul
             ).read_bytes(),
         )
     with pytest.raises(ValueError):
+        aggregate.verify_qualification(**matrix.args)
+
+
+def _qualify_python_315_cell_first(monkeypatch, native):
+    """Keep every required cell while rejecting the targeted bad receipt first."""
+    cells = aggregate.EXPECTED_MATRIX
+    target = ("3.15", native)
+    assert target in cells
+    monkeypatch.setattr(
+        aggregate, "EXPECTED_MATRIX", (target, *(cell for cell in cells if cell != target))
+    )
+
+
+@pytest.mark.parametrize("native", ["3.19.1", "3.22"])
+@pytest.mark.parametrize("kind", ["wheel", "sdist"])
+@pytest.mark.parametrize("evidence", ["smoke", "lifecycle"])
+def test_python_315_requires_both_installed_formats_at_each_native_endpoint(
+    matrix, monkeypatch, native, kind, evidence
+):
+    """A successful older-Python matrix cannot replace any final 3.15 receipt."""
+    _qualify_python_315_cell_first(monkeypatch, native)
+    prefix = "native" if evidence == "smoke" else "lifecycle"
+    directory = matrix.args[f"{evidence}_root"] / f"{prefix}-evidence-py3.15-iperf{native}"
+    matrix.change(directory / f"{kind}.json")
+    with pytest.raises(ValueError, match="retained evidence inventory differs"):
+        aggregate.verify_qualification(**matrix.args)
+
+
+@pytest.mark.parametrize("evidence", ["smoke", "lifecycle"])
+@pytest.mark.parametrize("python", ["3.15.0rc3", "3.15.0b4", "3.14.8"])
+def test_python_315_rejects_preview_or_older_runtime_receipts(
+    matrix, monkeypatch, evidence, python
+):
+    """Passing candidate or fallback runs cannot satisfy the final-runtime gate."""
+    _qualify_python_315_cell_first(monkeypatch, "3.22")
+    prefix = "native" if evidence == "smoke" else "lifecycle"
+    directory = matrix.args[f"{evidence}_root"] / f"{prefix}-evidence-py3.15-iperf3.22"
+    path = directory / "wheel.json"
+    receipt = json.loads(path.read_text())
+    if evidence == "smoke":
+        receipt["python"] = f"{python} (synthetic isolated interpreter)"
+    else:
+        receipt["tests"]["python"] = python
+        matrix.change(directory / "wheel-tests.json", receipt["tests"])
+    matrix.change(path, receipt)
+    with pytest.raises(ValueError, match="receipt Python does not identify expected 3.15"):
         aggregate.verify_qualification(**matrix.args)
 
 
@@ -502,10 +548,10 @@ def test_cli_writes_complete_success_index(matrix, tmp_path):
     assert index["release_manifest_sha256"] == matrix.args["release_manifest_sha256"]
     assert index["lifecycle_manifest_sha256"] == matrix.args["lifecycle_manifest_sha256"]
     assert index["totals"] == {
-        "smoke_receipts": 12,
-        "lifecycle_receipts": 12,
-        "lifecycle_cases": 588,
-        "lifecycle_phases": 1764,
+        "smoke_receipts": 16,
+        "lifecycle_receipts": 16,
+        "lifecycle_cases": 784,
+        "lifecycle_phases": 2352,
     }
-    assert len(index["receipts"]) == 12
+    assert len(index["receipts"]) == 16
     assert list(output.parent.iterdir()) == [output]

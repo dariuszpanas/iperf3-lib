@@ -163,9 +163,9 @@ def require_installed_package(expected_version: str) -> str:
     if direct_url and json.loads(direct_url).get("dir_info", {}).get("editable"):
         raise ValueError("editable package installation cannot qualify a distribution")
     requirements = distribution.requires or []
-    if [re.split(r"[\s(<>=!~;\[]", item, maxsplit=1)[0].lower() for item in requirements] != [
-        "cffi"
-    ]:
+    # Metadata retains each Python-conditional CFFI requirement, including inactive ones.
+    names = {re.split(r"[\s(<>=!~;\[]", item, maxsplit=1)[0].lower() for item in requirements}
+    if names != {"cffi"}:
         raise ValueError("installed package runtime dependencies must contain only CFFI")
     return str(location)
 

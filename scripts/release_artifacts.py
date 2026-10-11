@@ -41,9 +41,13 @@ def metadata_description(metadata: str, version: str) -> str:
     if parsed["Name"] != "iperf3-lib" or parsed["Version"] != version:
         raise ValueError("distribution metadata does not match project identity/version")
     requirements = parsed.get_all("Requires-Dist", [])
-    names = [re.split(r"[\s(<>=!~;\[]", value, maxsplit=1)[0].lower() for value in requirements]
-    if names != ["cffi"]:
-        raise ValueError(f"expected CFFI-only runtime dependencies, found {requirements}")
+    normalized = {re.sub(r"\s+", "", value).replace("'", '"') for value in requirements}
+    expected = {
+        'cffi<3,>=2.0;python_version<"3.15"',
+        'cffi<3,>=2.1.1;python_version>="3.15"',
+    }
+    if len(requirements) != len(expected) or normalized != expected:
+        raise ValueError(f"CFFI runtime requirements differ from supported policy: {requirements}")
     if parsed["Requires-Python"] != ">=3.12":
         raise ValueError("distribution Python requirement differs from the supported policy")
     if parsed["Description-Content-Type"] != "text/markdown":

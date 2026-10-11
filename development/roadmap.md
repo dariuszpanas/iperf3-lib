@@ -16,10 +16,10 @@ retained exact-source native and installed-package qualification. The
 [live-event guide](../docs/guides/live-events.md) describes the owned stream contract.
 
 Python 3.15 support and qualification are tracked in
-[#63](https://github.com/dariuszpanas/iperf3-lib/issues/63). A separate RC3 preview
-lane prepares compatibility work while final-runtime qualification remains open.
-Final 0.4.0 release
-preparation must qualify the combined source, retained wheel and sdist,
+[#63](https://github.com/dariuszpanas/iperf3-lib/issues/63). Python 3.15 final is
+included in the stable CI and release matrices; the RC3 workflow is retained
+for manual historical diagnostics. Final 0.4.0 release preparation must qualify
+the combined source, retained wheel and sdist on Python 3.12–3.15,
 documentation, and Grafana integration. The `Unreleased` changelog is a
 development record; it does not establish that these features are published.
 

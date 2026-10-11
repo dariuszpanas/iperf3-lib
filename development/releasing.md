@@ -12,40 +12,50 @@ maps are linked from the [advanced execution design](design/advanced-execution.m
 Historical release receipts do not qualify these additions. Release notes and
 capability claims must follow evidence for the combined candidate.
 
-## Python 3.15 preview and final activation
+## Python 3.15 final qualification
 
-The separate `python-preview.yml` workflow tests **3.15.0rc3**, without publication
-permissions. It layers a pinned uv 0.12.23 and managed RC3 interpreter over the
-ordinary Python 3.14 native image. Tests and installed environments explicitly
-select `/opt/preview-venv/bin/python`; the base image's Python is not preview
-evidence. `scripts/python_preview.py` checks the actual interpreter and native
-getter before recording runtime identity, frozen dependencies and lock hash.
+Stable CI and release qualification include standard-GIL Python **3.15 final**
+alongside 3.12, 3.13 and 3.14. Until the official Python 3.15 Docker image is
+available, those jobs use `python:3.14-slim` with `PYTHON_RUNTIME=3.15.0` to install
+and explicitly select the managed final interpreter. Both libiperf 3.19.1 and
+3.22 are required. The base image label does not qualify the runtime: preflight
+checks and runtime receipts must identify the actual final interpreter and its
+GIL configuration. The release verifier rejects prerelease versions.
+The eight-cell release gate requires **16 smoke and 16 lifecycle receipts,
+784 selected cases and 2352 passed phases**.
 
-Run a selected candidate manually with:
+Issue [#63](https://github.com/dariuszpanas/iperf3-lib/issues/63) tracks support
+and qualification evidence. Rerun the complete non-publishing release rehearsal
+on the final 0.4.0 candidate. Historical RC3 results or an earlier successful
+candidate cannot replace evidence for that exact source and its retained
+wheel/sdist pair. Python `>=3.12`, the shared wheel format and the two native
+endpoints remain unchanged. Free-threaded builds are outside this matrix.
+
+### Historical RC3 diagnostics
+
+The separate manual-only `python-preview.yml` workflow retains the earlier
+**3.15.0rc3** diagnostic, without publication permissions. It layers pinned
+uv 0.12.23 and a managed RC3 interpreter over the Python 3.14 native image.
+Tests and installed environments explicitly select `/opt/preview-venv/bin/python`;
+the base image's Python is not preview evidence. `scripts/python_preview.py`
+checks the actual interpreter and native getter before recording runtime
+identity, frozen dependencies and lock hash.
+
+Run a historical diagnostic manually with:
 
 ```bash
 gh workflow run python-preview.yml --ref main
 ```
 
-The workflow runs non-native checks before native integration, then the existing
+This workflow runs non-native checks before native integration, then the existing
 installed lifecycle and smoke harnesses on one sealed wheel/sdist pair. Both
 libiperf 3.19.1 and 3.22 must pass. Download `python-preview-distributions` and
 both `python-preview-rc3-iperf*` artifacts, together with job logs, for a durable
 record. Expect **four lifecycle receipts, 196 selected cases and 588 passed
 phases**, plus **four smoke receipts**. Runtime JSON and image inspection retain
 the resolved interpreter, dependency and container identities. These preview
-receipts are separate from the stable release qualification index.
-
-Issue [#63](https://github.com/dariuszpanas/iperf3-lib/issues/63) remains open until
-final Python and its official Docker image are available and qualified. At final
-activation, verify the actual interpreter and image digest, add 3.15 to stable
-CI, release and aggregate matrices, and update classifiers, capability reports,
-and current compatibility documentation. Preserve Python `>=3.12` and existing
-native endpoints. The eight-cell release gate must then require **16 smoke and
-16 lifecycle receipts, 784 selected cases and 2352 passed phases**. Rerun the
-complete non-publishing release rehearsal on the final 0.4.0 candidate; RC3
-success cannot substitute for that evidence. The current release verifier
-deliberately rejects prerelease interpreter versions.
+receipts are separate from the stable release qualification index and cannot
+satisfy its Python 3.15 final cells.
 
 ## Rehearse without publishing
 
@@ -80,8 +90,8 @@ A successful rehearsal contains:
   `release-evidence/lifecycle-manifest.json` seals the same distributions,
   package contents and qualification harness; both manifest hashes come from
   the build job.
-- The full Python 3.12–3.14 × libiperf 3.19.1/3.22 native matrix, including
-  lifecycle regressions, from the exact source revision.
+- The full standard-GIL Python 3.12–3.15 × libiperf 3.19.1/3.22 native matrix,
+  including lifecycle regressions, from the exact source revision.
 - Installed wheel **and** sdist qualification in every matrix cell. These use
   fresh environments and isolated interpreters outside the checkout;
   editable/source imports are rejected.
@@ -109,7 +119,7 @@ Current CI also qualifies operation cancellation, Linux parent-death cleanup,
 the private worker transport, plans, adaptive UDP and typed live events
 from installed wheels and sdists. It builds one distribution pair from the
 candidate revision, then uses fresh environments outside the source checkout
-in all six Python/libiperf combinations. Import paths and installed package
+in all eight Python/libiperf combinations. Import paths and installed package
 bytes must match the retained distributions. Missing or skipped lifecycle
 cases fail qualification.
 
@@ -131,9 +141,9 @@ remains exactly one wheel and one sdist. Controlled UDP impairment runs inside
 the qualification container with `NET_ADMIN`; no host network changes are
 required.
 
-For the current six Python/native combinations, the release gate requires
-**12 smoke receipts and 12 lifecycle receipts**, with **588 lifecycle cases and
-1764 passed phases**. `scripts/verify_release_qualification.py` requires the
+For the current eight Python/native combinations, the release gate requires
+**16 smoke receipts and 16 lifecycle receipts**, with **784 lifecycle cases and
+2352 passed phases**. `scripts/verify_release_qualification.py` requires the
 exact expected cell/format directories, binds their identities to both
 manifests, checks retained semantic evidence, and rejects missing, extra,
 failed or skipped cases. It does not load libiperf or rerun benchmarks.
@@ -149,9 +159,11 @@ candidate evidence, not permission to publish or proof for a later revision.
 
 ## Inspect installed receipt v2
 
-The smoke contract introduced for 0.3.0 requires **12 successful receipt-v2 files**:
-one installed wheel and one installed sdist for each Python 3.12–3.14 and
-libiperf 3.19.1/3.22 combination. Each receipt must retain:
+The receipt-v2 smoke contract was introduced for 0.3.0. The current release
+matrix requires **16 successful receipt-v2 files**: one installed wheel and one
+installed sdist for each standard-GIL Python 3.12–3.15 and libiperf 3.19.1/3.22
+combination. Historical 0.3.0 receipts retain their original Python and native
+version identities. Each current receipt must retain:
 
 | Evidence | Required checks |
 | --- | --- |
