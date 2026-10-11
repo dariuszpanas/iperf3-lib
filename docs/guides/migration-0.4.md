@@ -1,7 +1,7 @@
 # Prepare an upgrade from 0.3.0
 
-!!! note "Unreleased changes intended for 0.4.0"
-    This guide describes changes on `main` after published 0.3.0. It does not
+!!! note "0.4.0 unreleased candidate"
+    This guide describes the 0.4.0 candidate on `main` after published 0.3.0. It does not
     establish that 0.4.0 has been released or extend the supported platform
     matrix. Check the [changelog](../changelog.md) and use documentation matching
     the source revision or package you install.

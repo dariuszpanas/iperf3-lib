@@ -9,7 +9,8 @@ configuration, result, experiment, and reporting features, or keep your runner
 and import its completed JSON.
 
 !!! note "Match the documentation to your version"
-    This site follows `main`. Dataclasses, portable artifacts, analysis, trial
+    This site follows the **unreleased 0.4.0 candidate** on `main`.
+    The latest published version is **0.3.0**. Dataclasses, portable artifacts, analysis, trial
     plans, sweeps, and Prometheus output are available in 0.3.0; 0.2.0 uses
     Pydantic models. Use documentation matching your installed version.
     Check the [changelog](changelog.md) and
@@ -26,7 +27,7 @@ changes, customizations, optional new APIs, and report readers.
 
 ## Install the Python package
 
-For the published package, choose the installer used by your application:
+For the published 0.3.0 package, choose the installer used by your application:
 
 ```bash
 uv add iperf3-lib
@@ -36,7 +37,7 @@ uv add iperf3-lib
 python -m pip install iperf3-lib
 ```
 
-For an optional installation from the current source:
+To evaluate the unreleased 0.4.0 candidate from source:
 
 ```bash
 python -m pip install "iperf3-lib @ git+https://github.com/dariuszpanas/iperf3-lib.git@main"

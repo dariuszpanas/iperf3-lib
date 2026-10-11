@@ -20,8 +20,16 @@ Python 3.15 support and qualification are tracked in
 included in the stable CI and release matrices; the RC3 workflow is retained
 for manual historical diagnostics. Final 0.4.0 release preparation must qualify
 the combined source, retained wheel and sdist on Python 3.12–3.15,
-documentation, and Grafana integration. The `Unreleased` changelog is a
+documentation, and Grafana integration. The versioned unreleased-candidate changelog is a
 development record; it does not establish that these features are published.
+
+The 0.4.0 candidate freezes this scope with the task-submission correction in
+[#77](https://github.com/dariuszpanas/iperf3-lib/issues/77) and the patched-native
+recommendation. No additional feature cycle is required for this Beta release.
+Stable API/deprecation guarantees, immutable versioned documentation, broader
+platform coverage, longer mixed-workload qualification, and consumer feedback
+remain later stability work, tracked in
+[#78](https://github.com/dariuszpanas/iperf3-lib/issues/78).
 
 ## Historical 0.3.0 planning
 
