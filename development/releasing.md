@@ -6,7 +6,7 @@ decision.
 
 The published 0.3.0 scope included finite sequential trials, explicit sweeps,
 expanded native controls, callback events and isolated Python/CFFI workers.
-The planned 0.4.0 scope adds owned async and bounded concurrent plans, adaptive
+The published 0.4.0 scope adds owned async and bounded concurrent plans, adaptive
 UDP experiments, and typed live-event consumption. Their current qualification
 maps are linked from the [advanced execution design](design/advanced-execution.md).
 Historical release receipts do not qualify these additions. Release notes and
@@ -24,9 +24,9 @@ GIL configuration. The release verifier rejects prerelease versions.
 The eight-cell release gate requires **16 smoke and 16 lifecycle receipts,
 784 selected cases and 2352 passed phases**.
 
-Issue [#63](https://github.com/dariuszpanas/iperf3-lib/issues/63) tracks support
-and qualification evidence. Rerun the complete non-publishing release rehearsal
-on the final 0.4.0 candidate. Historical RC3 results or an earlier successful
+Issue [#63](https://github.com/dariuszpanas/iperf3-lib/issues/63) retains support
+and qualification evidence. Run the complete non-publishing release rehearsal
+on each final release candidate. Historical RC3 results or an earlier successful
 candidate cannot replace evidence for that exact source and its retained
 wheel/sdist pair. Python `>=3.12`, the shared wheel format and the two native
 endpoints remain unchanged. Free-threaded builds are outside this matrix.

@@ -43,12 +43,12 @@ libiperf has process-global state. Async operations, expanded controls, event de
 timeouts use Python worker processes. The library manages their protocol,
 results, and cleanup; native traffic generation still happens in libiperf.
 
-!!! note "Additional ownership APIs on current main"
+!!! note "Additional ownership APIs in 0.4.0"
     Changes after 0.3.0 make async cancellation await worker cleanup and any
     active callback, reporting unconfirmed cleanup as `IperfCleanupError`.
     [Owned live-event streams](live-events.md), [bounded concurrent plans](concurrent-plans.md),
-    and [adaptive UDP experiments](adaptive-udp.md) also belong to the unreleased
-    0.4.0 work. See the [upgrade guide](migration-0.4.md) before relying on these
+    and [adaptive UDP experiments](adaptive-udp.md) are also available in 0.4.0.
+    See the [upgrade guide](migration-0.4.md) before relying on these
     behaviors. Version 0.3.0 does not stop an executor-based async operation
     merely because its await is cancelled.
 

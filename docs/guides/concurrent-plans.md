@@ -1,6 +1,6 @@
 # Bounded concurrent plans
 
-Available on `main` after merge (unreleased), `arun_concurrent_plan` runs
+Available in 0.4.0, `arun_concurrent_plan` runs
 independent cells in isolated workers. You must provide both a worker limit
 and an aggregate target-rate limit. The existing synchronous `run_plan` and
 async `arun_plan` remain sequential.

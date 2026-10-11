@@ -47,13 +47,13 @@ Python **3.12–3.15** with the standard GIL is supported. Stable CI and release
 qualification cover all four Python versions against both native endpoints,
 including installed wheel and sdist checks.
 
-The **0.4.0 candidate is unreleased**; **0.3.0** is the latest published version.
+The latest published version is **0.4.0**, with Beta project maturity.
 Documentation follows `main`. The installation guide explains how to choose
 between a published package and a source revision; consult the
 [changelog](https://dariuszpanas.github.io/iperf3-lib/changelog.html) for release
 status. Upgrade guidance covers
 [0.2.0 to 0.3.0](https://dariuszpanas.github.io/iperf3-lib/guides/migration-0.3.html)
-and [unreleased changes after 0.3.0](https://dariuszpanas.github.io/iperf3-lib/guides/migration-0.4.html).
+and [0.3.0 to 0.4.0](https://dariuszpanas.github.io/iperf3-lib/guides/migration-0.4.html).
 
 ## Documentation
 

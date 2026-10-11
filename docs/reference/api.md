@@ -2,7 +2,7 @@
 
 The site follows `main`; use documentation matching your installed version.
 Async worker cancellation, `IperfCleanupError`, and owned typed live streams are
-unreleased additions after 0.3.0. See [installation](../getting-started.md)
+available starting in 0.4.0. See [installation](../getting-started.md)
 for package setup.
 
 ## Clients and servers
@@ -425,7 +425,9 @@ versions. Report-v1 imports preserve archived analysis and validate frozen
 baseline rules, finite budgets, report evolution, and CI status precedence.
 
 
-## Owned async plans (unreleased)
+<span id="owned-async-plans-unreleased"></span>
+
+## Owned async plans
 
 Import `arun_plan` from `iperf3_lib.async_trials`:
 
@@ -464,7 +466,9 @@ for cancellation, retention limits and compatibility boundaries. Existing v2
 archives remain readable; new exception records carrying event evidence require
 the updated v2 reader.
 
-## Bounded concurrent plans (unreleased)
+<span id="bounded-concurrent-plans-unreleased"></span>
+
+## Bounded concurrent plans
 
 Import `arun_concurrent_plan` from `iperf3_lib.concurrent_trials`:
 
@@ -526,7 +530,9 @@ It uses the shared `ReportValidationError` and `UnsupportedReportVersionError`.
 See [bounded sweeps](../guides/sweeps.md) for admission, ordering, qualification,
 method separation and the frozen report contract.
 
-## Adaptive UDP experiments (unreleased)
+<span id="adaptive-udp-experiments-unreleased"></span>
+
+## Adaptive UDP experiments
 
 Import from `iperf3_lib.adaptive`:
 

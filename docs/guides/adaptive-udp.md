@@ -1,6 +1,6 @@
 # Adaptive UDP experiments
 
-This exploratory API is **unreleased**. It builds on [bounded trials](trials.md)
+This exploratory API is available in **0.4.0**. It builds on [bounded trials](trials.md)
 and [explicit sweeps](sweeps.md) to find the highest tested offered rate that
 meets declared receiver-loss and sender-delivery criteria. Its result describes
 the tested conditions; it does not estimate exact physical network capacity.

@@ -1,6 +1,6 @@
 # Advanced execution: design and release disposition
 
-Status: **implementation contracts for the unreleased 0.4.0 scope**. The original
+Status: **implementation contracts shipped in 0.4.0**. The original
 design review and native-event exploration were recorded on 2026-09-26.
 The [native-control guide](../../docs/guides/native-controls.md) and
 [live-event guide](../../docs/guides/live-events.md) document the public interfaces.
@@ -18,7 +18,7 @@ criteria have evidence; implementation and collected tests alone are insufficien
 
 | Proposal | Decision | Evidence needed for complete qualification |
 | --- | --- | --- |
-| [Adaptive UDP #34](https://github.com/dariuszpanas/iperf3-lib/issues/34) | Qualified and merged through PR69; see the [unreleased guide](../../docs/guides/adaptive-udp.md). | The issue retains exact-source synthetic, minimum/latest native, isolated impairment, and installed wheel/sdist evidence. |
+| [Adaptive UDP #34](https://github.com/dariuszpanas/iperf3-lib/issues/34) | Qualified and merged through PR69; see the [0.4.0 guide](../../docs/guides/adaptive-udp.md). | The issue retains exact-source synthetic, minimum/latest native, isolated impairment, and installed wheel/sdist evidence. |
 | [Live events #35](https://github.com/dariuszpanas/iperf3-lib/issues/35) | Owned typed async contexts preserve complete-result access and legacy callbacks. | Minimum/latest event assembly, bounded delivery, failure/overflow/abandonment tests, and lifecycle qualification. |
 | [Process isolation #36](https://github.com/dariuszpanas/iperf3-lib/issues/36) | Qualified and merged through PR68. | The [acceptance map](isolated-execution-qualification.md) and issue retain the exact-source installed matrix, bounded transport, partial evidence and resource cleanup qualification. |
 
@@ -52,7 +52,7 @@ defines the current platform and native-version coverage.
 
 ### Admission and evidence
 
-The unreleased implementation is split between `adaptive.py` (pure decisions),
+The 0.4.0 implementation is split between `adaptive.py` (pure decisions),
 `adaptive_execution.py` (sequential batches) and `adaptive_reports.py` (standalone
 schema-1 archives). The [user guide](../../docs/guides/adaptive-udp.md) states its
 explicit limitations and public API. The following criteria remain the
@@ -126,7 +126,7 @@ and all admission limits with controlled observations. Then qualify bounded
 native mechanics on libiperf 3.19.1 and 3.22 and a controlled impaired link
 with recorded rate/loss settings. Clean loopback alone cannot validate the
 loss-threshold algorithm. Explicit finite sweeps remain the published 0.3.0
-mechanism; adaptive UDP remains unreleased until separately selected and qualified.
+mechanism; adaptive UDP shipped in 0.4.0 with its separate qualification.
 
 ## Typed live events
 
