@@ -19,6 +19,32 @@ repository policies. `make test` runs non-native tests. Docker is required for
 workflow lint and the full native suite; see [compatibility](../docs/reference/compatibility.md)
 for supported versions. Run non-native gates before native tests.
 
+## CI coverage for documentation changes
+
+Pull requests and main pushes that change only the following documentation
+files skip the eight native Docker jobs:
+
+| Location | Allowed files |
+| --- | --- |
+| Repository root | `README.md`, `CONTRIBUTING.md`, `SECURITY.md` |
+| Anywhere under `docs/` or `development/` | `.md`, `.css` and image files |
+| Anywhere under `overrides/` | `.html`, `.css` and image files |
+
+Allowed image suffixes are `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.svg` and
+`.ico`. These paths and suffixes are case-sensitive. Changes must use ordinary
+non-executable files. Changes to any other path, executable or nonregular file
+modes, mixed changes, an empty diff or an uncertain comparison require the full
+native matrix. Renames retain both old and new paths for this decision.
+
+Quality checks, non-native unit tests, YAGA policies, the strict documentation
+build, README rendering and local-link checks, and the package build still run.
+The short workflow lint check also remains Docker-backed.
+
+The required `ci` result always runs and accepts a skipped native matrix only
+after an explicit documentation-only decision and successful remaining checks.
+Manual and scheduled CI runs still use the full matrix. Release qualification
+and publication always retain their complete native gates.
+
 ## Stable local Docker validation
 
 `make docker-build` and `make docker-test` copy the selected checkout into one
