@@ -211,8 +211,8 @@ aggregate workflow result together before publication.
    will remain true after publication; rendering and matching hashes alone do
    not check this. PyPI retains the first uploaded description and cannot apply
    a later repository edit to that release. Then run the Docker/native matrix,
-   merge through the normal required checks, and run a build-only hosted
-   rehearsal for the resulting exact commit. Inspect the retained distributions,
+   merge through the normal required checks, and run a nonpublishing hosted
+   qualification for the resulting exact commit. Inspect the retained distributions,
    hashes, and every installed-native receipt.
 4. Inspect the retained artifacts' rendered README and deployed documentation
    anonymously. Confirm
