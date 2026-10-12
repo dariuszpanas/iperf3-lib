@@ -9,7 +9,7 @@ configuration, result, experiment, and reporting features, or keep your runner
 and import its completed JSON.
 
 !!! note "Match the documentation to your version"
-    This site follows `main`; the latest published version is **0.4.0**.
+    This site follows `main`; the latest published version is **0.4.1**.
     The project retains Beta maturity. Dataclasses, portable artifacts, analysis,
     trial plans, sweeps, and Prometheus output first shipped in 0.3.0; 0.4.0 adds
     owned async execution, concurrent plans, adaptive UDP and typed live events.
@@ -28,7 +28,7 @@ changes, customizations, optional new APIs, and report readers.
 
 ## Install the Python package
 
-For the published 0.4.0 package, choose the installer used by your application:
+For the published 0.4.1 package, choose the installer used by your application:
 
 ```bash
 uv add iperf3-lib
