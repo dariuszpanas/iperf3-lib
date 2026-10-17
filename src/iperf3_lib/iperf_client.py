@@ -220,9 +220,6 @@ class Client:
                 password = os.environ.get("IPERF3_PASSWORD")
             if cfg.username is not None and password is None:
                 raise ValueError("authenticated clients require password= or IPERF3_PASSWORD")
-            execution_options = {"_control": _control} if _control is not None else {}
-            if _on_live_event is not None:
-                execution_options["_on_live_event"] = _on_live_event
             return finish(
                 run_worker(
                     "client",
@@ -230,7 +227,8 @@ class Client:
                     password=password,
                     timeout=timeout,
                     on_event=on_event,
-                    **execution_options,
+                    _control=_control,
+                    _on_live_event=_on_live_event,
                 )
             )
 

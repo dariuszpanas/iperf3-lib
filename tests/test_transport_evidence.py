@@ -39,9 +39,9 @@ def _assert_fields(model, native, mapping, prefix):
     for canonical, key in mapping.items():
         expected = native.get(key)
         if expected is not None and expected >= 0:
-            assert getattr(model, canonical) == (
-                expected / 1_000_000 if canonical.endswith("seconds") else expected
-            )
+            observed = getattr(model, canonical)
+            assert observed == (expected / 1_000_000 if canonical.endswith("seconds") else expected)
+            assert type(observed) is (float if canonical.endswith("seconds") else int)
             assert model.evidence_paths[canonical] == f"{prefix}/{key}"
         else:
             assert getattr(model, canonical) is None
@@ -151,12 +151,17 @@ def test_unknown_role_keeps_local_cpu_locality_and_remote_cpu_unknown():
     artifact_to_dict(artifact_from_result(result))
 
 
-@pytest.mark.parametrize("field", list(INTERVAL_FIELDS.values()))
+@pytest.mark.parametrize(
+    "summary,field",
+    [(False, name) for name in INTERVAL_FIELDS.values()]
+    + [(True, name) for name in SUMMARY_FIELDS.values()],
+)
 @pytest.mark.parametrize("value", [True, -2, 1.5, float("inf")])
-def test_invalid_native_tcp_numbers_reject(field, value):
+def test_invalid_native_tcp_numbers_reject(summary, field, value):
     """TCP getters return integers; malformed values cannot acquire normalized units."""
     raw = _raw()
-    raw["intervals"][0]["streams"][0][field] = value
+    native = raw["end"]["streams"][0]["sender"] if summary else raw["intervals"][0]["streams"][0]
+    native[field] = value
     with pytest.raises(ValueError):
         result_from_iperf_json(raw)
 
@@ -173,6 +178,59 @@ def test_native_tcp_unavailable_sentinel_is_never_zero(field, canonical, version
     )
     assert getattr(interval.tcp, canonical) is None
     assert result.availability[f"/intervals/{index}/tcp/{canonical}"].state == "unsupported"
+    artifact_to_dict(artifact_from_result(result))
+
+
+def test_tcp_evidence_preserves_integer_bytes_zero_and_microsecond_resolution():
+    """TCP constructors preserve integer windows and convert only RTT units."""
+    raw = _raw()
+    native_interval = raw["intervals"][0]["streams"][0]
+    native_interval.update(rtt=1, rttvar=0, snd_cwnd=2**53 + 1, snd_wnd=0, pmtu=1500)
+    native_summary = raw["end"]["streams"][0]["sender"]
+    native_summary.update(
+        min_rtt=0,
+        max_rtt=1_000_001,
+        mean_rtt=1,
+        max_snd_cwnd=2**53 + 1,
+        max_snd_wnd=0,
+    )
+    original = copy.deepcopy(raw)
+    result = result_from_iperf_json(raw)
+    interval = next(item for item in result.intervals if item.scope == "stream")
+    _assert_fields(interval.tcp, native_interval, INTERVAL_FIELDS, "/raw/intervals/0/streams/0")
+    _assert_fields(
+        result.streams[0].sender.tcp,
+        native_summary,
+        SUMMARY_FIELDS,
+        "/raw/end/streams/0/sender",
+    )
+    assert raw == original
+    assert loads_artifact(dumps_artifact(artifact_from_result(result))).result == result
+
+
+@pytest.mark.parametrize("canonical,native_name", SUMMARY_FIELDS.items())
+@pytest.mark.parametrize("value", [None, -1], ids=["absent", "unsupported"])
+def test_summary_tcp_unavailable_fields_preserve_availability(canonical, native_name, value):
+    """Missing and sentinel summary fields stay distinct from observed zero."""
+    raw = _raw()
+    raw["end"]["streams"][0]["sender"][native_name] = value
+    result = result_from_iperf_json(raw)
+    tcp = result.streams[0].sender.tcp
+    assert getattr(tcp, canonical) is None
+    assert canonical not in tcp.evidence_paths
+    path = f"/streams/0/sender/tcp/{canonical}"
+    if value == -1:
+        evidence = [f"/raw/end/streams/0/sender/{native_name}", "/raw/start/version"]
+        assert result.availability[path].state == "unsupported"
+        assert result.availability[path].evidence_paths == evidence
+        assert any(
+            item.path == path
+            and item.code == "measurement.unsupported"
+            and item.evidence_paths == evidence
+            for item in result.diagnostics
+        )
+    else:
+        assert path not in result.availability
     artifact_to_dict(artifact_from_result(result))
 
 

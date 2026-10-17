@@ -10,7 +10,7 @@ import re
 import stat
 import subprocess
 import sys
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -146,7 +146,7 @@ def prepare_root(root: Path, source: Path) -> None:
 
 
 @contextmanager
-def exclusive_staging(root: Path) -> Iterator[None]:
+def exclusive_staging(root: Path) -> Generator[None, None, None]:
     """Hold an operating-system lock through staging, Docker build and optional testing."""
     _ownership(root)
     lock_path = _within(root, root / "staging.lock")
