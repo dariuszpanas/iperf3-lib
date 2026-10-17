@@ -20,7 +20,7 @@ import sys
 import tempfile
 import time
 import xml.etree.ElementTree as ET
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import asdict, replace
 from pathlib import Path
@@ -753,7 +753,9 @@ def verify_saved_result_semantics() -> dict:
 
 
 @contextmanager
-def native_server(executable: str, *, port: int | None = None) -> Iterator[tuple[str, int]]:
+def native_server(
+    executable: str, *, port: int | None = None
+) -> Generator[tuple[str, int], None, None]:
     """Own one fresh server per profile and wait without opening a probe connection."""
     host = "127.0.0.1"
     if port is None:

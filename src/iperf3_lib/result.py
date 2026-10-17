@@ -445,7 +445,7 @@ def result_from_iperf_json(
                 evidence_paths=evidence,
             )
             return None
-        values = {}
+        values: dict[str, int] = {}
         evidence_paths = {}
         for field_name, native_name in names.items():
             value = data.get(native_name)
@@ -473,10 +473,34 @@ def result_from_iperf_json(
                     f"iperf JSON {native_name} must be non-negative or the -1 sentinel"
                 )
             else:
-                values[field_name] = value / 1_000_000 if field_name.endswith("seconds") else value
+                values[field_name] = value
                 evidence_paths[field_name] = pointer
-        model = TcpSummaryEvidence if summary else TcpIntervalEvidence
-        return model(**values, evidence_paths=evidence_paths)
+
+        def _seconds(field_name: str) -> float | None:
+            value = values.get(field_name)
+            return value / 1_000_000 if value is not None else None
+
+        if summary:
+            return TcpSummaryEvidence(
+                minimum_sampled_rtt_seconds=_seconds("minimum_sampled_rtt_seconds"),
+                maximum_sampled_rtt_seconds=_seconds("maximum_sampled_rtt_seconds"),
+                native_mean_sampled_rtt_seconds=_seconds("native_mean_sampled_rtt_seconds"),
+                maximum_send_congestion_window_bytes=values.get(
+                    "maximum_send_congestion_window_bytes"
+                ),
+                maximum_advertised_send_window_bytes=values.get(
+                    "maximum_advertised_send_window_bytes"
+                ),
+                evidence_paths=evidence_paths,
+            )
+        return TcpIntervalEvidence(
+            smoothed_rtt_seconds=_seconds("smoothed_rtt_seconds"),
+            rtt_variation_seconds=_seconds("rtt_variation_seconds"),
+            send_congestion_window_bytes=values.get("send_congestion_window_bytes"),
+            advertised_send_window_bytes=values.get("advertised_send_window_bytes"),
+            path_mtu_bytes=values.get("path_mtu_bytes"),
+            evidence_paths=evidence_paths,
+        )
 
     def _sum(
         data: Any,

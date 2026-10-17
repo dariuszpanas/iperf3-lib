@@ -127,9 +127,6 @@ class Server:
             raise RuntimeError("this Server already has an active operation")
         release_control = _control
         try:
-            execution_options = {"_control": _control} if _control is not None else {}
-            if _on_live_event is not None:
-                execution_options["_on_live_event"] = _on_live_event
             return _run_worker(
                 _options
                 if _options is not None
@@ -137,7 +134,8 @@ class Server:
                 on_event=on_event,
                 max_runs=1,
                 timeout=timeout,
-                **execution_options,
+                _control=_control,
+                _on_live_event=_on_live_event,
             )
         except IperfCleanupError as exc:
             release_control = exc._control
