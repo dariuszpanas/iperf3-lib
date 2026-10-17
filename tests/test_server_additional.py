@@ -37,7 +37,18 @@ def test_run_once_passes_all_options_and_returns_worker_result(monkeypatch):
 
     monkeypatch.setattr(module, "_run_worker", worker)
     assert server.run_once(on_event=event_handler, timeout=5) is result
-    assert calls == [(expected, {"on_event": event_handler, "max_runs": 1, "timeout": 5})]
+    assert calls == [
+        (
+            expected,
+            {
+                "on_event": event_handler,
+                "max_runs": 1,
+                "timeout": 5,
+                "_control": None,
+                "_on_live_event": None,
+            },
+        )
+    ]
 
 
 def test_lazy_worker_forwarding_supplies_server_role(monkeypatch):
