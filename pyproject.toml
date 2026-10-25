@@ -59,7 +59,7 @@ dev = [
     "readme-renderer[md]>=44",
     "ruff>=0.15.22,<0.18",
     "ty>=0.0.83",
-    "yaga-cli>=0.2,<0.3",
+    "yaga-cli>=0.2,<0.4",
     "zensical>=0.0.20",
 ]
 release = [
