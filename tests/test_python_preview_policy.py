@@ -5,6 +5,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+from scripts import python_preview as preview
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -30,6 +32,17 @@ def test_preview_has_no_publication_authority(preview_workflow: dict) -> None:
             assert "pypi-publish" not in step.get("uses", "")
             if "actions/checkout@" in step.get("uses", ""):
                 assert step["with"]["persist-credentials"] is False
+
+
+def test_preview_toolchain_and_retained_image_identity_agree(preview_workflow: dict) -> None:
+    """A Docker dependency bump must update runtime checks and retained provenance."""
+    dockerfile = (ROOT / "Dockerfile.preview").read_text(encoding="utf-8")
+    assert f"FROM {preview.UV_IMAGE} AS preview-uv" in dockerfile
+    assert preview.UV_IMAGE.startswith(f"ghcr.io/astral-sh/uv:{preview.UV_VERSION}@sha256:")
+    assert preview.PYTHON_DOWNLOAD["key"] in dockerfile
+    runs = "\n".join(step.get("run", "") for step in preview_workflow["jobs"]["native"]["steps"])
+    assert f"docker pull {preview.UV_IMAGE}\n" in runs
+    assert f"docker image inspect {preview.UV_IMAGE} > preview-evidence/uv-image.json" in runs
 
 
 def test_preview_binds_both_formats_to_one_build_and_explicit_interpreter(

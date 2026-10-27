@@ -26,7 +26,7 @@ def runtime() -> dict:
         "machine": "x86_64",
         "platform": "Linux-preview",
         "gil_disabled": False,
-        "uv_version": "uv 0.12.23 (build 2026-10-03)",
+        "uv_version": "uv 0.13.5 (build 2026-10-21)",
     }
 
 
@@ -45,7 +45,8 @@ def runtime() -> dict:
         ("base_prefix", "/opt/preview-venv"),
         ("base_prefix", "/usr/local"),
         ("uv_version", "uv 0.12.17"),
-        ("uv_version", "uv 0.12.230"),
+        ("uv_version", "uv 0.12.23"),
+        ("uv_version", "uv 0.13.50"),
     ],
 )
 def test_wrong_runtime_fails_before_native_import(monkeypatch, runtime, tmp_path, field, value):
@@ -76,6 +77,8 @@ def test_receipt_preserves_actual_evidence(monkeypatch, runtime, tmp_path, nativ
     assert receipt["lock_sha256"] == hashlib.sha256(lock.read_bytes()).hexdigest()
     assert receipt["source_revision"] == "a" * 40
     assert receipt["dependencies"] == {"cffi": "2.1.1"}
+    assert receipt["declared_uv_image"] == preview.UV_IMAGE
+    assert receipt["declared_python_download"] == preview.PYTHON_DOWNLOAD
     assert {key: receipt[key] for key in runtime} == original
     assert runtime == original
 
