@@ -19,7 +19,7 @@ criteria have evidence; implementation and collected tests alone are insufficien
 | Proposal | Decision | Evidence needed for complete qualification |
 | --- | --- | --- |
 | [Adaptive UDP #34](https://github.com/dariuszpanas/iperf3-lib/issues/34) | Qualified and merged through PR69; see the [0.4.0 guide](../../docs/guides/adaptive-udp.md). | The issue retains exact-source synthetic, minimum/latest native, isolated impairment, and installed wheel/sdist evidence. |
-| [Live events #35](https://github.com/dariuszpanas/iperf3-lib/issues/35) | Owned typed async contexts preserve complete-result access and legacy callbacks. | Minimum/latest event assembly, bounded delivery, failure/overflow/abandonment tests, and lifecycle qualification. |
+| [Live events #35](https://github.com/dariuszpanas/iperf3-lib/issues/35) | Qualified and merged through PR70; see the [0.4.0 live-event guide](../../docs/guides/live-events.md). | The [live-event qualification map](live-event-qualification.md) and issue retain minimum/latest event assembly, bounded delivery, failure/overflow/abandonment, and installed lifecycle evidence. |
 | [Process isolation #36](https://github.com/dariuszpanas/iperf3-lib/issues/36) | Qualified and merged through PR68. | The [acceptance map](isolated-execution-qualification.md) and issue retain the exact-source installed matrix, bounded transport, partial evidence and resource cleanup qualification. |
 
 Native event shapes have been observed in a small loopback experiment. The
@@ -186,7 +186,7 @@ and discards future nonterminal payloads; the owner must still drain/clean up
 the direct run or await an isolated worker's terminal state. Queue bounds do
 not cancel a native call.
 
-### Qualification still required
+### Qualification contract
 
 The 22 exploratory probes establish small event-shape observations only.
 The [live-event qualification map](live-event-qualification.md) connects these
@@ -306,7 +306,7 @@ Truncated or malformed frames invalidate only that worker's channel. Cap
 pending output, drain while waiting, and reject replayed/wrong-request terminal
 frames. Waiting for exit while a worker blocks sending its result can deadlock.
 
-### Qualification still required
+### Isolated worker qualification contract
 
 Test startup/import/native-load failure, malformed/oversized frames, crashes
 before and after allocation, stalled connection/run, user cancellation,
@@ -327,8 +327,7 @@ design do not establish its cancellation, stress or orphan-cleanup qualification
 
 Close each issue only when its implementation and qualification criteria are
 met, with acceptance checkboxes and retained exact-source evidence reconciled.
-Issues #34 and #36 record their completed qualification. The live-event issue
-tracks the remaining candidate evidence separately. The native-controls implementation must preserve complete results and
+Issues #34, #35, and #36 record their completed qualification and shipped in 0.4.0. The native-controls implementation must preserve complete results and
 explicit lifecycle/concurrency limits while its combined source is qualified.
 Revisit each broader proposal with its own acceptance evidence and release
 decision; adaptive UDP selection remains separate from explicit sweeps.

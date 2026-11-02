@@ -156,10 +156,10 @@ flags still collapse lookup/load failures to false; use the report when those
 distinctions matter. Parser-backed worker controls are distinct from dedicated
 setter probes. SCTP and MPTCP still depend on the native build and kernel. Basic
 direct calls remain non-reentrant. Async methods always select the isolated
-worker on current `main`; an explicit execution timeout also selects it for a
-synchronous client. Async cancellation waits for worker cleanup and any active
-callback, and unconfirmed cleanup raises `IperfCleanupError`. This support is
-new after 0.3.0; see [async cancellation](running-tests.md#integrate-with-asyncio).
+worker; an explicit execution timeout also selects it for a synchronous client.
+Starting in 0.4.0, async cancellation waits for worker cleanup and any active
+callback, and unconfirmed cleanup raises `IperfCleanupError`; see
+[async cancellation](running-tests.md#integrate-with-asyncio).
 
 ## Profiles and native option decisions
 

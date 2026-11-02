@@ -37,14 +37,14 @@ launch the `iperf3` executable or parse its human-readable terminal output.
 Expanded controls use libiperf's public argument parser inside an isolated
 Python/CFFI worker, so that path also works without the CLI executable.
 
-Process isolation remains part of the implementation. On current `main`, basic
+Process isolation remains part of the implementation. Basic
 synchronous native calls run in the caller and must be serialized because
 libiperf has process-global state. Async operations, expanded controls, event delivery, and explicit execution
 timeouts use Python worker processes. The library manages their protocol,
 results, and cleanup; native traffic generation still happens in libiperf.
 
 !!! note "Additional ownership APIs in 0.4.0"
-    Changes after 0.3.0 make async cancellation await worker cleanup and any
+    Starting in 0.4.0, async cancellation awaits worker cleanup and any
     active callback, reporting unconfirmed cleanup as `IperfCleanupError`.
     [Owned live-event streams](live-events.md), [bounded concurrent plans](concurrent-plans.md),
     and [adaptive UDP experiments](adaptive-udp.md) are also available in 0.4.0.

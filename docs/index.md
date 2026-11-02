@@ -35,9 +35,9 @@ replacing their runner.
 - **Run a benchmark**
 
     Install the shared library, configure a TCP or UDP client, and learn the
-    synchronous and asynchronous APIs.
+    synchronous, asynchronous, and live-event APIs.
 
-    [Installation and first run](getting-started.md) · [Native controls](guides/native-controls.md)
+    [Installation and first run](getting-started.md) · [Native controls](guides/native-controls.md) · [Live events](guides/live-events.md)
 
 - **Understand the measurements**
 
@@ -62,10 +62,10 @@ replacing their runner.
 
 - **Run repeatable experiments**
 
-    Retain warm-ups, repetitions and failures; assess compatible baselines or
-    explore finite parameter matrices with explicit order and admission budgets.
+    Retain warm-ups, repetitions and failures; assess compatible baselines, run
+    bounded concurrent plans, or explore finite sweeps and adaptive UDP rates.
 
-    [Trials and assessments](guides/trials.md) · [Parameter sweeps](guides/sweeps.md)
+    [Trials and assessments](guides/trials.md) · [Concurrent plans](guides/concurrent-plans.md) · [Parameter sweeps](guides/sweeps.md) · [Adaptive UDP](guides/adaptive-udp.md)
 
 - **Export completed runs**
 
@@ -98,10 +98,10 @@ not bundle libiperf or operate a benchmark scheduler or metrics service.
 
 Linux is the tested platform. Basic direct native calls share process-global
 state and must be serialized. Async methods, expanded controls, event delivery
-and explicit execution timeouts use isolated Python/CFFI workers. On current
-`main`, cancelling `arun()` or `aserve_once()` waits for worker cleanup and any
-active callback; unconfirmed cleanup raises `IperfCleanupError`. This support
-is new after 0.3.0. See [compatibility and limitations](reference/compatibility.md).
+and explicit execution timeouts use isolated Python/CFFI workers. Cancelling
+`arun()` or `aserve_once()` waits for worker cleanup and any active callback;
+unconfirmed cleanup raises `IperfCleanupError` (introduced in 0.4.0). See
+[compatibility and limitations](reference/compatibility.md).
 
 Use the [native option inventory](reference/native-options.md) to find binding,
 protocol, transport, server-policy and output controls. Option availability also

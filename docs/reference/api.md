@@ -1,9 +1,12 @@
 # Python API reference
 
-The site follows `main`; use documentation matching your installed version.
-Async worker cancellation, `IperfCleanupError`, and owned typed live streams are
-available starting in 0.4.0. See [installation](../getting-started.md)
-for package setup.
+The site follows `main`; use documentation matching your installed version
+(see [tagged release documentation](compatibility.md#release-documentation-snapshots)).
+Async worker cancellation, `IperfCleanupError`, owned typed live streams,
+bounded concurrent plans, and adaptive UDP experiments are available starting in
+0.4.0. See [installation](../getting-started.md) for package setup and the
+[compatibility, deprecation, and archive policy](compatibility.md#compatibility-deprecation-and-archive-policy)
+for public API and schema guarantees.
 
 ## Clients and servers
 

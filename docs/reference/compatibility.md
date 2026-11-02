@@ -4,14 +4,18 @@
 
 | Component | Project coverage |
 | --- | --- |
-| Python | 3.12, 3.13, 3.14, 3.15 with the standard GIL. |
-| libiperf | 3.19.1 minimum; 3.22 default. CI tests both endpoints. |
-| Operating system | Linux. |
+| Python | CPython 3.12, 3.13, 3.14, 3.15 with the standard GIL. |
+| CFFI | `cffi>=2.0,<3` on Python 3.12–3.14; `cffi>=2.1.1,<3` on Python `>=3.15`. |
+| libiperf | 3.19.1 minimum; 3.22 recommended default. CI tests both endpoints. |
+| Operating system | Linux `x86_64` (`glibc`). |
 | Protocols | TCP, UDP, SCTP; SCTP also requires operating-system and native-library support. |
 
-The package declares Python `>=3.12`; the versions listed above are the
-current tested matrix. macOS and FreeBSD are unverified by this project.
-Windows DLL loading is best-effort and has no native CI coverage.
+The package declares Python `>=3.12`; the versions and architecture listed above
+define the tested runtime envelope. Although the distribution is a pure-Python
+`py3-none-any` wheel, that wheel tag does not imply native qualification on
+`aarch64`, `musl` (Alpine), macOS, FreeBSD, Windows, or free-threaded
+(`Py_GIL_DISABLED`) Python builds. macOS and FreeBSD are unverified by this
+project, and Windows DLL loading is best-effort with no native CI coverage.
 
 Python 3.15 final is included in stable CI and release qualification against
 both native endpoints, including installed wheel and sdist checks. The package
@@ -63,7 +67,7 @@ loaded raises `IperfLibraryError` rather than falling back to another name.
 | Native JSON | Completed client/server results remain available independently of live event delivery. |
 | MPTCP | `mptcp=True` uses the worker; requires TCP and native/kernel support. |
 | Streaming JSON | `json_stream=True` or an event callback selects bounded worker event delivery. |
-| Async convenience | Always isolated; cancellation waits for worker cleanup and any active callback. Unconfirmed cleanup raises `IperfCleanupError`. This behavior is new after 0.3.0. |
+| Async convenience | Always isolated; cancellation waits for worker cleanup and any active callback. Unconfirmed cleanup raises `IperfCleanupError` (introduced in 0.4.0). |
 | Concurrent native operations | Basic direct calls remain non-reentrant. Expanded worker calls isolate native state; ordinary client construction alone does not select isolation. |
 | Bounded concurrent plans | Opt-in isolated workers with explicit target-rate/worker ceilings, endpoint and caller-resource exclusions, zero pauses and no fixed client ports. See [concurrent plans](../guides/concurrent-plans.md). |
 | Execution timeout | Explicit `timeout` terminates/reaps the worker before raising; native C finalizers are not promised on forced termination. |
@@ -115,7 +119,7 @@ feature table and loaded library version. Symbol availability, wrapper
 support, and a successful test are separate checks.
 
 **An asyncio timeout expires, but traffic continues.** Version 0.3.0 leaves the
-executor operation running when its await is cancelled. Current `main` makes
+executor operation running when its await is cancelled. Version 0.4.0 and later make
 `arun()` and `aserve_once()` request worker termination and await cleanup and
 any active callback during cancellation. Unconfirmed cleanup raises
 `IperfCleanupError` and retains worker ownership.
@@ -133,3 +137,78 @@ independent of delivery loss, while 3.19.1 streaming reconstructs native events.
 the same direction, observation point, interval, and units in `result.raw`.
 The [results guide](../guides/results.md) explains the convenience summary
 and the current normalization limits.
+
+## Compatibility, deprecation, and archive policy
+
+### Public API boundary
+
+The supported public surface consists of the symbols documented in the
+[Python API reference](api.md) and exported by `iperf3_lib` and its documented
+public submodules (`config`, `server_config`, `result`, `artifacts`, `analysis`,
+`trials`, `assessments`, `async_trials`, `plan_execution`, `plan_reports`,
+`concurrent_trials`, `concurrent_execution`, `concurrent_reports`, `sweeps`,
+`sweep_reports`, `adaptive`, `adaptive_execution`, `adaptive_reports`, `events`,
+`live_events`, `intent`, `capabilities`, `native_options`, `reports`,
+`exceptions`, and `exporters.prometheus`). Documented signatures, default
+values, measurement units, missing-value semantics (`None` vs. measured `0`),
+exception inheritance, and worker cleanup rules belong to that contract.
+
+Private `_`-prefixed modules and helpers, worker IPC wire framing, internal
+CFFI handles, process IDs, and exact human-readable error strings are internal
+implementation details and may change between releases.
+
+### Versioning and deprecation
+
+- **Patch releases** preserve documented valid usage.
+- **Minor releases** add backward-compatible APIs, options, or diagnostic codes.
+  While the project is in `0.x` Beta, any intentional incompatible change in a
+  minor release is accompanied by explicit migration instructions.
+- **From 1.0.0 onward**, incompatible changes to the documented public API
+  require a major release under [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
+  Deprecations document the replacement, emit a `DeprecationWarning` at the
+  affected public entry point, and remain supported for at least one minor
+  release before removal in a major release. Urgent security mitigations
+  provide an explicit notice and never silently alter archived measurements.
+- Consumers inspecting `Diagnostic.code` or `AnalysisDiagnostic.code` should
+  tolerate newly added advisory codes in minor releases.
+
+### Data ownership and mutation boundaries
+
+- `Client.run()`, `Client.arun()`, and `EventStream` snapshot and detach
+  `ClientConfig` and `ServerConfig` on admission so subsequent caller mutation
+  does not alter an admitted operation.
+- `result_from_iperf_json()` retains the caller's `raw` mapping on the returned
+  `Result`. Treat that input mapping as read-only after normalization, or pass
+  a deep copy if your application mutates it later.
+- `artifact_from_result()`, `loads_artifact()`, and `LiveEvent` delivery detach
+  their JSON payloads at the conversion boundary so consumer edits do not alias
+  producer state.
+
+### Versioned archive and report schemas
+
+Archive schema versions are independent of the Python package version. Readers
+validate both `kind` and `schema_version`:
+
+| Kind | Schema version | Module |
+| --- | --- | --- |
+| `iperf3-lib.result` | `1` | `iperf3_lib.artifacts` |
+| `iperf3-lib.assessment` | `1` (`median-summary-v1`) | `iperf3_lib.reports` |
+| `iperf3-lib.sweep` | `1` (`sweep-summary-v1`) | `iperf3_lib.sweep_reports` |
+| `iperf3-lib.plan-execution` | `2` (`sequential-owned`) | `iperf3_lib.plan_reports` |
+| `iperf3-lib.plan-execution` | `3` (`bounded-concurrent`) | `iperf3_lib.concurrent_reports` |
+| `iperf3-lib.adaptive-udp` | `1` (`conservative-tested-rates-v1`) | `iperf3_lib.adaptive_reports` |
+
+Published archive schemas remain readable across minor updates without loading
+`libiperf`, re-running benchmarks, or substituting a newer analysis algorithm.
+Unknown schema versions raise `UnsupportedArtifactVersion` or
+`UnsupportedReportVersionError`.
+
+### Release documentation snapshots
+
+This site tracks `main`. To read documentation matching a specific published
+release tag, browse the immutable tagged tree in GitHub:
+
+- [v0.4.1 documentation](https://github.com/dariuszpanas/iperf3-lib/tree/v0.4.1/docs) ([release notes](https://github.com/dariuszpanas/iperf3-lib/releases/tag/v0.4.1))
+- [v0.4.0 documentation](https://github.com/dariuszpanas/iperf3-lib/tree/v0.4.0/docs) ([release notes](https://github.com/dariuszpanas/iperf3-lib/releases/tag/v0.4.0))
+- [v0.3.0 documentation](https://github.com/dariuszpanas/iperf3-lib/tree/v0.3.0/docs) ([release notes](https://github.com/dariuszpanas/iperf3-lib/releases/tag/v0.3.0))
+- [v0.2.0 README](https://github.com/dariuszpanas/iperf3-lib/blob/v0.2.0/README.md) ([release notes](https://github.com/dariuszpanas/iperf3-lib/releases/tag/v0.2.0))

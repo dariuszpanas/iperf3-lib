@@ -60,10 +60,10 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-On current `main`, `arun()` always uses an isolated Python/CFFI worker. Cancelling
+Starting in 0.4.0, `arun()` always uses an isolated Python/CFFI worker. Cancelling
 the awaiting task, including through an asyncio timeout, requests worker
 termination and propagates `CancelledError` after confirmed cleanup. Unconfirmed
-cleanup raises `IperfCleanupError`. This behavior is new after 0.3.0.
+cleanup raises `IperfCleanupError`.
 Pass `await Client(config).arun(timeout=10)` to set an independent worker deadline.
 Repeated cancellation does not abandon cleanup. A callback already running must
 return before the await finishes; the worker is still stopped independently.
@@ -119,7 +119,7 @@ Library-launched Linux workers install a kernel parent-death signal before
 importing the native worker. If the owning parent dies, the kernel sends
 `SIGKILL` to the worker. Startup also verifies the expected parent identity;
 if the parent has already disappeared or protection cannot be installed, the
-worker exits before running libiperf. This behavior is new after 0.3.0.
+worker exits before running libiperf (introduced in 0.4.0).
 
 Linux ties this signal to the thread that created the child. The library keeps
 that thread alive until the operation and its cleanup finish. After parent

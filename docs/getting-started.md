@@ -13,8 +13,9 @@ and import its completed JSON.
     The project retains Beta maturity. Dataclasses, portable artifacts, analysis,
     trial plans, sweeps, and Prometheus output first shipped in 0.3.0; 0.4.0 adds
     owned async execution, concurrent plans, adaptive UDP and typed live events.
-    Use documentation matching your installed version.
-    Check the [changelog](changelog.md) and
+    Use documentation matching your installed version: see the
+    [tagged release documentation snapshots](reference/compatibility.md#release-documentation-snapshots),
+    [changelog](changelog.md), and
     [published releases](https://github.com/dariuszpanas/iperf3-lib/releases)
     for publication status.
 
@@ -121,14 +122,14 @@ unavailable. For directional analysis or missing-data decisions, use
 
 ## Next steps
 
-- [Migrate a 0.2.0 application to dataclasses](guides/migration-0.3.md).
-- [Run TCP, UDP, reverse, or bidirectional tests](guides/running-tests.md).
+- [Migrate a 0.2.0 application to dataclasses](guides/migration-0.3.md) or [upgrade from 0.3.0 to 0.4.0](guides/migration-0.4.md).
+- [Run TCP, UDP, reverse, or bidirectional tests](guides/running-tests.md) and [consume typed live events](guides/live-events.md).
 - [Choose configuration values and understand validation](reference/configuration.md).
 - [Find a native CLI option's Python equivalent](reference/native-options.md)
   and [use binding, transport, timeout and event controls](guides/native-controls.md).
 - [Declare aggregate rate intent and inspect capabilities](guides/configuration-intent.md).
 - [Read flows, observations, intervals, and native JSON](guides/results.md).
 - [Save portable artifacts](guides/artifacts.md) and [analyze measurements](guides/analysis.md).
-- [Repeat and assess trials](guides/trials.md) or [run finite parameter sweeps](guides/sweeps.md).
+- [Repeat and assess trials](guides/trials.md), [run bounded concurrent plans](guides/concurrent-plans.md), [run finite parameter sweeps](guides/sweeps.md), or [explore adaptive UDP rates](guides/adaptive-udp.md).
 - [Explore Prometheus snapshots and textfile output](guides/prometheus.md).
 
