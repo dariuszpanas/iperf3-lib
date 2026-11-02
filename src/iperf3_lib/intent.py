@@ -228,3 +228,16 @@ def estimate_plan(
         if payload_bytes > max_payload_bytes:
             raise ValueError("plan exceeds the payload admission budget")
     return PlanEstimate(tuple(runs), active_seconds, payload_bits, payload_bytes)
+
+
+__all__ = [
+    "DEFAULT_UDP_RATE",
+    "MAX_RATE",
+    "PlanEstimate",
+    "RateIntent",
+    "ResolvedRate",
+    "RunEstimate",
+    "estimate_plan",
+    "parse_rate",
+    "resolve_rate",
+]

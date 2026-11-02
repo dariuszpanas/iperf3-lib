@@ -124,9 +124,11 @@ def verify_native_artifact(
 
 def config_dict(config: ClientConfig) -> dict:
     """Serialize the exact caller/native configuration without enum coercion drift."""
+    from iperf3_lib.config import Protocol
+
     data = asdict(config)
     data["server"] = str(config.server)
-    data["protocol"] = config.protocol.value
+    data["protocol"] = Protocol(config.protocol).value
     return json_value(data)
 
 
@@ -573,9 +575,10 @@ def verify_native_case_result(
     name: str = "installed",
 ) -> None:
     """Verify actual native configuration and flow observations for one profile."""
+    from iperf3_lib.config import Protocol
     from iperf3_lib.intent import resolve_rate
 
-    protocol, parallel = config.protocol, config.parallel
+    protocol, parallel = Protocol(config.protocol), config.parallel
     reverse, bidirectional = config.reverse, config.bidirectional
     if not result.ok:
         raise ValueError(f"{name} native benchmark failed: {result.error}")

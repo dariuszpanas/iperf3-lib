@@ -49,3 +49,8 @@ def run_adaptive_udp(
             pause = time.monotonic() - started
         execution = run_plan(decision.batch.plan, executor=executor)
         history.append(AdaptiveBatchResult(decision.batch, execution, pause))
+
+
+__all__ = [
+    "run_adaptive_udp",
+]

@@ -27,3 +27,11 @@ class IperfCleanupError(IperfLibraryError):
 
 class UnsupportedFeatureError(RuntimeError):
     """Requested feature is not supported by the loaded libiperf."""
+
+
+__all__ = [
+    "IperfCleanupError",
+    "IperfError",
+    "IperfLibraryError",
+    "UnsupportedFeatureError",
+]

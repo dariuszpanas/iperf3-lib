@@ -675,9 +675,7 @@ def run_worker(
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
-        text=True,
-        encoding="utf-8",
-        bufsize=1,
+        bufsize=0,
         env=environment,
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )

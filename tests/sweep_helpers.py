@@ -3,9 +3,9 @@
 from dataclasses import asdict
 from types import SimpleNamespace
 
-from iperf3_lib.config import ClientConfig, config_to_dict
+from iperf3_lib.config import ClientConfig, Protocol, config_to_dict
 from iperf3_lib.intent import resolve_rate
-from iperf3_lib.result import result_from_iperf_json
+from iperf3_lib.result import VerifiedSetting, result_from_iperf_json
 from iperf3_lib.sweeps import SweepAxis, prepare_sweep, run_sweep
 from iperf3_lib.trials import PlanBudget, TrialPolicy
 
@@ -44,7 +44,7 @@ def measured(spec, *, count=100, seconds=1, failed=False, incomplete=False):
         "system_info": "Linux synthetic sweep fixture",
         "connecting_to": {"host": str(cfg.server), "port": cfg.port},
         "test_start": {
-            "protocol": cfg.protocol.value.upper(),
+            "protocol": Protocol(cfg.protocol).value.upper(),
             "duration": cfg.duration,
             "num_streams": cfg.parallel,
             "omit": cfg.omit,
@@ -66,7 +66,33 @@ def measured(spec, *, count=100, seconds=1, failed=False, incomplete=False):
                     "seconds": seconds,
                     "bits_per_second": 99999999,
                 }
+    if cfg.address_family in ("ipv4", "ipv6"):
+        host = "::1" if cfg.address_family == "ipv6" else "127.0.0.1"
+        start["connected"] = [
+            {
+                "socket": 5,
+                "local_host": host,
+                "local_port": 50000,
+                "remote_host": host,
+                "remote_port": cfg.port,
+            }
+        ]
     result = result_from_iperf_json(raw)
+    if cfg.address_family in ("ipv4", "ipv6"):
+        result.execution.configuration.effective["address_family"] = VerifiedSetting(
+            cfg.address_family,
+            "verified",
+            ["/raw/start/connected/0/local_host", "/raw/start/connected/0/remote_host"],
+        )
+    if cfg.dont_fragment:
+        result.extensions["iperf3_lib.native_configuration"] = {
+            "dont_fragment": {"value": True, "getter": "iperf_get_dont_fragment"}
+        }
+        result.execution.configuration.effective["dont_fragment"] = VerifiedSetting(
+            True,
+            "verified",
+            ["/extensions/iperf3_lib.native_configuration/dont_fragment/value"],
+        )
     result.extensions["example.synthetic"] = True
     result.extensions["iperf3_lib.rate_intent"] = {
         "schema_version": 1,

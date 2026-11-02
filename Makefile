@@ -83,9 +83,9 @@ docs-serve:
 	$(UV) run --frozen zensical serve
 
 build:
-	$(UV) build --no-sources
-	$(UV) run --frozen --no-dev --group release twine check dist/*
-	$(UV) run --frozen --no-dev --group release check-wheel-contents dist/*.whl
+	$(UV) build --no-sources --clear
+	$(UV) run --frozen --isolated --no-dev --group release twine check dist/*
+	$(UV) run --frozen --isolated --no-dev --group release check-wheel-contents dist/*.whl
 
 docker-build:
 	$(UV) run --frozen python scripts/docker_validate.py build \

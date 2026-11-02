@@ -290,6 +290,12 @@ def test_installed_identity_rejects_source_imports_and_altered_installations(
 
 
 def _passed_results():
+    """Return a detached copy of the cached full positive qualification suite."""
+    return copy.deepcopy(_passed_results_cached())
+
+
+@lru_cache
+def _passed_results_cached():
     reports = []
     for nodeid in qualification.expected_tests():
         key = qualification.TESTS[nodeid.split("::")[0]][1]
@@ -611,6 +617,12 @@ def test_adaptive_receipt_rejects_resealed_decision_without_matching_native_tria
 
 
 def _async_plan_receipt(case):
+    """Detach synthetic async-plan receipts before each corruption test."""
+    return copy.deepcopy(_async_plan_receipt_cached(case))
+
+
+@lru_cache
+def _async_plan_receipt_cached(case):
     """Build explicit synthetic persisted evidence for fail-closed validator tests."""
     from iperf3_lib.artifacts import artifact_from_result
     from iperf3_lib.config import ClientConfig
@@ -761,6 +773,12 @@ def _async_plan_receipt(case):
 
 
 def _concurrent_plan_receipt(case):
+    """Detach synthetic concurrent-plan receipts before each corruption test."""
+    return copy.deepcopy(_concurrent_plan_receipt_cached(case))
+
+
+@lru_cache
+def _concurrent_plan_receipt_cached(case):
     """Create synthetic overlapping native evidence to exercise qualification rejection."""
     from iperf3_lib.artifacts import artifact_from_result
     from iperf3_lib.concurrent_execution import (
@@ -992,6 +1010,12 @@ def _concurrent_plan_receipt(case):
 
 
 def _resource_stress_receipt(case):
+    """Detach synthetic resource-stress receipts before each corruption test."""
+    return copy.deepcopy(_resource_stress_receipt_cached(case))
+
+
+@lru_cache
+def _resource_stress_receipt_cached(case):
     """Build explicit synthetic proc inventories for tamper-detection tests."""
 
     def identity(pid, parent):

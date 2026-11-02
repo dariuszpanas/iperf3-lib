@@ -26,9 +26,9 @@ class Protocol(StrEnum):
 class ClientConfig:
     """Configuration for an iperf3 client run."""
 
-    server: str
+    server: str | ipaddress.IPv4Address | ipaddress.IPv6Address
     port: int = 5201
-    protocol: Protocol = Protocol.TCP
+    protocol: Protocol | Literal["tcp", "udp", "sctp"] = Protocol.TCP
     duration: int | None = 10
     parallel: int = 1
     omit: int = 0
@@ -311,3 +311,16 @@ def config_from_dict(data: dict) -> ClientConfig:
         if isinstance(values.get(name), list):
             values[name] = tuple(values[name])
     return ClientConfig(**values)
+
+
+__all__ = [
+    "ClientConfig",
+    "LEGACY_CONFIG_FIELDS",
+    "MAX_BLOCK_SIZE",
+    "MAX_UDP_BLOCK_SIZE",
+    "MIN_UDP_BLOCK_SIZE",
+    "Protocol",
+    "config_from_dict",
+    "config_to_dict",
+    "requires_worker",
+]

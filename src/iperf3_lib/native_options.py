@@ -438,3 +438,13 @@ def observe_native_options(test: Any, options: dict[str, Any]) -> GetterEvidence
     ``options`` must be the admitted fields retained by the owning worker.
     """
     return _getter_evidence(test, options)
+
+
+__all__ = [
+    "EvidenceValue",
+    "GetterEvidence",
+    "GetterReceipt",
+    "NativeSetup",
+    "configure_native",
+    "observe_native_options",
+]

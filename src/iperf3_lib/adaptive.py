@@ -305,7 +305,7 @@ def _setting_checks_v1(result, spec):
             "tos",
         )
     }
-    expected["protocol"] = config.protocol.value
+    expected["protocol"] = Protocol(config.protocol).value
     requested = result.execution.configuration.requested if result.execution else None
     for name, default in _EXPANDED_DEFAULTS_V1.items():
         wanted = getattr(config, name)
@@ -335,6 +335,7 @@ def _setting_checks_v1(result, spec):
             if not verified
             else "native_default"
             if wanted is None
+            or (name == "address_family" and wanted == "auto" and observed in {"ipv4", "ipv6"})
             else "matched"
             if _exact_equal(wanted, observed)
             else "mismatch"
@@ -439,15 +440,19 @@ def _observation_v1(prepared, record):
     )
 
 
-def _rate_summaries_v1(prepared, history):
+def _rate_summaries_v1(prepared, history, batch_observations=None):
     grouped = {}
     confirmations = {}
-    for item in history:
+    for index, item in enumerate(history):
         for rate in item.batch.rates:
             if item.batch.reason == "confirm_promising_rate":
                 confirmations[rate] = confirmations.get(rate, 0) + 1
-        for record in item.execution.trials:
-            observation = _observation_v1(prepared, record)
+        observations = (
+            batch_observations[index]
+            if batch_observations is not None and index < len(batch_observations)
+            else tuple(_observation_v1(prepared, record) for record in item.execution.trials)
+        )
+        for observation in observations:
             grouped.setdefault(observation.requested_rate_bps, []).append(observation)
     summaries = []
     for rate, observations in sorted(grouped.items()):
@@ -475,14 +480,15 @@ def _rate_summaries_v1(prepared, history):
     return tuple(summaries)
 
 
-def _choose_v1(prepared, history):
+def _choose_v1(prepared, history, *, batch_observations=None, summaries=None):
     if not history:
         return AdaptiveDecision(
             _batch_v1(prepared, history, prepared.initial_rates, "initial_grid", 0), "initial_grid"
         )
     if any(item.execution.stop_reason is not None for item in history):
         return AdaptiveDecision(None, "execution_stopped")
-    summaries = _rate_summaries_v1(prepared, history)
+    if summaries is None:
+        summaries = _rate_summaries_v1(prepared, history, batch_observations)
     depths = {
         rate: item.batch.depth
         for item in history
@@ -547,14 +553,17 @@ def _choose_v1(prepared, history):
     return AdaptiveDecision(batch, batch.reason)
 
 
-def _history_v1(prepared, history):
+def _history_with_observations_v1(prepared, history):
     if not isinstance(history, Sequence) or isinstance(history, (str, bytes)):
         raise ValueError("history must be a finite sequence")
     retained = []
+    batch_observations = []
     for item in history:
         if not isinstance(item, AdaptiveBatchResult):
             raise ValueError("history must contain AdaptiveBatchResult values")
-        expected = _choose_v1(prepared, tuple(retained)).batch
+        expected = _choose_v1(
+            prepared, tuple(retained), batch_observations=batch_observations
+        ).batch
         if expected is None or not _exact_equal(asdict(expected), asdict(item.batch)):
             raise ValueError("recorded batch disagrees with the deterministic admission decision")
         execution = plan_result_from_dict(plan_result_to_dict(item.execution))
@@ -578,13 +587,21 @@ def _history_v1(prepared, history):
         ):
             raise ValueError("between-batch cooldown is shorter than the declared pause")
         retained.append(AdaptiveBatchResult(expected, execution, item.pause_before_seconds))
-    return tuple(retained)
+        batch_observations.append(
+            tuple(_observation_v1(prepared, record) for record in execution.trials)
+        )
+    return tuple(retained), tuple(batch_observations)
+
+
+def _history_v1(prepared, history):
+    retained, _ = _history_with_observations_v1(prepared, history)
+    return retained
 
 
 def _next_batch_v1(prepared, history=()):
     prepared = _validated_prepared_v1(prepared)
-    history = _history_v1(prepared, history)
-    return _choose_v1(prepared, history)
+    history, batch_observations = _history_with_observations_v1(prepared, history)
+    return _choose_v1(prepared, history, batch_observations=batch_observations)
 
 
 def next_adaptive_batch(
@@ -596,9 +613,9 @@ def next_adaptive_batch(
 
 def _summarize_v1(prepared, history):
     prepared = _validated_prepared_v1(prepared)
-    history = _history_v1(prepared, history)
-    decision = _choose_v1(prepared, history)
-    summaries = _rate_summaries_v1(prepared, history)
+    history, batch_observations = _history_with_observations_v1(prepared, history)
+    summaries = _rate_summaries_v1(prepared, history, batch_observations)
+    decision = _choose_v1(prepared, history, summaries=summaries)
     acceptable = tuple(value.rate_bps for value in summaries if value.status == "eligible")
     outcome = (
         "acceptable_tested_rates"
@@ -634,3 +651,18 @@ def _validate_result_v1(result):
     if not _exact_equal(asdict(result), asdict(expected)):
         raise ValueError("adaptive result disagrees with retained v1 evidence and decisions")
     return expected
+
+
+__all__ = [
+    "AdaptiveBatch",
+    "AdaptiveBatchResult",
+    "AdaptiveDecision",
+    "AdaptiveObservation",
+    "AdaptiveRateSummary",
+    "AdaptiveResult",
+    "AdaptiveUDPPolicy",
+    "PreparedAdaptiveUDP",
+    "next_adaptive_batch",
+    "prepare_adaptive_udp",
+    "summarize_adaptive_udp",
+]

@@ -93,14 +93,17 @@ def render_text(
     )
     if result.ok:
         flows = result.flows
-        if not flows and result.end is not None:
-            flows = [
-                FlowStats(
-                    direction="client_to_server",
-                    sender=result.end.sum_sent,
-                    receiver=result.end.sum_received,
-                )
-            ]
+        if not flows and result.end is not None and not result.bidirectional:
+            method = result.execution.method if result.execution is not None else "forward"
+            if method in ("forward", "reverse"):
+                direction = "server_to_client" if method == "reverse" else "client_to_server"
+                flows = [
+                    FlowStats(
+                        direction=direction,
+                        sender=result.end.sum_sent,
+                        receiver=result.end.sum_received,
+                    )
+                ]
         for flow in flows:
             for observer, stats in (("sender", flow.sender), ("receiver", flow.receiver)):
                 if stats is None:
@@ -180,3 +183,9 @@ def write_textfile(
             except FileNotFoundError:
                 pass
         raise
+
+
+__all__ = [
+    "render_text",
+    "write_textfile",
+]

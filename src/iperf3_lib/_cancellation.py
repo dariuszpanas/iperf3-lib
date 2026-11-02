@@ -7,6 +7,7 @@ import subprocess
 import threading
 import time
 from collections.abc import Callable
+from typing import Any
 
 from .exceptions import IperfCleanupError, IperfLibraryError
 from .result import Result
@@ -28,7 +29,7 @@ class _ExecutionControl:
         self._cause: BaseException | None = None
         self._completed = False
         self._started = False
-        self._process: subprocess.Popen[str] | None = None
+        self._process: subprocess.Popen[Any] | None = None
         self._owner: threading.Thread | None = None
         self._cleanup_error: IperfCleanupError | None = None
         self._reap_callbacks: list[Callable[[], None]] = []
@@ -82,7 +83,7 @@ class _ExecutionControl:
                 return
         callback()
 
-    def register(self, process: subprocess.Popen[str]) -> None:
+    def register(self, process: subprocess.Popen[Any]) -> None:
         """Transfer a just-created process to its single shutdown owner."""
         with self._lock:
             if self._process is not None:
