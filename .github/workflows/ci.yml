@@ -60,7 +60,7 @@ jobs:
 
       - name: Install uv and Python
         id: setup-uv
-        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           python-version: "3.12"
           enable-cache: true
@@ -117,7 +117,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Check pull request title and commits
-        uses: dariuszpanas/yaga/actions/commit-check@fe0a4b219002c7f49eee055f1fd7ef9c8ccd526f # v0.3.0
+        uses: dariuszpanas/yaga/actions/commit-check@24a76f21d075d8ed3a96b2d174fe79f6980f07fd # v0.4.1
 
   docker-matrix-tests:
     name: docker (${{ matrix.python }}, iperf ${{ matrix.iperf }})
