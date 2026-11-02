@@ -255,7 +255,7 @@ Async methods always use an isolated worker and propagate task cancellation
 after confirmed cleanup; unconfirmed cleanup raises `IperfCleanupError`. A
 callback already running must return before the await finishes. See
 [async cancellation](running-tests.md#integrate-with-asyncio) for cleanup bounds
-and failure behavior; this support is new after 0.3.0.
+and failure behavior (introduced in 0.4.0).
 
 An explicit `timeout` or `on_event` callback selects the isolated Python/CFFI
 worker even for a basic client. `json_stream=True` also selects that path.

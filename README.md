@@ -62,11 +62,11 @@ and execution limits.
 
 | Topic | Guides and references |
 | --- | --- |
-| Run clients and servers | [Running tests](https://dariuszpanas.github.io/iperf3-lib/guides/running-tests.html) · [Python API](https://dariuszpanas.github.io/iperf3-lib/reference/api.html) |
+| Run clients and servers | [Running tests](https://dariuszpanas.github.io/iperf3-lib/guides/running-tests.html) · [Live events](https://dariuszpanas.github.io/iperf3-lib/guides/live-events.html) · [Python API](https://dariuszpanas.github.io/iperf3-lib/reference/api.html) |
 | Bind interfaces and tune traffic | [Native-control recipes](https://dariuszpanas.github.io/iperf3-lib/guides/native-controls.html) · [Configuration](https://dariuszpanas.github.io/iperf3-lib/reference/configuration.html) · [Complete native-option inventory](https://dariuszpanas.github.io/iperf3-lib/reference/native-options.html) |
 | Check support and execution limits | [Compatibility and native setup](https://dariuszpanas.github.io/iperf3-lib/reference/compatibility.html) · [Rate intent and capabilities](https://dariuszpanas.github.io/iperf3-lib/guides/configuration-intent.html) |
 | Interpret and save measurements | [Results](https://dariuszpanas.github.io/iperf3-lib/guides/results.html) · [Portable artifacts](https://dariuszpanas.github.io/iperf3-lib/guides/artifacts.html) |
-| Analyze and compare experiments | [Analysis](https://dariuszpanas.github.io/iperf3-lib/guides/analysis.html) · [Trials and baselines](https://dariuszpanas.github.io/iperf3-lib/guides/trials.html) · [Parameter sweeps](https://dariuszpanas.github.io/iperf3-lib/guides/sweeps.html) |
+| Analyze and compare experiments | [Analysis](https://dariuszpanas.github.io/iperf3-lib/guides/analysis.html) · [Trials and baselines](https://dariuszpanas.github.io/iperf3-lib/guides/trials.html) · [Concurrent plans](https://dariuszpanas.github.io/iperf3-lib/guides/concurrent-plans.html) · [Parameter sweeps](https://dariuszpanas.github.io/iperf3-lib/guides/sweeps.html) · [Adaptive UDP](https://dariuszpanas.github.io/iperf3-lib/guides/adaptive-udp.html) |
 | Integrate monitoring | [Prometheus](https://dariuszpanas.github.io/iperf3-lib/guides/prometheus.html) · [Grafana](https://dariuszpanas.github.io/iperf3-lib/guides/grafana.html) |
 
 ## Contributing

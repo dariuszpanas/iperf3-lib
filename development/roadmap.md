@@ -5,8 +5,10 @@ This is retained planning background from the 0.3.0 development cycle.
 for current scope and completion status; the tables below preserve the planning
 context rather than certify the current release candidate.
 
-## Released 0.4.0
+## Released 0.4.1 and 0.4.0
 
+Version 0.4.1 refines CI scope detection for documentation-only changes while
+preserving the full native and installed-package qualification gates.
 Version 0.4.0 adds owned async and bounded concurrent plans,
 adaptive UDP experiments, and typed live-event consumption. Issues
 [#36](https://github.com/dariuszpanas/iperf3-lib/issues/36),
@@ -28,8 +30,9 @@ The 0.4.0 release completes this scope with the task-submission correction in
 recommendation. No additional feature cycle is required for this Beta release.
 Stable API/deprecation guarantees, immutable versioned documentation, broader
 platform coverage, longer mixed-workload qualification, and consumer feedback
-remain later stability work, tracked in
-[#78](https://github.com/dariuszpanas/iperf3-lib/issues/78).
+remain post-0.4.0 stability work, tracked in
+[#83](https://github.com/dariuszpanas/iperf3-lib/issues/83) (following the
+completed 0.4.0 readiness checklist in [#78](https://github.com/dariuszpanas/iperf3-lib/issues/78)).
 
 ## Historical 0.3.0 planning
 

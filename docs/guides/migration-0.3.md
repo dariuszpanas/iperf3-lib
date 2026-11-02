@@ -263,8 +263,9 @@ or reproduce Pydantic's model framework. Validate any manually assembled
 result through the artifact writer before durable storage.
 
 In released 0.3.0, async convenience uses executor threads, and cancelling an
-await alone leaves its operation running. Current `main` adds
-[async worker cancellation](running-tests.md#integrate-with-asyncio).
+await alone leaves its operation running. Version 0.4.0 adds
+[async worker cancellation](running-tests.md#integrate-with-asyncio); see the
+[0.4.0 upgrade guide](migration-0.4.md).
 Basic direct native calls remain non-reentrant.
 Expanded controls, event callbacks and explicit execution timeouts select the
 [isolated Python/CFFI worker](native-controls.md#observe-events-and-bound-a-run).
