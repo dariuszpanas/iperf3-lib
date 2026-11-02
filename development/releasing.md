@@ -239,7 +239,7 @@ and post releases are not part of this publication policy.
 Validate a planned tag against the current metadata:
 
 ```bash
-uv run --no-project python scripts/validate_release.py --tag v0.4.1
+uv run --no-project python scripts/validate_release.py --tag v0.4.2
 ```
 
 That local metadata check alone does not qualify the candidate. The workflow

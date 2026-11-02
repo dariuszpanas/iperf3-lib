@@ -4,6 +4,38 @@ These pages describe `main`. Released versions remain available through
 [GitHub releases](https://github.com/dariuszpanas/iperf3-lib/releases) and
 [PyPI](https://pypi.org/project/iperf3-lib/).
 
+## 0.4.2
+
+- Verify `address_family` from observed socket endpoint literals in
+  `raw["start"]["connected"]`, populating `effective["address_family"]` as
+  `"ipv4"` or `"ipv6"` and treating `requested["address_family"] == "auto"` as
+  compatible with verified IPv4/IPv6 connections across client results,
+  artifacts, sweeps, and adaptive UDP experiments.
+- Accept `ipaddress.IPv4Address | ipaddress.IPv6Address` for
+  `ClientConfig.server` and `Literal["tcp", "udp", "sctp"]` strings for
+  `ClientConfig.protocol` in static type checking while normalizing to
+  `Protocol`. Declare explicit `__all__` exports across all public submodules.
+- Validate `TestResult` in-memory invariants (`version`, `protocol`,
+  `direction`, `reporting_role`) before artifact serialization, enforce
+  control-character and RFC 6901 JSON Pointer checks across artifact,
+  assessment, sweep, and concurrent report deserializers, preserve
+  `bytes_per_second` in `TrialAssessmentReport` text summaries, and include
+  `start_time_unix` in Prometheus exporter completeness checks.
+- Reuse first-pass observation dictionaries in adaptive UDP summaries, skip
+  unconditional `ctypes.util.find_library` subprocess probes when `IPERF3_LIB`
+  or standard Linux loader names succeed, switch worker parent-child pipes to
+  binary I/O with direct UTF-8 `bytes` JSON parsing, validate live-event
+  payloads in a single pass, and add a `/proc` fallback for `WaitPID` in
+  `docker-entrypoint.sh`.
+- Publish the [API and schema stability policy](reference/compatibility.md#compatibility-deprecation-and-archive-policy),
+  add tagged release documentation snapshot links (`v0.2.0`–`v0.4.1`), and
+  align architecture, design, and contributor documentation with the `0.4.x`
+  codebase.
+- Route documentation-only pull requests and pushes away from the native Docker
+  matrix while preserving the required `ci` check, static/unit gates, and full
+  native coverage for code, workflow, and release paths. Align preview `uv`
+  provenance checks and stricter `ty` keyword-argument typing.
+
 ## 0.4.1 — 2026-10-12
 
 Published on [PyPI](https://pypi.org/project/iperf3-lib/0.4.1/) and as
