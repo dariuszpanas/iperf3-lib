@@ -5,9 +5,9 @@ This is retained planning background from the 0.3.0 development cycle.
 for current scope and completion status; the tables below preserve the planning
 context rather than certify the current release candidate.
 
-## 0.4.2 candidate and released 0.4.1 / 0.4.0
+## Released 0.4.2, 0.4.1, and 0.4.0
 
-The 0.4.2 candidate ([issue #106](https://github.com/dariuszpanas/iperf3-lib/issues/106))
+Version 0.4.2 ([issue #106](https://github.com/dariuszpanas/iperf3-lib/issues/106))
 consolidates post-0.4.1 maintenance refinements: `address_family` verification
 from connected socket endpoints, strict report and artifact validation
 symmetry, consumer static-typing ergonomics and submodule `__all__` contracts

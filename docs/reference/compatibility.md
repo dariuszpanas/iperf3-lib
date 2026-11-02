@@ -208,6 +208,7 @@ Unknown schema versions raise `UnsupportedArtifactVersion` or
 This site tracks `main`. To read documentation matching a specific published
 release tag, browse the immutable tagged tree in GitHub:
 
+- [v0.4.2 documentation](https://github.com/dariuszpanas/iperf3-lib/tree/v0.4.2/docs) ([release notes](https://github.com/dariuszpanas/iperf3-lib/releases/tag/v0.4.2))
 - [v0.4.1 documentation](https://github.com/dariuszpanas/iperf3-lib/tree/v0.4.1/docs) ([release notes](https://github.com/dariuszpanas/iperf3-lib/releases/tag/v0.4.1))
 - [v0.4.0 documentation](https://github.com/dariuszpanas/iperf3-lib/tree/v0.4.0/docs) ([release notes](https://github.com/dariuszpanas/iperf3-lib/releases/tag/v0.4.0))
 - [v0.3.0 documentation](https://github.com/dariuszpanas/iperf3-lib/tree/v0.3.0/docs) ([release notes](https://github.com/dariuszpanas/iperf3-lib/releases/tag/v0.3.0))
