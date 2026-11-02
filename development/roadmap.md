@@ -5,8 +5,17 @@ This is retained planning background from the 0.3.0 development cycle.
 for current scope and completion status; the tables below preserve the planning
 context rather than certify the current release candidate.
 
-## Released 0.4.1 and 0.4.0
+## 0.4.2 candidate and released 0.4.1 / 0.4.0
 
+The 0.4.2 candidate ([issue #106](https://github.com/dariuszpanas/iperf3-lib/issues/106))
+consolidates post-0.4.1 maintenance refinements: `address_family` verification
+from connected socket endpoints, strict report and artifact validation
+symmetry, consumer static-typing ergonomics and submodule `__all__` contracts
+([#102](https://github.com/dariuszpanas/iperf3-lib/issues/102)), adaptive UDP
+and worker/live-event runtime optimizations
+([#103](https://github.com/dariuszpanas/iperf3-lib/issues/103)), and the
+published API/schema stability policy and tagged documentation snapshots
+([#101](https://github.com/dariuszpanas/iperf3-lib/issues/101)).
 Version 0.4.1 refines CI scope detection for documentation-only changes while
 preserving the full native and installed-package qualification gates.
 Version 0.4.0 adds owned async and bounded concurrent plans,
