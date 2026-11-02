@@ -535,10 +535,12 @@ def test_exception_events_round_trip_and_render_without_becoming_result_artifact
     assert first.find("error").attrib["type"] == "exception"
     evidence = json.loads(first.find("system-out").text)
     assert evidence["partial_events"][0]["data"] == {"sum": {"bytes": 20}}
+    assert evidence["events_observed"] == 2
+    assert evidence["events_dropped"] == 1
     if returned_evidence:
         assert evidence["returned_result_evidence"] == record.returned_result_evidence
     else:
-        assert set(evidence) == {"partial_events"}
+        assert set(evidence) == {"partial_events", "events_observed", "events_dropped"}
     original.execution.trials[0].partial_events[0].data["sum"]["bytes"] = 999
     assert record.partial_events[0].data == {"sum": {"bytes": 20}}
 

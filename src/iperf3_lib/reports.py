@@ -8,7 +8,7 @@ import math
 import types
 import xml.etree.ElementTree as ET
 from collections.abc import Mapping
-from typing import Any, Literal, Never, TypeAliasType, get_args, get_origin, get_type_hints
+from typing import Any, Literal, Never, TypeAliasType, Union, get_args, get_origin, get_type_hints
 
 from ._evidence import has_observed_evidence
 from .analysis import (
@@ -125,7 +125,7 @@ def _convert(spec, value, path, *, encoding=False):
         except ValueError:
             _fail(path, "invalid protocol")
     origin, args = get_origin(spec), get_args(spec)
-    if origin is types.UnionType:
+    if origin in (types.UnionType, Union):
         if value is None and type(None) in args:
             return None
         for option in args:
@@ -894,3 +894,20 @@ def render_junit(
         root.set(attribute, str(len(root.findall(f"testcase/{tag}"))))
     root.set("time", str(report.execution.elapsed_seconds))
     return ET.tostring(root, encoding="unicode", xml_declaration=True)
+
+
+__all__ = [
+    "ReportValidationError",
+    "UnsupportedReportVersionError",
+    "compatibility_from_dict",
+    "compatibility_to_dict",
+    "dumps_report",
+    "loads_report",
+    "plan_result_from_dict",
+    "plan_result_to_dict",
+    "render_junit",
+    "render_text",
+    "report_from_dict",
+    "report_to_dict",
+    "summary_eligible_v1",
+]

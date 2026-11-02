@@ -285,8 +285,10 @@ def result_from_iperf_json(
     elif protocol is not None:
         raise ValueError("iperf JSON protocol must be a string")
     for name in ("version", "system_info"):
-        if start.get(name) is not None and not isinstance(start[name], str):
-            raise ValueError(f"iperf JSON {name} must be a string")
+        if start.get(name) is not None and (
+            not isinstance(start[name], str) or not start[name].strip()
+        ):
+            raise ValueError(f"iperf JSON {name} must be a nonempty string")
 
     def _optional_number(data: dict[str, Any], name: str, *, integer: bool = False):
         value = data.get(name)
@@ -1035,3 +1037,26 @@ def result_from_iperf_json(
         availability=availability,
         cpu=cpu,
     )
+
+
+__all__ = [
+    "ConfigurationSnapshot",
+    "Diagnostic",
+    "EndStats",
+    "EndpointCpuEvidence",
+    "ExecutionMetadata",
+    "FieldAvailability",
+    "FlowStats",
+    "IntervalStats",
+    "JSONValue",
+    "ObservationPoint",
+    "ReportingRole",
+    "Result",
+    "RunTiming",
+    "StreamStats",
+    "SumStats",
+    "TcpIntervalEvidence",
+    "TcpSummaryEvidence",
+    "VerifiedSetting",
+    "result_from_iperf_json",
+]

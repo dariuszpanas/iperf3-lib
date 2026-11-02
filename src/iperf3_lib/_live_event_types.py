@@ -48,9 +48,18 @@ def event_identity(event: LiveEvent) -> LiveEvent:
     )
 
 
+_last_sized_event: tuple[LiveEvent | None, int] = (None, 0)
+
+
 def live_event_size(event: LiveEvent) -> int:
     """Bound a projected envelope by strict JSON wire bytes including its header."""
-    return len(_ipc.encode_frame({"type": "live_event", "event": asdict(event)}))
+    global _last_sized_event
+    cached_event, cached_size = _last_sized_event
+    if cached_event is event:
+        return cached_size
+    size = len(_ipc.encode_frame({"type": "live_event", "event": asdict(event)}))
+    _last_sized_event = (event, size)
+    return size
 
 
 def make_delivery_gap_event(

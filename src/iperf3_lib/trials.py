@@ -375,3 +375,17 @@ def run_plan(
         pause_elapsed,
         stop_reason,
     )
+
+
+__all__ = [
+    "PlanBudget",
+    "PlanResult",
+    "PreparedPlan",
+    "TrialException",
+    "TrialPolicy",
+    "TrialRecord",
+    "TrialSpec",
+    "prepare_plan",
+    "prepare_trials",
+    "run_plan",
+]

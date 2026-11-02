@@ -378,6 +378,7 @@ def _setting_checks(result, cell, intent):
             if not verified
             else "native_default"
             if wanted is None
+            or (name == "address_family" and wanted == "auto" and observed in {"ipv4", "ipv6"})
             else "matched"
             if _exact_equal(wanted, observed)
             else "mismatch"
@@ -402,7 +403,7 @@ def _sample_v1(record, direction, method, cell, intent, *, current_analysis):
     result = record.artifact.result
     if result.execution is None or result.execution.method != method:
         return None, "method_mismatch"
-    if result.protocol != record.spec.config.protocol.value:
+    if result.protocol != Protocol(record.spec.config.protocol).value:
         return None, "protocol_mismatch"
     if not summary_eligible_v1(record.artifact, direction=direction, observation="receiver"):
         return None, "receiver_measurement_unavailable"
@@ -602,3 +603,23 @@ def run_sweep(
         minimum_valid_trials=minimum_valid_trials,
         comparison_policy=comparison_policy,
     )
+
+
+__all__ = [
+    "CellSummary",
+    "Direction",
+    "DirectionalSummary",
+    "Method",
+    "PreparedSweep",
+    "Quality",
+    "SettingCheck",
+    "SweepAxis",
+    "SweepCell",
+    "SweepComparison",
+    "SweepExclusion",
+    "SweepResult",
+    "SweepSample",
+    "prepare_sweep",
+    "run_sweep",
+    "summarize_sweep",
+]

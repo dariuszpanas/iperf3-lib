@@ -520,12 +520,16 @@ def render_concurrent_junit(report: ConcurrentPlanReport) -> str:
             ET.SubElement(case, "error", type=record.status, message=_xml_text(message))
         if record.artifact is not None:
             ET.SubElement(case, "system-out").text = _xml_text(dumps_artifact(record.artifact))
-        elif record.partial_events:
+        elif record.events_observed or record.partial_events:
             events = [
                 _scalar_field(NativeEvent, event, "", encoding=True)
                 for event in record.partial_events
             ]
-            evidence: dict[str, Any] = {"partial_events": events}
+            evidence: dict[str, Any] = {
+                "partial_events": events,
+                "events_observed": record.events_observed,
+                "events_dropped": record.events_dropped,
+            }
             if record.returned_result_evidence is not None:
                 evidence["returned_result_evidence"] = record.returned_result_evidence
             ET.SubElement(case, "system-out").text = _xml_text(json.dumps(evidence, sort_keys=True))
@@ -549,3 +553,15 @@ def render_concurrent_junit(report: ConcurrentPlanReport) -> str:
     root.set("failures", "0")
     root.set("time", str(execution.elapsed_seconds))
     return ET.tostring(root, encoding="unicode", xml_declaration=True)
+
+
+__all__ = [
+    "concurrent_report_from_dict",
+    "concurrent_report_from_execution",
+    "concurrent_report_to_dict",
+    "dumps_concurrent_report",
+    "loads_concurrent_report",
+    "render_concurrent_junit",
+    "render_concurrent_text",
+    "snapshot_concurrent_execution",
+]

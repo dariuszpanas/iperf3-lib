@@ -1905,7 +1905,8 @@ def test_terminal_worker_with_retained_stdout_writer_fails_closed_and_cleans_up(
         # another process. EOF cannot unblock a buffered reader during cleanup.
         def relay():
             with original_output:
-                data = memoryview(original_output.buffer.read())
+                raw_stream = getattr(original_output, "buffer", original_output)
+                data = memoryview(raw_stream.read())
             while data:
                 data = data[os.write(retained_writer, data) :]
 

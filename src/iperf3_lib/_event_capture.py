@@ -196,17 +196,18 @@ class EventCapture:
 
     def capture(self, _test: Any, pointer: Any) -> None:
         """Copy bounded bytes and metadata; never parse or encode inside C."""
+        counted = False
         try:
-            with self._condition:
-                self.callbacks += 1
-                sequence = self.callbacks
-            offset, arrived = time.monotonic() - self._started, time.time()
             if pointer == self.ffi.NULL:
                 raise ValueError("null native payload")
             copied = self.ffi.string(pointer, self.capture_bytes + 1)
             if len(copied) > self.capture_bytes:
                 raise ValueError("native payload exceeds capture byte limit")
             with self._condition:
+                self.callbacks += 1
+                counted = True
+                sequence = self.callbacks
+                offset, arrived = time.monotonic() - self._started, time.time()
                 if (
                     self._closed
                     or len(self._queue) >= self.item_limit
@@ -221,6 +222,8 @@ class EventCapture:
                 self._condition.notify()
         except BaseException as exc:
             with self._condition:
+                if not counted:
+                    self.callbacks += 1
                 self.capture_dropped += 1
                 self._last_capture_loss = self.callbacks
                 self._diagnose(f"Cannot copy native event: {type(exc).__name__}")
@@ -456,11 +459,14 @@ class EventCapture:
         # Charge both reconstruction and original envelopes, including object keys.
         # Complete documents replace the projection and discard duplicated envelopes.
         size = _size(data)
-        error_text = part if isinstance(part, str) else json.dumps(part, ensure_ascii=False)
-        raw_cost = _size(error_text) if kind == "error" else _size(part)
-        required = (
-            size + 128 if kind == "complete" else self._retained_bytes + size + raw_cost + 128
-        )
+        error_text = ""
+        if kind == "complete":
+            required = size + 128
+        elif kind == "error":
+            error_text = part if isinstance(part, str) else json.dumps(part, ensure_ascii=False)
+            required = self._retained_bytes + size + _size(error_text) + 128
+        else:
+            required = self._retained_bytes + size + _size(part) + 128
         if required > self.retained_limit:
             self.retention_dropped += 1
             if kind == "complete":

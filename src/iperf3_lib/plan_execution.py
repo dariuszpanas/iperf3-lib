@@ -135,3 +135,13 @@ class PlanCleanupError(IperfLibraryError):
             "Plan worker cleanup could not be confirmed; process ownership is retained"
         )
         self.partial_result = snapshot_plan_execution(partial_result)
+
+
+__all__ = [
+    "PlanCancelledError",
+    "PlanCleanupError",
+    "PlanExecutionReport",
+    "PlanExecutionResult",
+    "PlanTimeoutError",
+    "PlanTrialRecord",
+]

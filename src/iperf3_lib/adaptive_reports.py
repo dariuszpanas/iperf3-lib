@@ -304,3 +304,15 @@ def render_adaptive_udp_text(report: AdaptiveUDPReport) -> str:
         if summary.reasons:
             lines.append(f"  Rate decision: {', '.join(summary.reasons)}")
     return "\n".join(lines)
+
+
+__all__ = [
+    "ADAPTIVE_UDP_ALGORITHM",
+    "AdaptiveUDPReport",
+    "adaptive_udp_report_from_dict",
+    "adaptive_udp_report_to_dict",
+    "dumps_adaptive_udp_report",
+    "loads_adaptive_udp_report",
+    "render_adaptive_udp_text",
+    "report_from_adaptive_udp",
+]

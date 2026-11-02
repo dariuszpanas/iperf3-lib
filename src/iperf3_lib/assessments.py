@@ -265,3 +265,15 @@ def ci_exit_code(report: AssessmentReport) -> int:
     if report.assessment.outcome == "inconclusive" or not report.execution.execution_success:
         return 3
     return 0
+
+
+__all__ = [
+    "ASSESSMENT_ALGORITHM",
+    "AssessedMeasurement",
+    "Assessment",
+    "AssessmentPolicy",
+    "AssessmentReport",
+    "ExcludedTrial",
+    "assess_plan",
+    "ci_exit_code",
+]

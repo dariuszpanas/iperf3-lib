@@ -19,8 +19,12 @@ POSSIBLE_NAMES: Final[tuple[str, ...]] = (
     "libiperf.dll",  # Windows (if available)
 )
 
-ffi = FFI()
-ffi.cdef(CDEF)
+_CACHED_FFI: FFI | None = globals().get("_CACHED_FFI")
+if _CACHED_FFI is None:
+    _CACHED_FFI = FFI()
+    _CACHED_FFI.cdef(CDEF)
+
+ffi = _CACHED_FFI
 
 
 def _dlopen():
@@ -64,3 +68,10 @@ class _LazyLibrary:
 
 
 lib = _LazyLibrary()
+
+
+__all__ = [
+    "POSSIBLE_NAMES",
+    "ffi",
+    "lib",
+]

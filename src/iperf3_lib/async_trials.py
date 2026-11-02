@@ -321,3 +321,8 @@ async def arun_plan(plan: PreparedPlan, *, timeout: float | None = None) -> Plan
         plan.trials, policy=plan.policy, budget=plan.budget, order_seed=plan.order_seed
     )
     return await _Run(plan, timeout).run()
+
+
+__all__ = [
+    "arun_plan",
+]

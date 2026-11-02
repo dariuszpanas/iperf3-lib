@@ -162,7 +162,7 @@ _SCHEMAS: dict[type, dict[str, Any]] = {
         "timing": RunTiming,
         "configuration": ConfigurationSnapshot,
         "native_version": _optional("nonempty_string"),
-        "native_system_info": _optional("string"),
+        "native_system_info": _optional("nonempty_string"),
         "python_version": _optional("nonempty_string"),
         "platform": _optional("string"),
     },
@@ -244,10 +244,14 @@ def _fail(path: str, message: str) -> Never:
 
 def _pointer(value: str, path: str) -> list[str]:
     if value and not value.startswith("/"):
-        _fail(path, "expected a JSON Pointer starting with '/' or the empty root pointer")
+        _fail(path, "expected a JSON Pointer starting with '/'")
     if re.search(r"~(?:[^01]|$)", value):
         _fail(path, "invalid JSON Pointer escape; use ~0 for '~' and ~1 for '/'")
-    return [part.replace("~1", "/").replace("~0", "~") for part in value.split("/")[1:]]
+    return (
+        []
+        if value == ""
+        else [part.replace("~1", "/").replace("~0", "~") for part in value.split("/")[1:]]
+    )
 
 
 def _object(value: Any, path: str) -> Mapping[str, Any]:
@@ -441,7 +445,7 @@ def _validate_configuration(result: Result, execution: ExecutionMetadata) -> Non
             if value is None and key in {"blksize", "rate", "tos", "duration"}:
                 continue
             if key == "server":
-                _convert("string", value, setting_path)
+                _convert("nonempty_string", value, setting_path)
             elif key == "protocol":
                 _convert(_enum("tcp", "udp", "sctp"), value, setting_path)
             elif key in {"reverse", "bidirectional", "mptcp", "json_stream"}:
@@ -481,7 +485,7 @@ def _validate_configuration(result: Result, execution: ExecutionMetadata) -> Non
             spec = (
                 "json"
                 if key not in LEGACY_CONFIG_FIELDS
-                else "string"
+                else "nonempty_string"
                 if key == "server"
                 else _enum("tcp", "udp", "sctp")
                 if key == "protocol"
@@ -502,6 +506,11 @@ def _validate_configuration(result: Result, execution: ExecutionMetadata) -> Non
             setting.state == "verified"
             and config.requested is not None
             and config.requested.get(key) is not None
+            and not (
+                key == "address_family"
+                and config.requested.get(key) == "auto"
+                and setting.value in {"ipv4", "ipv6"}
+            )
             and setting.value != config.requested.get(key)
             and not _related_diagnostic(
                 result, setting_path.removeprefix("/result"), setting.evidence_paths
@@ -534,19 +543,44 @@ def _extended_setting(name: str, value: JSONValue, path: str) -> None:
         "username",
         "rsa_public_key_path",
     }:
-        _convert("string", value, path)
+        text = _convert("nonempty_string", value, path)
+        if "\x00" in text:
+            _fail(path, "string must not contain NUL")
     elif name == "address_family":
         _convert(_enum("auto", "ipv4", "ipv6"), value, path)
     elif name == "interval_seconds":
-        _convert("number", value, path)
+        interval = _convert("nonnegative_number", value, path)
+        if not (interval == 0 or 0.1 <= interval <= 60):
+            _fail(path, "interval_seconds must be zero or between 0.1 and 60")
     elif name == "sctp_bind_addresses":
-        _convert(_array("string"), value, path)
+        items = _convert(_array("nonempty_string"), value, path)
+        if any("\x00" in item for item in items):
+            _fail(path, "sctp_bind_addresses must not contain NUL")
     elif name == "control_keepalive":
-        items = _convert(_array("integer"), value, path)
-        if len(items) != 3:
-            _fail(path, "expected three keepalive values")
+        items = _convert(_array("count"), value, path)
+        if len(items) != 3 or any(item > 2**31 - 1 for item in items):
+            _fail(path, "expected three keepalive integers between 0 and 2147483647")
     else:
-        _convert("integer", value, path)
+        number = _convert("integer", value, path)
+        minimum, maximum = {
+            "client_port": (0, 65535),
+            "socket_buffer_bytes": (0, 2**31 - 1),
+            "mss": (0, 65535),
+            "connect_timeout_ms": (-1, 2**31 - 1),
+            "bytes_to_send": (0, 2**64 - 1),
+            "blocks_to_send": (0, 2**64 - 1),
+            "pacing_timer_us": (0, 2**31 - 1),
+            "fq_rate_bps": (0, 2**64 - 1),
+            "burst_packets": (0, 1000),
+            "flow_label": (0, 0xFFFFF),
+            "sctp_streams": (0, 65535),
+            "affinity": (-1, 1024),
+            "server_affinity": (-1, 1024),
+            "receive_timeout_ms": (0, 86400000),
+            "send_timeout_ms": (0, 86400000),
+        }[name]
+        if not minimum <= number <= maximum:
+            _fail(path, f"expected an integer between {minimum} and {maximum}")
 
 
 def _validate_result(result: Result) -> None:
@@ -934,3 +968,17 @@ def artifact_from_legacy_dict(mapping: Mapping[str, Any]) -> ResultArtifact:
         )
     )
     return artifact_from_result(result)
+
+
+__all__ = [
+    "ArtifactProducer",
+    "ArtifactValidationError",
+    "ResultArtifact",
+    "UnsupportedArtifactVersion",
+    "artifact_from_dict",
+    "artifact_from_legacy_dict",
+    "artifact_from_result",
+    "artifact_to_dict",
+    "dumps_artifact",
+    "loads_artifact",
+]

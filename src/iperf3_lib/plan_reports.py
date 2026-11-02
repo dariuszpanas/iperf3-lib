@@ -385,3 +385,15 @@ def render_plan_junit(report: PlanExecutionReport) -> str:
     root.set("failures", "0")
     root.set("time", str(execution.elapsed_seconds))
     return ET.tostring(root, encoding="unicode", xml_declaration=True)
+
+
+__all__ = [
+    "dumps_plan_report",
+    "loads_plan_report",
+    "plan_report_from_dict",
+    "plan_report_from_execution",
+    "plan_report_to_dict",
+    "render_plan_junit",
+    "render_plan_text",
+    "snapshot_plan_execution",
+]

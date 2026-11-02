@@ -234,3 +234,8 @@ class Server:
     def stop(self) -> None:
         """Request that serve_forever stop before its next native test."""
         self._stop_event.set()
+
+
+__all__ = [
+    "Server",
+]

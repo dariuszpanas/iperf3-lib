@@ -106,3 +106,8 @@ char *iperf_get_iperf_version(void);
 extern int i_errno;
 char *iperf_strerror(int);
 """
+
+
+__all__ = [
+    "CDEF",
+]

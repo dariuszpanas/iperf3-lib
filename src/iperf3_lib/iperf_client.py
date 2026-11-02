@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import ipaddress
 import platform
 import time
 from collections.abc import Callable
 from dataclasses import asdict, replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Literal
 
 from ._event_capture import BoundedDocumentCapture
 from .config import ClientConfig, Protocol, config_to_dict, requires_worker
@@ -63,6 +64,40 @@ def _maybe_set(setter_name: str, t, value: int) -> bool:
         fn(t, int(value))
         return True
     return False
+
+
+def _observed_address_family(
+    raw: dict[str, Any],
+) -> tuple[Literal["ipv4", "ipv6"], list[str]] | None:
+    """Derive verified IPv4/IPv6 family from connected socket endpoint literals."""
+    start = raw.get("start")
+    connected = start.get("connected") if isinstance(start, dict) else None
+    if not isinstance(connected, list) or not connected:
+        return None
+    families: set[Literal["ipv4", "ipv6"]] = set()
+    evidence_paths: list[str] = []
+    for index, entry in enumerate(connected):
+        if not isinstance(entry, dict):
+            return None
+        entry_paths = 0
+        for key in ("local_host", "remote_host"):
+            host = entry.get(key)
+            if host is None:
+                continue
+            if not isinstance(host, str) or not host.strip():
+                return None
+            try:
+                version = ipaddress.ip_address(host.split("%", 1)[0]).version
+            except ValueError:
+                return None
+            families.add("ipv4" if version == 4 else "ipv6")
+            evidence_paths.append(f"/raw/start/connected/{index}/{key}")
+            entry_paths += 1
+        if entry_paths == 0:
+            return None
+    if len(families) != 1 or not evidence_paths:
+        return None
+    return next(iter(families)), evidence_paths
 
 
 def _install_json_callback(t) -> tuple[BoundedDocumentCapture, object | None]:
@@ -178,6 +213,16 @@ class Client:
                                 "verified",
                                 [f"/extensions/iperf3_lib.native_configuration/{name}/value"],
                             )
+            existing_family = metadata.configuration.effective.get("address_family")
+            if existing_family is None or existing_family.state == "unavailable":
+                observed_family = _observed_address_family(result.raw)
+                if observed_family is not None:
+                    family_value, family_paths = observed_family
+                    metadata.configuration.effective["address_family"] = VerifiedSetting(
+                        family_value,
+                        "verified",
+                        family_paths,
+                    )
             result.extensions["iperf3_lib.rate_intent"] = {
                 "schema_version": 1,
                 "caller_config": caller_config,
@@ -195,7 +240,16 @@ class Client:
                 result.reporting_role = "client"
             for name, setting in metadata.configuration.effective.items():
                 intent = requested.get(name)
-                if setting.state == "verified" and intent is not None and setting.value != intent:
+                if (
+                    setting.state == "verified"
+                    and intent is not None
+                    and not (
+                        name == "address_family"
+                        and intent == "auto"
+                        and setting.value in {"ipv4", "ipv6"}
+                    )
+                    and setting.value != intent
+                ):
                     result.diagnostics.append(
                         Diagnostic(
                             f"Native setting {name} differs from the recorded request.",
@@ -243,7 +297,8 @@ class Client:
             assert cfg.duration is not None
             lib.iperf_set_test_duration(t, int(cfg.duration))
 
-            protocol_id = PROTOCOL_IDS[cfg.protocol]
+            protocol = Protocol(cfg.protocol)
+            protocol_id = PROTOCOL_IDS[protocol]
             protocol_setter = _try_set("set_protocol")
             protocol_getter = _try_set("iperf_get_test_protocol_id")
             if protocol_setter is None or protocol_getter is None:
@@ -253,7 +308,7 @@ class Client:
             _check(protocol_setter(t, protocol_id))
             if int(protocol_getter(t)) != protocol_id:
                 raise IperfLibraryError(
-                    f"libiperf did not apply requested protocol {cfg.protocol.value}"
+                    f"libiperf did not apply requested protocol {protocol.value}"
                 )
 
             if cfg.omit:
@@ -378,3 +433,14 @@ class Client:
         return await _run_async(
             lambda control: self._run(timeout=timeout, on_event=on_event, _control=control)
         )
+
+
+__all__ = [
+    "Client",
+    "DEFAULT_SCTP_BLOCK_SIZE",
+    "DEFAULT_UDP_BLOCK_SIZE",
+    "PROTOCOL_IDS",
+    "SCTP_PROTOCOL_ID",
+    "TCP_PROTOCOL_ID",
+    "UDP_PROTOCOL_ID",
+]

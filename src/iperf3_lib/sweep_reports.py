@@ -428,3 +428,14 @@ def loads_sweep_report(text: str | bytes) -> SweepReport:
             raise
         _fail("", f"invalid JSON: {exc}")
     return sweep_report_from_dict(data)
+
+
+__all__ = [
+    "SWEEP_ALGORITHM",
+    "SweepReport",
+    "dumps_sweep_report",
+    "loads_sweep_report",
+    "report_from_sweep",
+    "sweep_report_from_dict",
+    "sweep_report_to_dict",
+]

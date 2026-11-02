@@ -358,3 +358,8 @@ async def arun_concurrent_plan(
         plan, policy, resources
     )
     return await _Run(prepared, policy, resources_copy, keys, targets, timeout).run()
+
+
+__all__ = [
+    "arun_concurrent_plan",
+]
