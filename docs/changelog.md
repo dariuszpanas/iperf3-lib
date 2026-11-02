@@ -4,7 +4,10 @@ These pages describe `main`. Released versions remain available through
 [GitHub releases](https://github.com/dariuszpanas/iperf3-lib/releases) and
 [PyPI](https://pypi.org/project/iperf3-lib/).
 
-## 0.4.2
+## 0.4.2 — 2026-11-02
+
+Published on [PyPI](https://pypi.org/project/iperf3-lib/0.4.2/) and as
+[GitHub release v0.4.2](https://github.com/dariuszpanas/iperf3-lib/releases/tag/v0.4.2).
 
 - Verify `address_family` from observed socket endpoint literals in
   `raw["start"]["connected"]`, populating `effective["address_family"]` as
