@@ -26,7 +26,7 @@ def runtime() -> dict:
         "machine": "x86_64",
         "platform": "Linux-preview",
         "gil_disabled": False,
-        "uv_version": "uv 0.13.5 (build 2026-10-21)",
+        "uv_version": "uv 0.13.6 (build 2026-10-26)",
     }
 
 
@@ -46,7 +46,7 @@ def runtime() -> dict:
         ("base_prefix", "/usr/local"),
         ("uv_version", "uv 0.12.17"),
         ("uv_version", "uv 0.12.23"),
-        ("uv_version", "uv 0.13.50"),
+        ("uv_version", "uv 0.13.60"),
     ],
 )
 def test_wrong_runtime_fails_before_native_import(monkeypatch, runtime, tmp_path, field, value):

@@ -14,13 +14,13 @@ import sysconfig
 from pathlib import Path, PurePosixPath
 
 PYTHON_VERSION = "3.15.0rc3"
-UV_VERSION = "0.13.5"
+UV_VERSION = "0.13.6"
 PREVIEW_PREFIX = "/opt/preview-venv"
-UV_IMAGE = "ghcr.io/astral-sh/uv:0.13.5@sha256:32a7bb39b496babbd997b0a39a4d66c126bdaf5661b302bf6f06abda8deca6ff"
+UV_IMAGE = "ghcr.io/astral-sh/uv:0.13.6@sha256:af22a52f5eafef3d78e551599d405c02df61919d18028f0cea8eda93bc9986d0"
 # Declared download identity from this pinned uv release's catalog. uv checks the
 # archive during installation; these fields are not measurements of a live archive.
 PYTHON_DOWNLOAD = {
-    "catalog": "https://raw.githubusercontent.com/astral-sh/uv/46776a95d6686ac0160c10611327ce491e6b202f/crates/uv-python-managed/download-metadata.json",
+    "catalog": "https://raw.githubusercontent.com/astral-sh/uv/329bf9448afd9f9088d14a4d57fbc61eb454f117/crates/uv-python-managed/download-metadata.json",
     "key": "cpython-3.15.0rc3-linux-x86_64-gnu",
     "build": "20261003",
     "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261003/cpython-3.15.0rc3%2B20261003-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz",
