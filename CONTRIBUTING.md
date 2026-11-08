@@ -102,12 +102,21 @@ Run `make format` only when you intend to modify source formatting.
 
 ## YAGA checks and policies
 
-`make install` includes the published `yaga-cli` package in the development
+`make install` includes the published `yaga-cli` 0.5.x package in the development
 environment. No YAGA source checkout or global YAGA installation is needed.
 The project's policy lives in `[tool.yaga]` in `pyproject.toml` and `.yaga/`.
-Dependabot's existing uv and GitHub Actions updates cover the CLI and Action.
+Each policy declares a `required-version` floor of `>=0.5.0`, including policies
+used directly without the repository plan. The CLI dependency and the root
+`dariuszpanas/yaga` Action are updated separately by Dependabot's uv and GitHub
+Actions jobs. The Action uses `check: commit`; the former
+`actions/commit-check` entrypoint was retired in YAGA 0.5.0. When upgrading YAGA,
+review both entrypoints and the upstream consumer examples. The uv update
+strategy preserves compatible requirement ranges and increases them when needed;
+review the supported lower bound as part of each upgrade.
 
-`make check` runs Ruff, ty, the documentation build/link check, and the YAGA repository plan. That plan checks
+`make check` runs Ruff, ty, the documentation build/link check, a strict YAGA
+policy schema audit, and the YAGA repository plan. The audit rejects invalid,
+deprecated, or legacy schemas before the plan runs. That plan checks
 immutable Action references, workflow permissions and checkout settings,
 Windows-compatible file names, regular file modes, file size limits, required
 project files, and accidental commits of local vaults or generated files.

@@ -13,6 +13,7 @@ updates:
 
   - package-ecosystem: "uv"
     directory: "/"
+    versioning-strategy: "increase-if-necessary"
     schedule:
       interval: "weekly"
       day: "monday"

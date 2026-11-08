@@ -19,7 +19,7 @@ help:
 	@echo "  format           - Apply Ruff formatting and safe lint fixes"
 	@echo "  format-check     - Check formatting without changing files"
 	@echo "  type-check       - Run ty against the package"
-	@echo "  policy-check     - Run YAGA workflow and repository policies (REVISION=HEAD)"
+	@echo "  policy-check     - Audit YAGA schemas and run repository policies (REVISION=HEAD)"
 	@echo "  commit-check     - Check one commit message (REVISION=HEAD)"
 	@echo "  change-check     - Require tests with source changes (RANGE=origin/main...HEAD)"
 	@echo "  workflow-lint    - Run YAGA actionlint checks (requires Docker)"
@@ -60,6 +60,7 @@ type-check:
 	$(UV) run --frozen ty check examples --python-platform linux
 
 policy-check:
+	$(UV) run --frozen yaga policy check --strict
 	$(UV) run --frozen yaga repo check --plan .yaga/checks/repository.toml --revision "$(REVISION)"
 
 commit-check:

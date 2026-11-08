@@ -59,7 +59,7 @@ dev = [
     "readme-renderer[md]>=44",
     "ruff>=0.15.22,<0.18",
     "ty>=0.0.83",
-    "yaga-cli>=0.2,<0.6",
+    "yaga-cli>=0.5.0,<0.6",
     "zensical>=0.0.20",
 ]
 release = [
@@ -72,6 +72,7 @@ packages = ["src/iperf3_lib"]
 
 [tool.yaga]
 config-version = 1
+required-version = ">=0.5.0"
 
 [tool.yaga.commit]
 allowed-types = ["build", "chore", "ci", "docs", "feat", "fix", "perf", "refactor", "revert", "style", "test"]
