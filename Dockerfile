@@ -50,8 +50,8 @@ ENV VIRTUAL_ENV=/opt/venv \
 
 WORKDIR /app
 
-# An explicit version selects managed CPython when its official image is not yet
-# available. The default selects the base image interpreter.
+# Defaults to the official base image interpreter; PYTHON_RUNTIME can override
+# UV_PYTHON for local diagnostics.
 # Cache the frozen development environment independently from source changes.
 COPY pyproject.toml uv.lock README.md LICENSE ./
 RUN uv sync --frozen --dev --no-install-project

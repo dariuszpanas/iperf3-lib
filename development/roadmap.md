@@ -28,8 +28,9 @@ retained exact-source native and installed-package qualification. The
 
 Python 3.15 support and qualification are tracked in
 [#63](https://github.com/dariuszpanas/iperf3-lib/issues/63). Python 3.15 final is
-included in the stable CI and release matrices; the RC3 workflow is retained
-for manual historical diagnostics. The combined 0.4.0 source and retained
+included in the stable CI and release matrices on official `python:3.15-slim`
+images, and the temporary RC3 preview workflow has been retired. The combined
+0.4.0 source and retained
 wheel/sdist were qualified on Python 3.12–3.15, together with documentation
 and Grafana integration. The [changelog](../docs/changelog.md) links the
 published package and GitHub release; #78 retains the exact-source evidence.
@@ -37,9 +38,11 @@ published package and GitHub release; #78 retains the exact-source evidence.
 The 0.4.0 release completes this scope with the task-submission correction in
 [#77](https://github.com/dariuszpanas/iperf3-lib/issues/77) and the patched-native
 recommendation. No additional feature cycle is required for this Beta release.
-Stable API/deprecation guarantees, immutable versioned documentation, broader
-platform coverage, longer mixed-workload qualification, and consumer feedback
-remain post-0.4.0 stability work, tracked in
+Subsequent maintenance work added the published API/schema stability policy and
+immutable versioned documentation ([#101](https://github.com/dariuszpanas/iperf3-lib/issues/101))
+plus bounded mixed-workload soak qualification (`scripts/qualify_soak.py`).
+Remaining `1.0.0` promotion criteria—including completing the `0.4` consumer
+feedback window—are tracked in
 [#83](https://github.com/dariuszpanas/iperf3-lib/issues/83) (following the
 completed 0.4.0 readiness checklist in [#78](https://github.com/dariuszpanas/iperf3-lib/issues/78)).
 
@@ -81,10 +84,12 @@ defines that concrete contract; the [advanced design](design/advanced-execution.
 retains broader qualification criteria. Implementation alone does not close
 those issues or establish release readiness for the combined revision.
 
-## What exists today
+## Historical 0.3.0 foundation snapshot
 
-Documentation tracks the development branch. The following foundation is on
-`main`; it includes changes made after the published 0.2.0 release.
+The sections below preserve the 0.3.0 baseline before the 0.4.x releases
+completed [#34](https://github.com/dariuszpanas/iperf3-lib/issues/34),
+[#35](https://github.com/dariuszpanas/iperf3-lib/issues/35), and
+[#36](https://github.com/dariuszpanas/iperf3-lib/issues/36).
 
 | Area | Current foundation | Remaining work |
 | --- | --- | --- |
@@ -314,9 +319,10 @@ Server stop remains cooperative between tests, with a fresh native test per iter
 The
 [execution design](design/advanced-execution.md#typed-live-events) and
 [native observation report](design/native-event-observations.md) explain the
-minimum/latest streaming difference and broader qualification criteria. Keep
-#35/#36 open until their actual criteria have evidence; the historical small
-loopback probe alone does not qualify production event delivery or cleanup.
+minimum/latest streaming difference and broader qualification criteria
+completed for 0.4.0 in [#35](https://github.com/dariuszpanas/iperf3-lib/issues/35)
+and [#36](https://github.com/dariuszpanas/iperf3-lib/issues/36) (replacing the
+historical small loopback probe).
 
 ## Working principles
 

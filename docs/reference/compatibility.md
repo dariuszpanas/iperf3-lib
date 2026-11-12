@@ -26,9 +26,11 @@ fixes an ABI incompatibility introduced in Python 3.15.0b4. Python 3.12–3.14
 retains the CFFI 2.0 minimum. Runtime compatibility also depends on the native
 library. Free-threaded Python builds are outside the tested matrix.
 
-The earlier Python 3.15.0rc3 preview workflow remains available for manual
-historical diagnostics. Its receipts do not qualify the final interpreter or
-replace the current release matrix.
+CI and release qualification build directly on the official `python:3.15-slim`
+image alongside 3.12–3.14, verifying a final standard-GIL CPython interpreter
+before executing the native and installed-package test suites. Historical
+prerelease qualification records remain in issue
+[#63](https://github.com/dariuszpanas/iperf3-lib/issues/63).
 
 Installing the Python package does not install or upgrade libiperf. Follow the
 [upstream iperf releases](https://github.com/esnet/iperf/releases) for native
@@ -144,12 +146,13 @@ and the current normalization limits.
 
 The supported public surface consists of the symbols documented in the
 [Python API reference](api.md) and exported by `iperf3_lib` and its documented
-public submodules (`config`, `server_config`, `result`, `artifacts`, `analysis`,
-`trials`, `assessments`, `async_trials`, `plan_execution`, `plan_reports`,
-`concurrent_trials`, `concurrent_execution`, `concurrent_reports`, `sweeps`,
-`sweep_reports`, `adaptive`, `adaptive_execution`, `adaptive_reports`, `events`,
-`live_events`, `intent`, `capabilities`, `native_options`, `reports`,
-`exceptions`, and `exporters.prometheus`). Documented signatures, default
+public submodules (`config`, `server_config`, `iperf_client`, `iperf_server`,
+`result`, `artifacts`, `analysis`, `trials`, `assessments`, `async_trials`,
+`plan_execution`, `plan_reports`, `concurrent_trials`, `concurrent_execution`,
+`concurrent_reports`, `sweeps`, `sweep_reports`, `adaptive`,
+`adaptive_execution`, `adaptive_reports`, `events`, `intent`, `capabilities`,
+`native_options`, `reports`, `exceptions`, and `exporters.prometheus`).
+Documented signatures, default
 values, measurement units, missing-value semantics (`None` vs. measured `0`),
 exception inheritance, and worker cleanup rules belong to that contract.
 

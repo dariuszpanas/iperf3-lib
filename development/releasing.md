@@ -15,47 +15,41 @@ capability claims must follow evidence for the combined candidate.
 ## Python 3.15 final qualification
 
 Stable CI and release qualification include standard-GIL Python **3.15 final**
-alongside 3.12, 3.13 and 3.14. Until the official Python 3.15 Docker image is
-available, those jobs use `python:3.14-slim` with `PYTHON_RUNTIME=3.15.0` to install
-and explicitly select the managed final interpreter. Both libiperf 3.19.1 and
-3.22 are required. The base image label does not qualify the runtime: preflight
-checks and runtime receipts must identify the actual final interpreter and its
-GIL configuration. The release verifier rejects prerelease versions.
+alongside 3.12, 3.13, and 3.14, building directly on the official
+`python:3.12-slim` through `python:3.15-slim` container images. Both libiperf
+3.19.1 and 3.22 are required. The base image label alone does not qualify the
+runtime: preflight checks and runtime receipts verify an actual final
+standard-GIL CPython interpreter before native and installed-package suites run,
+and the release verifier rejects prerelease versions.
 The eight-cell release gate requires **16 smoke and 16 lifecycle receipts,
 784 selected cases and 2352 passed phases**.
 
-Issue [#63](https://github.com/dariuszpanas/iperf3-lib/issues/63) retains support
-and qualification evidence. Run the complete non-publishing release rehearsal
-on each final release candidate. Historical RC3 results or an earlier successful
-candidate cannot replace evidence for that exact source and its retained
-wheel/sdist pair. Python `>=3.12`, the shared wheel format and the two native
-endpoints remain unchanged. Free-threaded builds are outside this matrix.
+Issue [#63](https://github.com/dariuszpanas/iperf3-lib/issues/63) retains
+historical prerelease (`3.15.0rc3`) and final support evidence; the temporary
+`python-preview.yml` RC3 workflow was retired once official `python:3.15-slim`
+images entered the stable matrix. Run the complete non-publishing release
+rehearsal on each final release candidate. Earlier candidate receipts cannot
+replace evidence for that exact source and its retained wheel/sdist pair.
+Python `>=3.12`, the shared wheel format, and the two native endpoints remain
+unchanged. Free-threaded builds are outside this matrix.
 
-### Historical RC3 diagnostics
+## Bounded mixed soak qualification
 
-The separate manual-only `python-preview.yml` workflow retains the earlier
-**3.15.0rc3** diagnostic, without publication permissions. It layers pinned
-uv 0.12.23 and a managed RC3 interpreter over the Python 3.14 native image.
-Tests and installed environments explicitly select `/opt/preview-venv/bin/python`;
-the base image's Python is not preview evidence. `scripts/python_preview.py`
-checks the actual interpreter and native getter before recording runtime
-identity, frozen dependencies and lock hash.
-
-Run a historical diagnostic manually with:
+`scripts/qualify_soak.py` runs a bounded multi-cycle mixed workload (completed
+TCP/UDP/SCTP runs, `EventStream` consumption, immediate native connection
+failures, worker hard timeouts, and mid-transfer `asyncio` task cancellations)
+with resource tolerances declared before execution:
 
 ```bash
-gh workflow run python-preview.yml --ref main
+python scripts/qualify_soak.py run --cycles 24 --warmup-cycles 4 --output soak-receipt.json
+python scripts/qualify_soak.py verify --receipt soak-receipt.json
 ```
 
-This workflow runs non-native checks before native integration, then the existing
-installed lifecycle and smoke harnesses on one sealed wheel/sdist pair. Both
-libiperf 3.19.1 and 3.22 must pass. Download `python-preview-distributions` and
-both `python-preview-rc3-iperf*` artifacts, together with job logs, for a durable
-record. Expect **four lifecycle receipts, 196 selected cases and 588 passed
-phases**, plus **four smoke receipts**. Runtime JSON and image inspection retain
-the resolved interpreter, dependency and container identities. These preview
-receipts are separate from the stable release qualification index and cannot
-satisfy its Python 3.15 final cells.
+Every cycle verifies library-owned worker reaping, TCP listener release, and an
+immediate same-port reuse run with a distinct worker identity, while recording
+procfs `VmRSS`/`VmHWM`, open file descriptors, socket/pipe counts, and child
+processes under `PR_SET_CHILD_SUBREAPER`. Any RSS ceiling, post-warmup RSS
+slope, descriptor, child-process, listener, or reuse violation fails closed.
 
 ## Rehearse without publishing
 

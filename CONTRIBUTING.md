@@ -20,17 +20,11 @@ host does not provide a compatible library:
 make docker-test
 ```
 
-The Docker compatibility dimensions can be selected explicitly:
+The Docker compatibility dimensions can be selected explicitly across the
+official `python:3.12-slim` through `python:3.15-slim` base images:
 
 ```bash
-make docker-test PYTHON_BASE=python:3.14-slim IPERF3_VERSION=3.19.1
-```
-
-Until the official Python 3.15 Docker image is available, select the final
-managed interpreter explicitly over the Python 3.14 base image:
-
-```bash
-uv run --frozen python scripts/docker_validate.py test --python-base python:3.14-slim --build-arg PYTHON_RUNTIME=3.15.0 --iperf-version 3.22
+make docker-test PYTHON_BASE=python:3.15-slim IPERF3_VERSION=3.19.1
 ```
 
 ### Reuse one local Docker context

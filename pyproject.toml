@@ -128,6 +128,7 @@ pythonpath = ["src", "."]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short --strict-markers"
+asyncio_default_fixture_loop_scope = "function"
 markers = [
     "integration: marks tests that require a local libiperf and may run iperf3",
 ]
