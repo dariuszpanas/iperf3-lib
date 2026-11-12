@@ -763,3 +763,57 @@ def test_release_gate_requires_exact_artifact_lifecycle_receipts(release_workflo
         step for step in release_steps if "action-gh-release@" in step.get("uses", "")
     )
     assert "release-evidence/qualification.json" in publication["with"]["files"].splitlines()
+
+
+def test_stable_release_matrix_requires_final_python_315() -> None:
+    """Stable CI and release matrices build directly on official final Python images."""
+    import yaml
+
+    from scripts.verify_release_qualification import PYTHON_VERSIONS, _python
+
+    if not (ROOT / ".github/workflows/ci.yml").is_file():
+        pytest.skip("Workflow contracts run in the host gate; native images omit .github")
+    assert PYTHON_VERSIONS == ("3.12", "3.13", "3.14", "3.15")
+    assert _python("3.15.0", "3.15") == "3.15.0"
+    with pytest.raises(ValueError):
+        _python("3.15.0rc3", "3.15")
+    for name in ("ci.yml", "release.yml"):
+        workflow = yaml.safe_load((ROOT / ".github/workflows" / name).read_text(encoding="utf-8"))
+        matrices = [
+            job["strategy"]["matrix"] for job in workflow["jobs"].values() if "strategy" in job
+        ]
+        assert len(matrices) == 1
+        assert matrices[0]["python"] == list(PYTHON_VERSIONS)
+        assert "include" not in matrices[0]
+
+
+@pytest.mark.parametrize("name", ["ci.yml", "release.yml"])
+def test_stable_matrix_verifies_final_runtime_before_native_tests(name: str) -> None:
+    """A fallback interpreter or candidate cannot silently satisfy the final matrix."""
+    import yaml
+
+    path = ROOT / ".github/workflows" / name
+    if not path.is_file():
+        pytest.skip("Workflow contracts run in the host gate; native images omit .github")
+    workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
+    job = next(job for job in workflow["jobs"].values() if "strategy" in job)
+    steps = job["steps"]
+    build = next(step for step in steps if "docker/build-push-action@" in step.get("uses", ""))
+    assert build["with"]["build-args"].splitlines() == [
+        "PYTHON_BASE=python:${{ matrix.python }}-slim",
+        "IPERF3_VERSION=${{ matrix.iperf }}",
+    ]
+    runtime = next(
+        step for step in steps if step["name"] == "Verify final standard-GIL CPython runtime"
+    )
+    assert runtime["env"] == {"EXPECTED_PYTHON": "${{ matrix.python }}"}
+    command = runtime["run"]
+    assert "-e EXPECTED_PYTHON" in command
+    assert 'sys.implementation.name == "cpython"' in command
+    assert 'sys.version_info[:2])) == os.environ["EXPECTED_PYTHON"]' in command
+    assert 'sys.version_info.releaselevel == "final"' in command
+    assert 'not sysconfig.get_config_var("Py_GIL_DISABLED")' in command
+    full_suite = next(
+        step for step in steps if "pytest -vv --cov=iperf3_lib" in step.get("run", "")
+    )
+    assert steps.index(runtime) < steps.index(full_suite)

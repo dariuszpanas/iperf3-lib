@@ -374,3 +374,21 @@ def test_real_git_selection_includes_dirty_and_untracked_but_respects_ignores(tm
     assert manifest["dirty"]
     with pytest.raises(ValueError, match="Git-ignored"):
         staging.prepare_root(source / "not-ignored", source)
+
+
+def test_local_staging_can_build_alternate_dockerfile(tmp_path: Path) -> None:
+    """Support layered example Dockerfiles and extra build arguments under the staged context."""
+    (tmp_path / "context/examples/observability").mkdir(parents=True)
+    recipe = tmp_path / "context/examples/observability/Dockerfile"
+    recipe.write_text("ARG BASE_IMAGE\nFROM ${BASE_IMAGE}\n", encoding="utf-8")
+    command = staging.build_command(
+        tmp_path,
+        image="iperf3-lib-observability:dev",
+        python_base="python:3.15-slim",
+        iperf_version="3.22",
+        dockerfile="examples/observability/Dockerfile",
+        build_args=["BASE_IMAGE=iperf3-lib-test:local"],
+    )
+    assert command[command.index("--file") + 1] == str(recipe)
+    assert "BASE_IMAGE=iperf3-lib-test:local" in command
+    assert command[-1] == str(tmp_path / "context")
